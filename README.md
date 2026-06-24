@@ -153,7 +153,7 @@ A plataforma busca melhorar a organização escolar, reduzir o trabalho manual d
 
 ## Status do Projeto
 
-🚧 Em desenvolvimento
+Em desenvolvimento
 
 Atualmente o projeto encontra-se em fase de prototipação e desenvolvimento das funcionalidades principais.
 
