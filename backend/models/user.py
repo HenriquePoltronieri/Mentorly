@@ -28,3 +28,6 @@ class User:
             "role": self.role,
             "created_at": self.created_at,
         }
+class student:
+    def __init__(self, id, name, ):
+        pass
