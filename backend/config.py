@@ -1,7 +1,6 @@
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREATE_DATABASE_SCRIPT = os.path.join(BASE_DIR, "database", "create_database.sql")
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
@@ -10,3 +9,8 @@ DB_CONFIG = {
     "password": os.environ.get("DB_PASSWORD", ""),
     "database": os.environ.get("DB_NAME", "mentorly"),
 }
+
+SQLALCHEMY_DATABASE_URI = (
+    f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}"
+    f"@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+)

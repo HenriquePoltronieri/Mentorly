@@ -1,48 +1,24 @@
-from database.connection import get_connection
+from database import db
 from models.user import User
 
 
 class UserRepository:
     def find_all(self):
-        connection = get_connection()
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM users")
-                rows = cursor.fetchall()
-        finally:
-            connection.close()
-        return [User.from_row(row) for row in rows]
+        return User.query.all()
 
     def find_by_id(self, user_id):
-        connection = get_connection()
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-                row = cursor.fetchone()
-        finally:
-            connection.close()
-        return User.from_row(row)
+        return User.query.get(user_id)
 
     def find_by_email(self, email):
-        connection = get_connection()
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-                row = cursor.fetchone()
-        finally:
-            connection.close()
-        return User.from_row(row)
+        return User.query.filter_by(email=email).first()
 
     def create(self, name, email, password_hash, role):
-        connection = get_connection()
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO users (name, email, password_hash, role) VALUES (%s, %s, %s, %s)",
-                    (name, email, password_hash, role),
-                )
-                user_id = cursor.lastrowid
-            connection.commit()
-        finally:
-            connection.close()
-        return self.find_by_id(user_id)
+        user = User(
+            name=name,
+            email=email,
+            password_hash=password_hash,
+            role=role,
+        )
+        db.session.add(user)
+        db.session.commit()
+        return user
