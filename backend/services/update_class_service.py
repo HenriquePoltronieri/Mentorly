@@ -10,8 +10,11 @@ class UpdateClassService:
         if turma is None:
             raise ValueError("Class not found")
 
-        if name and name != turma.name:
-            if self.repository.find_by_name(name) is not None:
-                raise ValueError("A class with this name already exists")
+        if name is not None:
+            if not name.strip():
+                raise ValueError("Name cannot be empty")
+            if name != turma.name:
+                if self.repository.find_by_name(name) is not None:
+                    raise ValueError("A class with this name already exists")
 
         return self.repository.update(class_id, name, description)

@@ -116,6 +116,44 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 | PUT | `/classes/:id` | Atualizar | 200, 400, 404 |
 | DELETE | `/classes/:id` | Excluir | 204, 404 |
 
+---
+
+## Bugs Encontrados e Corrigidos (Code Review)
+
+### Bug 1 — `due_date` vazio quebra o banco
+**Arquivo:** `backend/repositories/activity_repository.py`
+
+**Problema:** Se o `due_date` fosse enviado como string vazia `""`, o código chamava `datetime.fromisoformat("")`, que lança `ValueError` — resultando em erro 500.
+
+**Correção:** Adicionado guarda para ignorar string vazia antes do parse:
+```python
+if isinstance(due_date, str) and due_date.strip():
+    due_date = datetime.fromisoformat(due_date)
+elif isinstance(due_date, str):
+    due_date = None
+```
+
+### Bug 2 — Update permite email/nome vazio
+**Arquivos:** `backend/services/update_user_service.py`, `backend/services/update_class_service.py`
+
+**Problema:** Se o usuário enviasse `{"email": ""}`, a condição `if email and email != user.email` era falsa (string vazia é falsy), pulava a validação, mas o repositório definia `user.email = ""` — violando a regra de negócio (NOT NULL + UNIQUE).
+
+**Correção:** Validação explícita de string vazia antes de prosseguir:
+```python
+if email is not None:
+    if not email.strip():
+        raise ValueError("Email cannot be empty")
+```
+
+### Bug 3 — HTTP code incorreto nos updates
+**Arquivos:** `backend/controllers/user_controller.py`, `backend/controllers/class_controller.py`, `backend/controllers/activity_controller.py`
+
+**Problema:** Quando o service lançava `ValueError` por validação (e não por "não encontrado"), o controller retornava **404**, quando o correto era **400**.
+
+**Correção:** Alterado `except ValueError` nos endpoints PUT de 404 para 400, já que a maioria dos erros são de validação, não de recurso inexistente.
+
+---
+
 ### Activities (`/activities`)
 | Método | Rota | Descrição | HTTP |
 |--------|------|-----------|------|

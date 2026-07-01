@@ -62,7 +62,7 @@ def update_user(user_id):
     try:
         user = update_user_service.execute(user_id, name, email, password, role)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 404
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(user.to_dict())
 

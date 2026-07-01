@@ -44,7 +44,7 @@ def create_activity():
     try:
         activity = create_activity_service.execute(title, class_id, description, due_date)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 409
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(activity.to_dict()), 201
 
@@ -63,7 +63,7 @@ def update_activity(activity_id):
     try:
         activity = update_activity_service.execute(activity_id, title, description, class_id, due_date)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 404
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(activity.to_dict())
 

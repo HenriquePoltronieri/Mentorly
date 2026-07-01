@@ -15,8 +15,10 @@ class ActivityRepository:
         return Activity.query.filter_by(class_id=class_id).all()
 
     def create(self, title, class_id, description=None, due_date=None):
-        if isinstance(due_date, str):
+        if isinstance(due_date, str) and due_date.strip():
             due_date = datetime.fromisoformat(due_date)
+        elif isinstance(due_date, str):
+            due_date = None
 
         activity = Activity(
             title=title,
@@ -39,8 +41,10 @@ class ActivityRepository:
         if class_id is not None:
             activity.class_id = class_id
         if due_date is not None:
-            if isinstance(due_date, str):
+            if isinstance(due_date, str) and due_date.strip():
                 due_date = datetime.fromisoformat(due_date)
+            elif isinstance(due_date, str):
+                due_date = None
             activity.due_date = due_date
         db.session.commit()
         return activity

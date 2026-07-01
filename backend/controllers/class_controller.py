@@ -58,7 +58,7 @@ def update_class(class_id):
     try:
         turma = update_class_service.execute(class_id, name, description)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 404
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(turma.to_dict())
 
