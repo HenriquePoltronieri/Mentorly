@@ -20,114 +20,207 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 
 ## Tecnologias Utilizadas
 
-### Frontend
-- Flutter
-
 ### Backend
-- Python (Flask)
-
-### Banco de Dados
+- Python 3
+- Flask 3.0.3
+- Flask-SQLAlchemy 3.1.1 (ORM)
+- PyMySQL 1.1.1
 - MySQL
 
-### Inteligência Artificial
-- Grok (em análise)
+### Frontend
+- Flutter (SDK ^3.11.5)
+- Dart
 
 ---
 
-## Funcionalidades
+## Models Implementadas
 
-### Coordenação Escolar
-- Cadastro e gerenciamento da escola;
-- Cadastro de professores;
-- Cadastro de turmas;
-- Cadastro de alunos;
-- Acompanhamento de pontuações e métricas gerais;
-- Visualização de relatórios.
+### User (`/backend/models/user.py`)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | Integer (PK) | Identificador único |
+| name | String(120) | Nome do usuário |
+| email | String(120) | Email (único) |
+| password_hash | String(255) | Hash da senha |
+| role | String(20) | Função (mentee, mentor, coordinator) |
+| created_at | DateTime | Data de criação |
+| updated_at | DateTime | Data de atualização |
 
-### Professores
-- Login individual;
-- Gerenciamento das turmas atribuídas;
-- Registro de mentorias;
-- Acompanhamento do desempenho dos alunos;
-- Recebimento de recomendações geradas por IA.
+### Turma (`/backend/models/class.py`)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | Integer (PK) | Identificador único |
+| name | String(120) | Nome da turma |
+| description | Text | Descrição (opcional) |
+| created_at | DateTime | Data de criação |
+| updated_at | DateTime | Data de atualização |
 
-### Inteligência Artificial
-
-1. Identificação automática de alunos com risco de baixo desempenho.
-
-2. Sugestão de estratégias pedagógicas personalizadas para cada aluno.
-
-3. Geração de planos de intervenção para alunos com dificuldades.
-
-4. Resumo automático do desempenho das turmas.
-
-5. Análise de padrões de comportamento e participação dos alunos.
-
-6. Recomendação de atividades complementares de acordo com as necessidades da turma.
-
-7. Geração de relatórios inteligentes para professores e coordenação.
-
-8. Sugestão de ações para melhorar o engajamento dos alunos.
-
-9. Apoio na organização e planejamento das mentorias.
-
-10. Dashboard com insights e indicadores gerados por IA para auxiliar na tomada de decisões pedagógicas.
+### Activity (`/backend/models/activity.py`)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | Integer (PK) | Identificador único |
+| title | String(200) | Título da atividade |
+| description | Text | Descrição (opcional) |
+| class_id | Integer (FK) | Referência à turma |
+| due_date | DateTime | Data de entrega (opcional) |
+| created_at | DateTime | Data de criação |
+| updated_at | DateTime | Data de atualização |
 
 ---
 
-## Estrutura do Sistema
+## Rotas Disponíveis
 
-O sistema é dividido em dois aplicativos:
+### Users (`/users`)
 
-### Aplicativo da Coordenação
-Responsável pelo gerenciamento da escola, professores, turmas e indicadores gerais.
+| Método | Rota | Descrição | Códigos HTTP |
+|--------|------|-----------|-------------|
+| POST | `/users` | Criar usuário | 201, 400, 409 |
+| GET | `/users` | Listar todos | 200 |
+| GET | `/users/:id` | Buscar por ID | 200, 404 |
+| PUT | `/users/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/users/:id` | Excluir | 204, 404 |
 
-### Aplicativo do Professor
-Responsável pelo acompanhamento das turmas, registro de aulas e comportamentos e utilização dos recursos de inteligência artificial.
+### Classes (`/classes`)
+
+| Método | Rota | Descrição | Códigos HTTP |
+|--------|------|-----------|-------------|
+| POST | `/classes` | Criar turma | 201, 400, 409 |
+| GET | `/classes` | Listar todas | 200 |
+| GET | `/classes/:id` | Buscar por ID | 200, 404 |
+| PUT | `/classes/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/classes/:id` | Excluir | 204, 404 |
+
+### Activities (`/activities`)
+
+| Método | Rota | Descrição | Códigos HTTP |
+|--------|------|-----------|-------------|
+| POST | `/activities` | Criar atividade | 201, 400, 409 |
+| GET | `/activities` | Listar todas (filtro: `?class_id=`) | 200 |
+| GET | `/activities/:id` | Buscar por ID | 200, 404 |
+| PUT | `/activities/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/activities/:id` | Excluir | 204, 404 |
 
 ---
 
-## Instalação e Execução
+## Funcionalidades Implementadas
 
-### Clonando o Repositório
+### Backend (API REST)
+- CRUD completo de Usuários
+- CRUD completo de Turmas
+- CRUD completo de Atividades
+- Arquitetura em camadas (Model → Repository → Service → Controller → Routes)
+- Tratamento de erros com códigos HTTP apropriados
+- Validação de entradas
+- Services separados por caso de uso
 
-```bash
-git clone https://github.com/SEU-USUARIO/mentorly.git
-Substitua `SEU-USUARIO` pelo usuário responsável pelo repositório.
-cd mentorly
+### Frontend (Flutter)
+- Tela inicial com navegação para cada entidade
+- Tela de listagem com refresh e exclusão com confirmação
+- Tela de cadastro com formulário validado
+- Tela de edição com dados preenchidos
+- Consumo da API REST
+
+---
+
+## Estrutura do Projeto
+
+```
+backend/
+├── app.py                      # Entry point, blueprint registration
+├── config.py                   # Database configuration
+├── controllers/                # HTTP request handling (Blueprints)
+│   ├── user_controller.py
+│   ├── class_controller.py
+│   └── activity_controller.py
+├── database/                   # Database connection
+│   ├── __init__.py             # SQLAlchemy instance
+│   └── connection.py           # Database creation
+├── models/                     # SQLAlchemy models
+│   ├── user.py
+│   ├── class.py
+│   └── activity.py
+├── repositories/               # Data access layer
+│   ├── user_repository.py
+│   ├── class_repository.py
+│   └── activity_repository.py
+├── services/                   # Business logic (per use case)
+│   ├── create_user_service.py
+│   ├── list_users_service.py
+│   ├── get_user_service.py
+│   ├── update_user_service.py
+│   ├── delete_user_service.py
+│   ├── create_class_service.py
+│   ├── list_classes_service.py
+│   ├── get_class_service.py
+│   ├── update_class_service.py
+│   ├── delete_class_service.py
+│   ├── create_activity_service.py
+│   ├── list_activities_service.py
+│   ├── get_activity_service.py
+│   ├── update_activity_service.py
+│   └── delete_activity_service.py
+├── routes/                     # Route definitions (placeholder)
+│   ├── users_routes.py
+│   └── class_route.py
+└── requirements.txt
+
+frontend/app_mentorly/
+├── lib/
+│   ├── main.dart               # App entry point
+│   ├── models/                 # Dart model classes
+│   │   ├── user.dart
+│   │   ├── turma.dart
+│   │   └── activity.dart
+│   ├── services/               # API service classes
+│   │   ├── api_service.dart
+│   │   ├── user_service.dart
+│   │   ├── class_service.dart
+│   │   └── activity_service.dart
+│   └── pages/                  # UI pages
+│       ├── home_page.dart
+│       ├── users/
+│       │   ├── user_list_page.dart
+│       │   └── user_form_page.dart
+│       ├── classes/
+│       │   ├── class_list_page.dart
+│       │   └── class_form_page.dart
+│       └── activities/
+│           ├── activity_list_page.dart
+│           └── activity_form_page.dart
+└── pubspec.yaml
 ```
 
-### Configuração do Backend
+---
+
+## Como Executar Backend
 
 ```bash
+# 1. Configurar o MySQL com o database mentorly
+
+# 2. Instalar dependências
 cd backend
 pip install -r requirements.txt
+
+# 3. Configurar variáveis de ambiente (opcional)
+# DB_HOST=localhost DB_USER=root DB_PASSWORD= DB_NAME=mentorly
+
+# 4. Executar
 python app.py
 ```
 
-O servidor será iniciado localmente na porta configurada no projeto.
+O servidor será iniciado em `http://localhost:5000`.
 
-### Configuração do Banco de Dados
+---
 
-1. Instale o MySQL.
-2. Crie um banco de dados chamado `mentorly`.
-3. Configure as credenciais de acesso no arquivo de configuração do backend.
-
-### Configuração do Frontend
+## Como Executar Frontend
 
 ```bash
-cd frontend
+cd frontend/app_mentorly
 flutter pub get
 flutter run
 ```
 
----
-
-## Objetivo
-
-O Mentorly tem como objetivo auxiliar escolas na gestão pedagógica, fornecendo ferramentas para acompanhamento de turmas, registro de informações acadêmicas e apoio à tomada de decisões através de recursos de inteligência artificial.
-
-A plataforma busca melhorar a organização escolar, reduzir o trabalho manual dos professores e permitir um acompanhamento mais eficiente do desenvolvimento dos alunos.
+Certifique-se de que o backend está rodando antes de iniciar o frontend.
 
 ---
 
@@ -140,22 +233,9 @@ A plataforma busca melhorar a organização escolar, reduzir o trabalho manual d
 
 ---
 
-## Diferenciais do Projeto
-
-- Centralização das informações acadêmicas;
-- Gestão simplificada de turmas e professores;
-- Relatórios automáticos de desempenho;
-- Recursos de Inteligência Artificial para apoio pedagógico;
-- Interface intuitiva e acessível;
-- Aplicativos específicos para coordenação e professores.
-
----
-
 ## Status do Projeto
 
 Em desenvolvimento
-
-Atualmente o projeto encontra-se em fase de prototipação e desenvolvimento das funcionalidades principais.
 
 ---
 

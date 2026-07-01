@@ -2,6 +2,8 @@ from flask import Flask
 
 from config import SQLALCHEMY_DATABASE_URI
 from controllers.user_controller import user_blueprint
+from controllers.class_controller import class_blueprint
+from controllers.activity_controller import activity_blueprint
 from database import db
 from database.connection import init_database
 
@@ -13,6 +15,8 @@ def create_app():
 
     db.init_app(app)
     app.register_blueprint(user_blueprint)
+    app.register_blueprint(class_blueprint)
+    app.register_blueprint(activity_blueprint)
 
     @app.get("/")
     def health_check():
