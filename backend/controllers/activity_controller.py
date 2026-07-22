@@ -1,30 +1,21 @@
 from flask import Blueprint, jsonify, request
 
-from services.create_activity_service import CreateActivityService
-from services.list_activities_service import ListActivitiesService
-from services.get_activity_service import GetActivityService
-from services.update_activity_service import UpdateActivityService
-from services.delete_activity_service import DeleteActivityService
+from services.activity_service import ActivityService
 
 activity_blueprint = Blueprint("activities", __name__, url_prefix="/activities")
-
-list_activities_service = ListActivitiesService()
-get_activity_service = GetActivityService()
-create_activity_service = CreateActivityService()
-update_activity_service = UpdateActivityService()
-delete_activity_service = DeleteActivityService()
+activity_service = ActivityService()
 
 
 @activity_blueprint.get("")
 def list_activities():
     class_id = request.args.get("class_id", type=int)
-    activities = list_activities_service.execute(class_id)
+    activities = activity_service.list_activities(class_id)
     return jsonify([a.to_dict() for a in activities])
 
 
 @activity_blueprint.get("/<int:activity_id>")
 def get_activity(activity_id):
-    activity = get_activity_service.execute(activity_id)
+    activity = activity_service.get_activity(activity_id)
     if activity is None:
         return jsonify({"error": "Activity not found"}), 404
     return jsonify(activity.to_dict())
@@ -42,9 +33,9 @@ def create_activity():
         return jsonify({"error": "title and class_id are required"}), 400
 
     try:
-        activity = create_activity_service.execute(title, class_id, description, due_date)
+        activity = activity_service.create_activity(title, class_id, description, due_date)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 409
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(activity.to_dict()), 201
 
@@ -61,9 +52,9 @@ def update_activity(activity_id):
         return jsonify({"error": "At least one field must be provided"}), 400
 
     try:
-        activity = update_activity_service.execute(activity_id, title, description, class_id, due_date)
+        activity = activity_service.update_activity(activity_id, title, description, class_id, due_date)
     except ValueError as error:
-        return jsonify({"error": str(error)}), 404
+        return jsonify({"error": str(error)}), 400
 
     return jsonify(activity.to_dict())
 
@@ -71,7 +62,7 @@ def update_activity(activity_id):
 @activity_blueprint.delete("/<int:activity_id>")
 def delete_activity(activity_id):
     try:
-        delete_activity_service.execute(activity_id)
+        activity_service.delete_activity(activity_id)
     except ValueError as error:
         return jsonify({"error": str(error)}), 404
 
