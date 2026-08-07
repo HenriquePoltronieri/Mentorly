@@ -1,68 +1,64 @@
-from flask import Blueprint, jsonify, request
+from flask import jsonify, request
 
 from services.user_service import UserService
 
-user_blueprint = Blueprint("users", __name__, url_prefix="/users")
-user_service = UserService()
 
+class UserController:
+    def __init__(self):
+        self.service = UserService()
 
-@user_blueprint.get("")
-def list_users():
-    users = user_service.list_users()
-    return jsonify([user.to_dict() for user in users])
+    def list_users(self):
+        users = self.service.list_users()
+        return jsonify([user.to_dict() for user in users])
 
+    def list_users_by_role(self, role):
+        users = self.service.list_users_by_role(role)
+        return jsonify(users)
 
-@user_blueprint.get("/<int:user_id>")
-def get_user(user_id):
-    user = user_service.get_user(user_id)
-    if user is None:
-        return jsonify({"error": "User not found"}), 404
-    return jsonify(user.to_dict())
+    def get_user(self, user_id):
+        user = self.service.get_user(user_id)
+        if user is None:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify(user.to_dict())
 
+    def create_user(self):
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        email = data.get("email")
+        password = data.get("password")
+        role = data.get("role", "mentee")
 
-@user_blueprint.post("")
-def create_user():
-    data = request.get_json(silent=True) or {}
-    name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
-    role = data.get("role", "mentee")
+        if not name or not email or not password:
+            return jsonify({"error": "name, email and password are required"}), 400
 
-    if not name or not email or not password:
-        return jsonify({"error": "name, email and password are required"}), 400
+        try:
+            user = self.service.create_user(name, email, password, role)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 409
 
-    try:
-        user = user_service.create_user(name, email, password, role)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 409
+        return jsonify(user.to_dict()), 201
 
-    return jsonify(user.to_dict()), 201
+    def update_user(self, user_id):
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        email = data.get("email")
+        password = data.get("password")
+        role = data.get("role")
 
+        if not any([name, email, password, role]):
+            return jsonify({"error": "At least one field must be provided"}), 400
 
-@user_blueprint.put("/<int:user_id>")
-def update_user(user_id):
-    data = request.get_json(silent=True) or {}
-    name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
-    role = data.get("role")
+        try:
+            user = self.service.update_user(user_id, name, email, password, role)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
 
-    if not any([name, email, password, role]):
-        return jsonify({"error": "At least one field must be provided"}), 400
+        return jsonify(user.to_dict())
 
-    try:
-        user = user_service.update_user(user_id, name, email, password, role)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 400
+    def delete_user(self, user_id):
+        try:
+            self.service.delete_user(user_id)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 404
 
-    return jsonify(user.to_dict())
-
-
-@user_blueprint.delete("/<int:user_id>")
-def delete_user(user_id):
-    try:
-        user_service.delete_user(user_id)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 404
-
-    return "", 204
+        return "", 204

@@ -1,5 +1,6 @@
 from werkzeug.security import generate_password_hash
 
+from models.user_model import User
 from repositories.user_repository import UserRepository
 
 
@@ -8,20 +9,20 @@ class UserService:
         self.repository = UserRepository()
 
     def list_users(self):
-        return self.repository.find_all()
+        return User.find_all()
 
     def get_user(self, user_id):
-        return self.repository.find_by_id(user_id)
+        return User.find_by_id(user_id)
 
     def create_user(self, name, email, password, role="mentee"):
         if self.repository.find_by_email(email) is not None:
             raise ValueError("Email already registered")
 
         password_hash = generate_password_hash(password)
-        return self.repository.create(name, email, password_hash, role)
+        return User.create(name, email, password_hash, role)
 
     def update_user(self, user_id, name=None, email=None, password=None, role=None):
-        user = self.repository.find_by_id(user_id)
+        user = User.find_by_id(user_id)
         if user is None:
             raise ValueError("User not found")
 
@@ -39,11 +40,15 @@ class UserService:
         if password:
             password_hash = generate_password_hash(password)
 
-        return self.repository.update(user_id, name, email, password_hash, role)
+        return user.update(name, email, password_hash, role)
 
     def delete_user(self, user_id):
-        user = self.repository.find_by_id(user_id)
+        user = User.find_by_id(user_id)
         if user is None:
             raise ValueError("User not found")
 
-        self.repository.delete(user_id)
+        user.delete()
+
+    def list_users_by_role(self, role):
+        """Usuários filtrados por papel (procedure)."""
+        return self.repository.usuarios_por_role(role)

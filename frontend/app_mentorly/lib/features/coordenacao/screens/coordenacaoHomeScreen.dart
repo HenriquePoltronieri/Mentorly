@@ -61,6 +61,14 @@ class CoordenacaoHomeScreen extends StatelessWidget {
               Navigator.pushNamed(context, AppRoutes.configNotasEtapa);
             },
           ),
+          _ItemMenu(
+            titulo: 'Relatório de Turmas',
+            subtitulo: 'Turmas com contagem de atividades',
+            icone: Icons.bar_chart_outlined,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.relatorioTurmas);
+            },
+          ),
         ],
       ),
     );

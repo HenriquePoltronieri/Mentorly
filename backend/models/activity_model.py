@@ -18,6 +18,42 @@ class Activity(db.Model):
         db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    @classmethod
+    def find_all(cls):
+        return cls.query.all()
+
+    @classmethod
+    def find_by_id(cls, activity_id):
+        return cls.query.get(activity_id)
+
+    @classmethod
+    def create(cls, title, class_id, description=None, due_date=None):
+        activity = cls(
+            title=title,
+            description=description,
+            class_id=class_id,
+            due_date=due_date,
+        )
+        db.session.add(activity)
+        db.session.commit()
+        return activity
+
+    def update(self, title=None, description=None, class_id=None, due_date=None):
+        if title is not None:
+            self.title = title
+        if description is not None:
+            self.description = description
+        if class_id is not None:
+            self.class_id = class_id
+        if due_date is not None:
+            self.due_date = due_date
+        db.session.commit()
+        return self
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
     def to_dict(self):
         return {
             "id": self.id,

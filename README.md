@@ -25,7 +25,7 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 - Flask 3.0.3
 - Flask-SQLAlchemy 3.1.1 (ORM)
 - PyMySQL 1.1.1
-- MySQL
+- MySQL (com Stored Procedures)
 
 ### Frontend
 - Flutter (SDK ^3.11.5)
@@ -35,7 +35,7 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 
 ## Models Implementadas
 
-### User (`/backend/models/user.py`)
+### User (`/backend/models/user_model.py`)
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | id | Integer (PK) | Identificador único |
@@ -46,7 +46,7 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 | created_at | DateTime | Data de criação |
 | updated_at | DateTime | Data de atualização |
 
-### Turma (`/backend/models/class.py`)
+### Class (`/backend/models/class_model.py`)
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | id | Integer (PK) | Identificador único |
@@ -55,7 +55,7 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 | created_at | DateTime | Data de criação |
 | updated_at | DateTime | Data de atualização |
 
-### Activity (`/backend/models/activity.py`)
+### Activity (`/backend/models/activity_model.py`)
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | id | Integer (PK) | Identificador único |
@@ -68,37 +68,78 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 
 ---
 
+## Repositories Utilizados
+
+### UserRepository (`/backend/repositories/user_repository.py`)
+- `find_by_email(email)` — busca usuário por email
+- `usuarios_por_role(role)` — usuários filtrados por papel (procedure)
+
+### ClassRepository (`/backend/repositories/class_repository.py`)
+- `find_by_name(name)` — busca turma por nome
+- `relatorio_turmas_atividades()` — relatório de turmas com contagem de atividades (procedure)
+
+### ActivityRepository (`/backend/repositories/activity_repository.py`)
+- `find_by_class_id(class_id)` — atividades de uma turma
+- `buscar_atividades(termo, ordenar_por, direcao)` — busca de atividades com filtro e ordenação (procedure)
+
+### ReportRepository (`/backend/repositories/report_repository.py`)
+- `resumo_sistema()` — resumo geral do sistema (procedure)
+
+---
+
+## Procedures Criadas
+
+As procedures estão definidas em `/backend/database/procedures.sql` e são instaladas automaticamente na inicialização do backend.
+
+| Procedure | Descrição | Consultas Utilizadas |
+|-----------|-----------|----------------------|
+| `sp_relatorio_turmas_atividades` | Relatório de turmas com contagem de atividades | LEFT JOIN, GROUP BY, ORDER BY |
+| `sp_buscar_atividades` | Busca de atividades por termo com ordenação | WHERE (LIKE), ORDER BY, LEFT JOIN |
+| `sp_usuarios_por_role` | Usuários filtrados por papel | WHERE, ORDER BY |
+| `sp_resumo_sistema` | Resumo geral do sistema (dashboard) | Subconsultas agregadas (COUNT) |
+
+---
+
 ## Rotas Disponíveis
 
-### Users (`/users`)
+### Users (`/api/users`)
 
 | Método | Rota | Descrição | Códigos HTTP |
 |--------|------|-----------|-------------|
-| POST | `/users` | Criar usuário | 201, 400, 409 |
-| GET | `/users` | Listar todos | 200 |
-| GET | `/users/:id` | Buscar por ID | 200, 404 |
-| PUT | `/users/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/users/:id` | Excluir | 204, 404 |
+| POST | `/api/users` | Criar usuário | 201, 400, 409 |
+| GET | `/api/users` | Listar todos | 200 |
+| GET | `/api/users/role/:role` | Listar por papel (procedure) | 200 |
+| GET | `/api/users/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/users/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/users/:id` | Excluir | 204, 404 |
 
-### Classes (`/classes`)
-
-| Método | Rota | Descrição | Códigos HTTP |
-|--------|------|-----------|-------------|
-| POST | `/classes` | Criar turma | 201, 400, 409 |
-| GET | `/classes` | Listar todas | 200 |
-| GET | `/classes/:id` | Buscar por ID | 200, 404 |
-| PUT | `/classes/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/classes/:id` | Excluir | 204, 404 |
-
-### Activities (`/activities`)
+### Classes (`/api/classes`)
 
 | Método | Rota | Descrição | Códigos HTTP |
 |--------|------|-----------|-------------|
-| POST | `/activities` | Criar atividade | 201, 400, 409 |
-| GET | `/activities` | Listar todas (filtro: `?class_id=`) | 200 |
-| GET | `/activities/:id` | Buscar por ID | 200, 404 |
-| PUT | `/activities/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/activities/:id` | Excluir | 204, 404 |
+| POST | `/api/classes` | Criar turma | 201, 400, 409 |
+| GET | `/api/classes` | Listar todas | 200 |
+| GET | `/api/classes/relatorio/atividades` | Relatório de turmas (procedure) | 200 |
+| GET | `/api/classes/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/classes/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/classes/:id` | Excluir | 204, 404 |
+
+### Activities (`/api/activities`)
+
+| Método | Rota | Descrição | Códigos HTTP |
+|--------|------|-----------|-------------|
+| POST | `/api/activities` | Criar atividade | 201, 400, 409 |
+| GET | `/api/activities` | Listar todas (filtro: `?class_id=`) | 200 |
+| GET | `/api/activities/buscar` | Buscar atividades (procedure) | 200 |
+| GET | `/api/activities/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/activities/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/activities/:id` | Excluir | 204, 404 |
+
+### Dashboard (`/api/dashboard`)
+
+| Método | Rota | Descrição | Códigos HTTP |
+|--------|------|-----------|-------------|
+| GET | `/api/dashboard/resumo` | Resumo geral do sistema (procedure) | 200 |
 
 ---
 
@@ -109,6 +150,11 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 - CRUD completo de Turmas
 - CRUD completo de Atividades
 - Arquitetura em camadas (Model → Repository → Service → Controller → Routes)
+- **Funcionalidades além do CRUD via Stored Procedures:**
+  - Relatório de turmas com contagem de atividades (LEFT JOIN + GROUP BY + ORDER BY)
+  - Busca de atividades por termo com ordenação (WHERE LIKE + ORDER BY)
+  - Usuários filtrados por papel (WHERE + ORDER BY)
+  - Resumo geral do sistema (subconsultas agregadas)
 - Tratamento de erros com códigos HTTP apropriados
 - Validação de entradas
 - Services separados por caso de uso
@@ -119,6 +165,9 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 - Tela de cadastro com formulário validado
 - Tela de edição com dados preenchidos
 - Consumo da API REST
+- **Telas de funcionalidades além do CRUD:**
+  - Relatório de Turmas (coordenação) — contagem de atividades por turma
+  - Busca de Atividades (professor) — filtro por termo e ordenação
 
 ---
 
@@ -128,65 +177,50 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 backend/
 ├── app.py                      # Entry point, blueprint registration
 ├── config.py                   # Database configuration
-├── controllers/                # HTTP request handling (Blueprints)
+├── controllers/                # HTTP request handling (Controllers finos)
 │   ├── user_controller.py
 │   ├── class_controller.py
-│   └── activity_controller.py
+│   ├── activity_controller.py
+│   └── dashboard_controller.py
 ├── database/                   # Database connection
 │   ├── __init__.py             # SQLAlchemy instance
-│   └── connection.py           # Database creation
-├── models/                     # SQLAlchemy models
-│   ├── user.py
-│   ├── class.py
-│   └── activity.py
-├── repositories/               # Data access layer
+│   ├── connection.py           # Database creation + procedure install
+│   ├── procedure.py            # Helper para chamar procedures
+│   └── procedures.sql          # Definição das stored procedures
+├── models/                     # SQLAlchemy models (entidades + CRUD básico)
+│   ├── user_model.py
+│   ├── class_model.py
+│   └── activity_model.py
+├── repositories/               # Consultas avançadas (procedures)
 │   ├── user_repository.py
 │   ├── class_repository.py
-│   └── activity_repository.py
+│   ├── activity_repository.py
+│   └── report_repository.py
 ├── services/                   # Business logic (per use case)
-│   ├── create_user_service.py
-│   ├── list_users_service.py
-│   ├── get_user_service.py
-│   ├── update_user_service.py
-│   ├── delete_user_service.py
-│   ├── create_class_service.py
-│   ├── list_classes_service.py
-│   ├── get_class_service.py
-│   ├── update_class_service.py
-│   ├── delete_class_service.py
-│   ├── create_activity_service.py
-│   ├── list_activities_service.py
-│   ├── get_activity_service.py
-│   ├── update_activity_service.py
-│   └── delete_activity_service.py
-├── routes/                     # Route definitions (placeholder)
-│   ├── users_routes.py
-│   └── class_route.py
+│   ├── user_service.py
+│   ├── class_service.py
+│   ├── activity_service.py
+│   └── dashboard_service.py
+├── routes/                     # Route definitions (Blueprints)
+│   ├── user_routes.py
+│   ├── class_routes.py
+│   ├── activity_routes.py
+│   └── dashboard_routes.py
 └── requirements.txt
 
 frontend/app_mentorly/
 ├── lib/
 │   ├── main.dart               # App entry point
-│   ├── models/                 # Dart model classes
-│   │   ├── user.dart
-│   │   ├── turma.dart
-│   │   └── activity.dart
-│   ├── services/               # API service classes
-│   │   ├── api_service.dart
-│   │   ├── user_service.dart
-│   │   ├── class_service.dart
-│   │   └── activity_service.dart
-│   └── pages/                  # UI pages
-│       ├── home_page.dart
-│       ├── users/
-│       │   ├── user_list_page.dart
-│       │   └── user_form_page.dart
-│       ├── classes/
-│       │   ├── class_list_page.dart
-│       │   └── class_form_page.dart
-│       └── activities/
-│           ├── activity_list_page.dart
-│           └── activity_form_page.dart
+│   ├── app/
+│   │   ├── routes.dart         # Rotas do app
+│   │   └── theme.dart
+│   ├── core/                   # Serviços e utilitários
+│   ├── features/
+│   │   ├── auth/               # Autenticação
+│   │   ├── coordenacao/        # Telas da coordenação
+│   │   │   └── screens/relatorios/relatorioTurmasScreen.dart
+│   │   └── professor/          # Telas do professor
+│   │       └── screens/atividades/buscarAtividadesScreen.dart
 └── pubspec.yaml
 ```
 
@@ -204,7 +238,7 @@ pip install -r requirements.txt
 # 3. Configurar variáveis de ambiente (opcional)
 # DB_HOST=localhost DB_USER=root DB_PASSWORD= DB_NAME=mentorly
 
-# 4. Executar
+# 4. Executar (as procedures são instaladas automaticamente)
 python app.py
 ```
 

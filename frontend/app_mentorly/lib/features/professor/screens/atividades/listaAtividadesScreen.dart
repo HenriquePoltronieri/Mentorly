@@ -65,6 +65,13 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const ProfessorTopBar(abaAtiva: 'atividades'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.pushNamed(context, AppRoutes.buscarAtividades);
+        },
+        icon: const Icon(Icons.search),
+        label: const Text('Buscar atividades'),
+      ),
       body: RefreshIndicator(
         onRefresh: _buscarTurmas,
         child: _construirCorpo(),

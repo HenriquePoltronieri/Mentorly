@@ -17,6 +17,7 @@ import '../features/coordenacao/screens/professores/listaProfessoresScreen.dart'
 import '../features/coordenacao/screens/turmas/gerenciarTurmasScreen.dart';
 import '../features/coordenacao/screens/turmas/listaTurmasProfessorScreen.dart';
 import '../features/coordenacao/screens/alunos/listaAlunosTurmaScreen.dart';
+import '../features/coordenacao/screens/relatorios/relatorioTurmasScreen.dart';
 
 // telas professor
 import '../features/professor/screens/dashboardScreen.dart';
@@ -26,6 +27,7 @@ import '../features/professor/screens/turmas/alunoDetailScreen.dart';
 import '../features/professor/screens/atividades/listaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/turmaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/atividadeNotasScreen.dart';
+import '../features/professor/screens/atividades/buscarAtividadesScreen.dart';
 
 // Nomes das rotas e o mapa usado no MaterialApp.
 // Pra passar dado pra tela (turma, aluno, atividade) usa o parametro arguments
@@ -48,6 +50,7 @@ class AppRoutes {
   static const String gerenciarTurmas = '/coordenacao/gerenciar-turmas';
   static const String listaTurmasProfessor = '/coordenacao/turmas';
   static const String listaAlunosTurma = '/coordenacao/alunos';
+  static const String relatorioTurmas = '/coordenacao/relatorio-turmas';
 
   // professor
   static const String dashboard = '/professor/dashboard';
@@ -57,6 +60,7 @@ class AppRoutes {
   static const String listaAtividades = '/professor/atividades';
   static const String turmaAtividades = '/professor/turma-atividades';
   static const String atividadeNotas = '/professor/atividade-notas';
+  static const String buscarAtividades = '/professor/buscar-atividades';
 
   static Map<String, WidgetBuilder> routes = {
     perfilSelection: (context) => PerfilSelectionScreen(),
@@ -74,6 +78,7 @@ class AppRoutes {
     gerenciarTurmas: (context) => GerenciarTurmasScreen(),
     listaTurmasProfessor: (context) => ListaTurmasProfessorScreen(),
     listaAlunosTurma: (context) => ListaAlunosTurmaScreen(),
+    relatorioTurmas: (context) => RelatorioTurmasScreen(),
 
     // professor
     dashboard: (context) => DashboardScreen(),
@@ -83,5 +88,6 @@ class AppRoutes {
     listaAtividades: (context) => ListaAtividadesScreen(),
     turmaAtividades: (context) => TurmaAtividadesScreen(),
     atividadeNotas: (context) => AtividadeNotasScreen(),
+    buscarAtividades: (context) => BuscarAtividadesScreen(),
   };
 }
