@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/routes.dart';
+import '../../../core/services/apiService.dart';
 import '../../../core/services/authService.dart';
 
 // tela de login da coordenacao
@@ -44,6 +45,14 @@ class _LoginScreenState extends State<LoginScreen> {
       // por enquanto so navega, depois a gente salva o token (SharedPreferences)
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.coordenacaoHome);
+    } on ApiException catch (e) {
+      // a API respondeu, mas recusou: mostra o motivo real em vez de
+      // dizer que o servidor esta fora do ar
+      setState(() {
+        _mensagemErro = e.statusCode == 401 || e.statusCode == 400
+            ? 'Email ou senha incorretos'
+            : e.mensagem;
+      });
     } catch (e) {
       setState(() {
         _mensagemErro = 'Não foi possível conectar ao servidor';
