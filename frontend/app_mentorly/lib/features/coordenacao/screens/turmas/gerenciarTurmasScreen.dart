@@ -1,16 +1,15 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../../../app/routes.dart';
+import '../../../../core/services/apiService.dart';
+import '../../models/turmaModel.dart';
+import '../../services/turmasService.dart';
 import 'adicionarTurmaModal.dart';
 
-// tela onde a coordenacao cria turmas e ve a lista de turmas existentes
-// (diferente da listaTurmasProfessorScreen, que serve pra VINCULAR
-// professores as turmas ja criadas aqui)
+// Tela da coordenacao com o CRUD de turmas.
+// Fluxo: tela -> TurmasService -> ApiService -> /api/classes
 //
-// IMPORTANTE PRO BACKEND:
-// endpoint -> GET {baseUrl}/api/coordenacao/turmas
-// resposta esperada (200) -> [ { "id": 1, "nome": "...", "disciplina": "...", "turno": "..." }, ... ]
+// Toque na turma -> abre as atividades dela (AppRoutes.turmaAtividades)
+// Lapis -> editar     Lixeira -> excluir (com confirmacao)
 class GerenciarTurmasScreen extends StatefulWidget {
   const GerenciarTurmasScreen({super.key});
 
@@ -19,13 +18,11 @@ class GerenciarTurmasScreen extends StatefulWidget {
 }
 
 class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final TurmasService _turmasService = TurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
-  List<dynamic> _turmas = [];
+  List<TurmaModel> _turmas = [];
 
   @override
   void initState() {
@@ -40,15 +37,10 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/coordenacao/turmas'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() => _turmas = jsonDecode(response.body));
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar turmas');
-      }
+      final turmas = await _turmasService.listarTurmas();
+      setState(() => _turmas = turmas);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar turmas: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
@@ -59,11 +51,59 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
   }
 
   Future<void> _abrirCriarTurma() async {
-    final criou = await showDialog<bool>(
+    final salvou = await showDialog<bool>(
       context: context,
       builder: (_) => const AdicionarTurmaModal(),
     );
-    if (criou == true) _buscarTurmas();
+    if (salvou == true) _buscarTurmas();
+  }
+
+  Future<void> _abrirEditarTurma(TurmaModel turma) async {
+    final salvou = await showDialog<bool>(
+      context: context,
+      builder: (_) => AdicionarTurmaModal(turma: turma),
+    );
+    if (salvou == true) _buscarTurmas();
+  }
+
+  Future<void> _excluirTurma(TurmaModel turma) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (contexto) => AlertDialog(
+        title: const Text('Excluir turma'),
+        content: Text('Excluir a turma "${turma.nome}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmou != true) return;
+
+    try {
+      await _turmasService.excluirTurma(turma.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Turma "${turma.nome}" excluída')),
+      );
+      _buscarTurmas();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível conectar ao servidor')),
+      );
+    }
   }
 
   @override
@@ -94,7 +134,8 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
           Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
           Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
+            child: Text(_mensagemErro!,
+                style: const TextStyle(color: Colors.red)),
           ),
         ],
       );
@@ -117,11 +158,31 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
         final turma = _turmas[index];
         return ListTile(
           leading: const CircleAvatar(child: Icon(Icons.class_)),
-          title: Text(turma['nome'] ?? ''),
-          subtitle: Text('${turma['disciplina'] ?? ''} • ${turma['turno'] ?? ''}'),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          title: Text(turma.nome),
+          subtitle: Text(
+            turma.descricao.isEmpty ? 'Sem descrição' : turma.descricao,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Editar',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _abrirEditarTurma(turma),
+              ),
+              IconButton(
+                tooltip: 'Excluir',
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () => _excluirTurma(turma),
+              ),
+            ],
+          ),
           onTap: () {
-            Navigator.pushNamed(context, AppRoutes.listaAlunosTurma, arguments: turma);
+            Navigator.pushNamed(
+              context,
+              AppRoutes.turmaAtividades,
+              arguments: turma,
+            );
           },
         );
       },

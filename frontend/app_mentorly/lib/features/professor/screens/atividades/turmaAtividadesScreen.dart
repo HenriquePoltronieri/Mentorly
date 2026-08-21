@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../../../app/routes.dart';
+import '../../../../core/services/apiService.dart';
 import '../../../coordenacao/models/turmaModel.dart';
-import '../../controllers/atividadesController.dart';
 import '../../models/atividadeModel.dart';
-import '../../widgets/professorTopBar.dart';
+import '../../services/atividadesService.dart';
 import 'adicionarAtividadeModal.dart';
 
-// tela que lista as atividades de uma turma especifica, com botao
-// pra criar uma nova atividade (abre AdicionarAtividadeModal)
-// recebe a turma via Navigator.pushNamed(context, AppRoutes.turmaAtividades, arguments: turma)
+// Lista as atividades de uma turma especifica, com criar/editar/excluir.
+// Fluxo: tela -> AtividadesService -> ApiService -> /api/activities?class_id=<id>
+//
+// Recebe a turma via Navigator.pushNamed(context, AppRoutes.turmaAtividades, arguments: turma)
 class TurmaAtividadesScreen extends StatefulWidget {
   const TurmaAtividadesScreen({super.key});
 
@@ -17,12 +17,13 @@ class TurmaAtividadesScreen extends StatefulWidget {
 }
 
 class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
-  final _controller = AtividadesController();
+  final AtividadesService _atividadesService = AtividadesService();
 
   bool _carregando = true;
   String? _mensagemErro;
   TurmaModel? _turma;
   bool _jaBuscou = false;
+  List<AtividadeModel> _atividades = [];
 
   @override
   void didChangeDependencies() {
@@ -49,7 +50,11 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     });
 
     try {
-      await _controller.carregarAtividades(_turma!.id);
+      final atividades =
+          await _atividadesService.listarAtividades(turmaId: _turma!.id);
+      setState(() => _atividades = atividades);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar atividades: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
@@ -62,50 +67,81 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   Future<void> _abrirAdicionarAtividade() async {
     if (_turma == null) return;
 
-    final adicionou = await showDialog<bool>(
+    final salvou = await showDialog<bool>(
       context: context,
       builder: (_) => AdicionarAtividadeModal(turmas: [_turma!]),
     );
 
-    if (adicionou == true) _buscarAtividades();
+    if (salvou == true) _buscarAtividades();
+  }
+
+  Future<void> _abrirEditarAtividade(AtividadeModel atividade) async {
+    if (_turma == null) return;
+
+    final salvou = await showDialog<bool>(
+      context: context,
+      builder: (_) =>
+          AdicionarAtividadeModal(turmas: [_turma!], atividade: atividade),
+    );
+
+    if (salvou == true) _buscarAtividades();
+  }
+
+  Future<void> _excluirAtividade(AtividadeModel atividade) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (contexto) => AlertDialog(
+        title: const Text('Excluir atividade'),
+        content: Text('Excluir a atividade "${atividade.nome}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmou != true) return;
+
+    try {
+      await _atividadesService.excluirAtividade(atividade.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Atividade "${atividade.nome}" excluída')),
+      );
+      _buscarAtividades();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível conectar ao servidor')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const ProfessorTopBar(abaAtiva: 'atividades'),
+      appBar: AppBar(
+        title: Text(_turma == null ? 'Atividades' : 'Atividades · ${_turma!.nome}'),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirAdicionarAtividade,
         icon: const Icon(Icons.add),
         label: const Text('Adicionar atividade'),
       ),
-      body: Column(
-        children: [
-          if (_turma != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  Text(
-                    _turma!.nome,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _buscarAtividades,
-              child: _construirCorpo(),
-            ),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _buscarAtividades,
+        child: _construirCorpo(),
       ),
     );
   }
@@ -122,15 +158,14 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
           Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
           Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
+            child:
+                Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
           ),
         ],
       );
     }
 
-    final atividades = _controller.atividades;
-
-    if (atividades.isEmpty) {
+    if (_atividades.isEmpty) {
       return ListView(
         children: [
           const SizedBox(height: 80),
@@ -143,30 +178,46 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: atividades.length,
+      itemCount: _atividades.length,
       itemBuilder: (context, index) {
-        final atividade = atividades[index];
+        final atividade = _atividades[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
-            leading: CircleAvatar(
-              child: Icon(
-                atividade.tipo == 'Prova' ? Icons.edit_note : Icons.assignment,
-              ),
-            ),
+            leading: const CircleAvatar(child: Icon(Icons.assignment)),
             title: Text(atividade.nome),
-            subtitle: Text('${atividade.tipo} • Etapa ${atividade.etapa} • vale ${atividade.valor} pts'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                AppRoutes.atividadeNotas,
-                arguments: {'atividade': atividade, 'turma': _turma},
-              );
-            },
+            subtitle: Text(_montarSubtitulo(atividade)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Editar',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _abrirEditarAtividade(atividade),
+                ),
+                IconButton(
+                  tooltip: 'Excluir',
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _excluirAtividade(atividade),
+                ),
+              ],
+            ),
+            onTap: () => _abrirEditarAtividade(atividade),
           ),
         );
       },
     );
+  }
+
+  String _montarSubtitulo(AtividadeModel atividade) {
+    final partes = <String>[];
+    if (atividade.descricao.isNotEmpty) partes.add(atividade.descricao);
+    if (atividade.dataEntrega.isNotEmpty) {
+      final data = atividade.dataEntrega.contains('T')
+          ? atividade.dataEntrega.split('T').first
+          : atividade.dataEntrega;
+      partes.add('Entrega: $data');
+    }
+    return partes.isEmpty ? 'Sem descrição' : partes.join(' • ');
   }
 }

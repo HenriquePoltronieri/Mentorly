@@ -23,10 +23,18 @@ class CoordenacaoHomeScreen extends StatelessWidget {
           ),
           _ItemMenu(
             titulo: 'Gerenciar Turmas',
-            subtitulo: 'Criar turmas e adicionar alunos',
+            subtitulo: 'Criar, editar, excluir turmas e ver suas atividades',
             icone: Icons.class_outlined,
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.gerenciarTurmas);
+            },
+          ),
+          _ItemMenu(
+            titulo: 'Buscar Atividades',
+            subtitulo: 'Filtrar atividades por termo e ordenação',
+            icone: Icons.search,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.buscarAtividades);
             },
           ),
           _ItemMenu(

@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
+import '../../services/atividadesService.dart';
 import '../../widgets/professorTopBar.dart';
 
 // Tela de busca de atividades com filtro por termo e ordenação.
@@ -14,7 +14,7 @@ class BuscarAtividadesScreen extends StatefulWidget {
 }
 
 class _BuscarAtividadesScreenState extends State<BuscarAtividadesScreen> {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+  final AtividadesService _atividadesService = AtividadesService();
 
   final _termoController = TextEditingController();
   String _ordenarPor = 'due_date';
@@ -38,25 +38,18 @@ class _BuscarAtividadesScreenState extends State<BuscarAtividadesScreen> {
     });
 
     try {
-      final params = <String, String>{
-        'ordenar_por': _ordenarPor,
-        'direcao': _direcao,
-      };
-      if (_termoController.text.trim().isNotEmpty) {
-        params['termo'] = _termoController.text.trim();
-      }
+      final atividades = await _atividadesService.buscarAtividades(
+        termo: _termoController.text.trim(),
+        ordenarPor: _ordenarPor,
+        direcao: _direcao,
+      );
 
-      final uri = Uri.parse('$baseUrl/api/activities/buscar').replace(queryParameters: params);
-      final response = await http.get(uri).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _atividades = jsonDecode(response.body);
-          _jaBuscou = true;
-        });
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar atividades');
-      }
+      setState(() {
+        _atividades = atividades;
+        _jaBuscou = true;
+      });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar atividades: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

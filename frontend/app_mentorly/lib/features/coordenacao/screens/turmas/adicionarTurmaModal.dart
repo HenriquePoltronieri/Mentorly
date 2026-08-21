@@ -1,36 +1,47 @@
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
+import '../../models/turmaModel.dart';
+import '../../services/turmasService.dart';
 
-// modal pra coordenacao criar uma turma nova
-// IMPORTANTE PRO BACKEND:
-// endpoint esperado -> POST {baseUrl}/api/coordenacao/turmas
-// body enviado -> { "nome": "...", "disciplina": "...", "turno": "..." }
-// resposta esperada (201) -> { "id": 1, "nome": "...", "disciplina": "...", "turno": "..." }
+// Modal da coordenacao pra criar OU editar uma turma.
+// Fluxo: tela -> TurmasService -> ApiService -> /api/classes
 //
-// uso: showDialog(context: context, builder: (_) => const AdicionarTurmaModal())
-// retorna 'true' via Navigator.pop se a turma foi criada com sucesso
+// A entidade Class do backend tem so name e description, entao o formulario
+// pede nome e descricao (antes pedia disciplina/turno, que nao existem na API).
+//
+// uso (criar):  showDialog(context: context, builder: (_) => const AdicionarTurmaModal())
+// uso (editar): showDialog(context: context, builder: (_) => AdicionarTurmaModal(turma: turma))
+// retorna 'true' via Navigator.pop quando a turma foi salva com sucesso
 class AdicionarTurmaModal extends StatefulWidget {
-  const AdicionarTurmaModal({super.key});
+  final TurmaModel? turma;
+
+  const AdicionarTurmaModal({super.key, this.turma});
 
   @override
   State<AdicionarTurmaModal> createState() => _AdicionarTurmaModalState();
 }
 
 class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
-  final _nomeController = TextEditingController();
-  final _disciplinaController = TextEditingController();
-  final _turnoController = TextEditingController();
+  final _turmasService = TurmasService();
+
+  late final TextEditingController _nomeController;
+  late final TextEditingController _descricaoController;
 
   bool _carregando = false;
   String? _mensagemErro;
 
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  bool get _editando => widget.turma != null;
 
-  Future<void> _adicionar() async {
+  @override
+  void initState() {
+    super.initState();
+    _nomeController = TextEditingController(text: widget.turma?.nome ?? '');
+    _descricaoController =
+        TextEditingController(text: widget.turma?.descricao ?? '');
+  }
+
+  Future<void> _salvar() async {
     if (_nomeController.text.trim().isEmpty) {
       setState(() => _mensagemErro = 'Digite o nome da turma');
       return;
@@ -42,24 +53,23 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
     });
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/coordenacao/turmas'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'nome': _nomeController.text.trim(),
-              'disciplina': _disciplinaController.text.trim(),
-              'turno': _turnoController.text.trim(),
-            }),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 201) {
-        if (!mounted) return;
-        Navigator.pop(context, true);
+      if (_editando) {
+        await _turmasService.atualizarTurma(
+          id: widget.turma!.id,
+          nome: _nomeController.text.trim(),
+          descricao: _descricaoController.text.trim(),
+        );
       } else {
-        setState(() => _mensagemErro = 'Erro ao criar turma');
+        await _turmasService.cadastrarTurma(
+          nome: _nomeController.text.trim(),
+          descricao: _descricaoController.text.trim(),
+        );
       }
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = e.mensagem);
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
@@ -72,8 +82,7 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
   @override
   void dispose() {
     _nomeController.dispose();
-    _disciplinaController.dispose();
-    _turnoController.dispose();
+    _descricaoController.dispose();
     super.dispose();
   }
 
@@ -120,9 +129,9 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Adicionar Turma',
-                    style: TextStyle(fontSize: 22),
+                  Text(
+                    _editando ? 'Editar Turma' : 'Adicionar Turma',
+                    style: const TextStyle(fontSize: 22),
                   ),
                   const SizedBox(height: 24),
                   const Text('Nome da turma:'),
@@ -136,23 +145,12 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Disciplina:'),
+                  const Text('Descrição:'),
                   const SizedBox(height: 6),
                   TextField(
-                    controller: _disciplinaController,
+                    controller: _descricaoController,
                     decoration: const InputDecoration(
-                      hintText: 'Exemplo "Matemática"',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Turno:'),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _turnoController,
-                    decoration: const InputDecoration(
-                      hintText: 'Exemplo "Manhã"',
+                      hintText: 'Exemplo "Matemática - turno da manhã"',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -169,14 +167,14 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton(
-                      onPressed: _carregando ? null : _adicionar,
+                      onPressed: _carregando ? null : _salvar,
                       child: _carregando
                           ? const SizedBox(
                               height: 18,
                               width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Adicionar'),
+                          : Text(_editando ? 'Salvar' : 'Adicionar'),
                     ),
                   ),
                 ],

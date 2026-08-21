@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
+import '../../services/turmasService.dart';
 
 // Relatório de turmas com contagem de atividades.
 // Dados vêm da procedure sp_relatorio_turmas_atividades (LEFT JOIN + GROUP BY + ORDER BY)
-// endpoint -> GET {baseUrl}/api/classes/relatorio/atividades
+// Fluxo: tela -> TurmasService -> ApiService -> GET /api/classes/relatorio/atividades
 class RelatorioTurmasScreen extends StatefulWidget {
   const RelatorioTurmasScreen({super.key});
 
@@ -13,7 +13,7 @@ class RelatorioTurmasScreen extends StatefulWidget {
 }
 
 class _RelatorioTurmasScreenState extends State<RelatorioTurmasScreen> {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+  final TurmasService _turmasService = TurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -32,17 +32,10 @@ class _RelatorioTurmasScreenState extends State<RelatorioTurmasScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/classes/relatorio/atividades'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _turmas = jsonDecode(response.body);
-        });
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar relatório');
-      }
+      final turmas = await _turmasService.relatorioTurmasAtividades();
+      setState(() => _turmas = turmas);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar relatório: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
