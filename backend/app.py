@@ -20,6 +20,16 @@ def create_app():
     app.register_blueprint(activity_blueprint)
     app.register_blueprint(dashboard_blueprint)
 
+    # Libera o acesso do Flutter Web: o app roda em outra porta, entao o
+    # navegador trata como outra origem e bloqueia a chamada sem estes
+    # cabecalhos. No emulador Android isso nao e necessario, mas nao atrapalha.
+    @app.after_request
+    def liberar_cors(response):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        return response
+
     @app.get("/")
     def health_check():
         return {"status": "ok", "service": "Mentorly API"}
