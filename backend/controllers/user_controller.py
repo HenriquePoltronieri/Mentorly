@@ -1,22 +1,24 @@
 from flask import jsonify, request
 
-from services.user_service import UserService
+from services.user.create_user import CreateUserService
+from services.user.delete_user import DeleteUserService
+from services.user.get_user import GetUserService
+from services.user.get_users import GetUsersService
+from services.user.get_users_by_role import GetUsersByRoleService
+from services.user.update_user import UpdateUserService
 
 
 class UserController:
-    def __init__(self):
-        self.service = UserService()
-
     def list_users(self):
-        users = self.service.list_users()
+        users = GetUsersService().execute()
         return jsonify([user.to_dict() for user in users])
 
     def list_users_by_role(self, role):
-        users = self.service.list_users_by_role(role)
+        users = GetUsersByRoleService().execute(role)
         return jsonify(users)
 
     def get_user(self, user_id):
-        user = self.service.get_user(user_id)
+        user = GetUserService().execute(user_id)
         if user is None:
             return jsonify({"error": "User not found"}), 404
         return jsonify(user.to_dict())
@@ -32,7 +34,7 @@ class UserController:
             return jsonify({"error": "name, email and password are required"}), 400
 
         try:
-            user = self.service.create_user(name, email, password, role)
+            user = CreateUserService().execute(name, email, password, role)
         except ValueError as error:
             return jsonify({"error": str(error)}), 409
 
@@ -49,7 +51,7 @@ class UserController:
             return jsonify({"error": "At least one field must be provided"}), 400
 
         try:
-            user = self.service.update_user(user_id, name, email, password, role)
+            user = UpdateUserService().execute(user_id, name, email, password, role)
         except ValueError as error:
             return jsonify({"error": str(error)}), 400
 
@@ -57,7 +59,7 @@ class UserController:
 
     def delete_user(self, user_id):
         try:
-            self.service.delete_user(user_id)
+            DeleteUserService().execute(user_id)
         except ValueError as error:
             return jsonify({"error": str(error)}), 404
 

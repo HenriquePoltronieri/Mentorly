@@ -1,9 +1,9 @@
 from repositories.report_repository import ReportRepository
 
 
-class DashboardService:
+class GetSystemSummaryService:
     def __init__(self):
         self.repository = ReportRepository()
 
-    def resumo_sistema(self):
+    def execute(self):
         return self.repository.resumo_sistema()

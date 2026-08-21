@@ -1,22 +1,24 @@
 from flask import jsonify, request
 
-from services.class_service import ClassService
+from services.class_.create_class import CreateClassService
+from services.class_.delete_class import DeleteClassService
+from services.class_.get_class import GetClassService
+from services.class_.get_class_report import GetClassReportService
+from services.class_.get_classes import GetClassesService
+from services.class_.update_class import UpdateClassService
 
 
 class ClassController:
-    def __init__(self):
-        self.service = ClassService()
-
     def list_classes(self):
-        classes = self.service.list_classes()
+        classes = GetClassesService().execute()
         return jsonify([class_obj.to_dict() for class_obj in classes])
 
     def relatorio_turmas_atividades(self):
-        relatorio = self.service.relatorio_turmas_atividades()
+        relatorio = GetClassReportService().execute()
         return jsonify(relatorio)
 
     def get_class(self, class_id):
-        class_obj = self.service.get_class(class_id)
+        class_obj = GetClassService().execute(class_id)
         if class_obj is None:
             return jsonify({"error": "Class not found"}), 404
         return jsonify(class_obj.to_dict())
@@ -30,7 +32,7 @@ class ClassController:
             return jsonify({"error": "name is required"}), 400
 
         try:
-            class_obj = self.service.create_class(name, description)
+            class_obj = CreateClassService().execute(name, description)
         except ValueError as error:
             return jsonify({"error": str(error)}), 409
 
@@ -45,7 +47,7 @@ class ClassController:
             return jsonify({"error": "At least one field must be provided"}), 400
 
         try:
-            class_obj = self.service.update_class(class_id, name, description)
+            class_obj = UpdateClassService().execute(class_id, name, description)
         except ValueError as error:
             return jsonify({"error": str(error)}), 400
 
@@ -53,7 +55,7 @@ class ClassController:
 
     def delete_class(self, class_id):
         try:
-            self.service.delete_class(class_id)
+            DeleteClassService().execute(class_id)
         except ValueError as error:
             return jsonify({"error": str(error)}), 404
 
