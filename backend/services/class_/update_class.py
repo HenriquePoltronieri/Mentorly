@@ -1,10 +1,10 @@
 from models.class_model import Class
-from repositories.class_repository import ClassRepository
+from repositories.turma_repository import TurmaRepository
 
 
 class UpdateClassService:
     def __init__(self):
-        self.repository = ClassRepository()
+        self.repository = TurmaRepository()
 
     def execute(self, class_id, name=None, description=None):
         class_obj = Class.find_by_id(class_id)

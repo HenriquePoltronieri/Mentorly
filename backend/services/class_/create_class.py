@@ -1,10 +1,10 @@
 from models.class_model import Class
-from repositories.class_repository import ClassRepository
+from repositories.turma_repository import TurmaRepository
 
 
 class CreateClassService:
     def __init__(self):
-        self.repository = ClassRepository()
+        self.repository = TurmaRepository()
 
     def execute(self, name, description=None):
         if not name or not name.strip():

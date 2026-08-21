@@ -2,7 +2,7 @@ from database.procedure import call_procedure
 from models.class_model import Class
 
 
-class ClassRepository:
+class TurmaRepository:
     def find_by_name(self, name):
         return Class.query.filter_by(name=name).first()
 

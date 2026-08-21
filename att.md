@@ -1,5 +1,23 @@
 # Atualização - CRUD Completo Backend
 
+## Nota sobre a estrutura de arquivos
+
+O CRUD foi reorganizado em subpastas por entidade dentro de `backend/services/`.
+
+Estrutura atual:
+
+```
+backend/services/
+├── user/        # create_user.py, get_user.py, get_users.py, get_users_by_role.py, update_user.py, delete_user.py
+├── class_/      # create_class.py, get_class.py, get_classes.py, get_class_report.py, update_class.py, delete_class.py
+├── activity/    # create_activity.py, get_activity.py, get_activities.py, search_activities.py, update_activity.py, delete_activity.py
+└── dashboard/   # get_system_summary.py
+```
+
+Cada caso de uso possui seu próprio Service em forma de classe (1 caso de uso = 1 Service).
+
+---
+
 ## Comparação: Requisito vs. Implementado
 
 | Requisito | Status | Observação |
@@ -36,15 +54,15 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 
 ## Models Implementadas
 
-### User (`backend/models/user.py`)
+### User (`backend/models/user_model.py`)
 - Já existia, adicionado campo `updated_at`
 
-### Turma (`backend/models/turma.py`)
+### Turma (`backend/models/class_model.py`)
 - Criado do zero (substitui `class.py` que estava vazio — renomeado para evitar conflito com palavra reservada `class` do Python)
 - Campos: id, name, description, created_at, updated_at
 - Relacionamento 1:N com Activity
 
-### Activity (`backend/models/activity.py`)
+### Activity (`backend/models/activity_model.py`)
 - Criado do zero (estava vazio)
 - Campos: id, title, description, class_id (FK → classes), due_date, created_at, updated_at
 
@@ -54,8 +72,8 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `backend/models/user.py` | Adicionado campo `updated_at` |
-| `backend/models/__init__.py` | Importados `Turma` e `Activity` |
+| `backend/models/user_model.py` | Adicionado campo `updated_at` |
+| `backend/models/__init__.py` | Importados `Class` e `Activity` |
 | `backend/repositories/user_repository.py` | Adicionados métodos `update` e `delete` |
 | `backend/controllers/user_controller.py` | Refatorado para usar services separados por caso de uso; adicionados endpoints PUT e DELETE |
 | `backend/controllers/class_controller.py` | Implementado Blueprint completo com CRUD (estava vazio) |
@@ -65,56 +83,68 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 ## Arquivos Criados
 
 ### Models
-- `backend/models/turma.py`
+- `backend/models/class_model.py`
 
 ### Repositories
-- `backend/repositories/class_repository.py`
+- `backend/repositories/turma_repository.py`
 - `backend/repositories/activity_repository.py`
 
 ### Services (separados por caso de uso)
-- `backend/services/create_user_service.py`
-- `backend/services/list_users_service.py`
-- `backend/services/get_user_service.py`
-- `backend/services/update_user_service.py`
-- `backend/services/delete_user_service.py`
-- `backend/services/create_class_service.py`
-- `backend/services/list_classes_service.py`
-- `backend/services/get_class_service.py`
-- `backend/services/update_class_service.py`
-- `backend/services/delete_class_service.py`
-- `backend/services/create_activity_service.py`
-- `backend/services/list_activities_service.py`
-- `backend/services/get_activity_service.py`
-- `backend/services/update_activity_service.py`
-- `backend/services/delete_activity_service.py`
+- `backend/services/user/create_user.py`
+- `backend/services/user/get_users.py`
+- `backend/services/user/get_user.py`
+- `backend/services/user/update_user.py`
+- `backend/services/user/delete_user.py`
+- `backend/services/class_/create_class.py`
+- `backend/services/class_/get_classes.py`
+- `backend/services/class_/get_class.py`
+- `backend/services/class_/update_class.py`
+- `backend/services/class_/delete_class.py`
+- `backend/services/activity/create_activity.py`
+- `backend/services/activity/get_activities.py`
+- `backend/services/activity/get_activity.py`
+- `backend/services/activity/update_activity.py`
+- `backend/services/activity/delete_activity.py`
 
 ### Controllers
 - `backend/controllers/activity_controller.py`
 
 ## Arquivos Removidos
-- `backend/models/class.py` (vazio; substituído por `turma.py`)
+- `backend/models/class.py` (vazio; substituído por `class_model.py`)
 
 ---
 
 ## Rotas Disponíveis
 
-### Users (`/users`)
+### Users (`/api/users`)
 | Método | Rota | Descrição | HTTP |
 |--------|------|-----------|------|
-| POST | `/users` | Criar usuário | 201, 400, 409 |
-| GET | `/users` | Listar todos | 200 |
-| GET | `/users/:id` | Buscar por ID | 200, 404 |
-| PUT | `/users/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/users/:id` | Excluir | 204, 404 |
+| POST | `/api/users` | Criar usuário | 201, 400, 409 |
+| GET | `/api/users` | Listar todos | 200 |
+| GET | `/api/users/role/:role` | Listar por papel (procedure) | 200 |
+| GET | `/api/users/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/users/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/users/:id` | Excluir | 204, 404 |
 
-### Classes (`/classes`)
+### Classes (`/api/classes`)
 | Método | Rota | Descrição | HTTP |
 |--------|------|-----------|------|
-| POST | `/classes` | Criar turma | 201, 400, 409 |
-| GET | `/classes` | Listar todas | 200 |
-| GET | `/classes/:id` | Buscar por ID | 200, 404 |
-| PUT | `/classes/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/classes/:id` | Excluir | 204, 404 |
+| POST | `/api/classes` | Criar turma | 201, 400, 409 |
+| GET | `/api/classes` | Listar todas | 200 |
+| GET | `/api/classes/relatorio/atividades` | Relatório de turmas (procedure) | 200 |
+| GET | `/api/classes/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/classes/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/classes/:id` | Excluir | 204, 404 |
+
+### Activities (`/api/activities`)
+| Método | Rota | Descrição | HTTP |
+|--------|------|-----------|------|
+| POST | `/api/activities` | Criar atividade | 201, 400, 409 |
+| GET | `/api/activities` | Listar todas (`?class_id=` opcional) | 200 |
+| GET | `/api/activities/buscar` | Buscar atividades (procedure) | 200 |
+| GET | `/api/activities/:id` | Buscar por ID | 200, 404 |
+| PUT | `/api/activities/:id` | Atualizar | 200, 400, 404 |
+| DELETE | `/api/activities/:id` | Excluir | 204, 404 |
 
 ---
 
@@ -134,7 +164,7 @@ elif isinstance(due_date, str):
 ```
 
 ### Bug 2 — Update permite email/nome vazio
-**Arquivos:** `backend/services/update_user_service.py`, `backend/services/update_class_service.py`
+**Arquivos:** `backend/services/user/update_user.py`, `backend/services/class_/update_class.py`
 
 **Problema:** Se o usuário enviasse `{"email": ""}`, a condição `if email and email != user.email` era falsa (string vazia é falsy), pulava a validação, mas o repositório definia `user.email = ""` — violando a regra de negócio (NOT NULL + UNIQUE).
 
@@ -151,14 +181,3 @@ if email is not None:
 **Problema:** Quando o service lançava `ValueError` por validação (e não por "não encontrado"), o controller retornava **404**, quando o correto era **400**.
 
 **Correção:** Alterado `except ValueError` nos endpoints PUT de 404 para 400, já que a maioria dos erros são de validação, não de recurso inexistente.
-
----
-
-### Activities (`/activities`)
-| Método | Rota | Descrição | HTTP |
-|--------|------|-----------|------|
-| POST | `/activities` | Criar atividade | 201, 400, 409 |
-| GET | `/activities` | Listar todas (`?class_id=` opcional) | 200 |
-| GET | `/activities/:id` | Buscar por ID | 200, 404 |
-| PUT | `/activities/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/activities/:id` | Excluir | 204, 404 |

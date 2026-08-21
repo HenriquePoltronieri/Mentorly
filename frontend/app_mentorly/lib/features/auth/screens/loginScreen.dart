@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../../app/routes.dart';
+import '../../../core/services/authService.dart';
 
 // tela de login da coordenacao
 // IMPORTANTE PRO BACKEND:
@@ -22,12 +21,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
+  final AuthService _authService = AuthService();
 
   bool _carregando = false;
   String? _mensagemErro;
-
-  // troca aqui pela url real do backend quando tiver
-  static const String baseUrl = 'http://10.0.2.2:5000';
 
   Future<void> _fazerLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -38,28 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/coordenacao/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _emailController.text.trim(),
-          'senha': _senhaController.text,
-        }),
+      await _authService.loginCoordenacao(
+        _emailController.text.trim(),
+        _senhaController.text,
       );
 
-      final dados = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        // login deu certo
-        // token vem em dados['token'], nome em dados['nome']
-        // por enquanto so navega, depois a gente salva o token (SharedPreferences)
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, AppRoutes.coordenacaoHome);
-      } else {
-        setState(() {
-          _mensagemErro = dados['erro'] ?? 'Email ou senha incorretos';
-        });
-      }
+      // login deu certo
+      // por enquanto so navega, depois a gente salva o token (SharedPreferences)
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.coordenacaoHome);
     } catch (e) {
       setState(() {
         _mensagemErro = 'Não foi possível conectar ao servidor';

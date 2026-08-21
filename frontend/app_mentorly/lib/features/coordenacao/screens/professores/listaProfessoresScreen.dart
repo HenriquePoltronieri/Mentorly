@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../../../app/routes.dart';
+import '../../services/professoresService.dart';
 
 // tela que lista os professores cadastrados pela coordenacao
 // IMPORTANTE PRO BACKEND:
@@ -16,8 +15,7 @@ class ListaProfessoresScreen extends StatefulWidget {
 }
 
 class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
-  // troca aqui pela url real do backend quando tiver
-  static const String baseUrl = 'http://10.0.2.2:5000';
+  final ProfessoresService _professoresService = ProfessoresService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -36,19 +34,10 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/coordenacao/professores'),
-      );
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _professores = jsonDecode(response.body);
-        });
-      } else {
-        setState(() {
-          _mensagemErro = 'Erro ao buscar professores';
-        });
-      }
+      final professores = await _professoresService.listarProfessores();
+      setState(() {
+        _professores = professores;
+      });
     } catch (e) {
       setState(() {
         _mensagemErro = 'Não foi possível conectar ao servidor';

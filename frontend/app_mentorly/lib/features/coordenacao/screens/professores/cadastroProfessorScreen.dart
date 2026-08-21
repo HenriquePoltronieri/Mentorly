@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../services/professoresService.dart';
 
 // tela onde a coordenacao cadastra um novo professor
 // IMPORTANTE PRO BACKEND:
@@ -23,12 +22,10 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
   final _disciplinaController = TextEditingController();
+  final ProfessoresService _professoresService = ProfessoresService();
 
   bool _carregando = false;
   String? _mensagemErro;
-
-  // troca aqui pela url real do backend quando tiver
-  static const String baseUrl = 'http://10.0.2.2:5000';
 
   Future<void> _cadastrarProfessor() async {
     if (!_formKey.currentState!.validate()) return;
@@ -39,29 +36,18 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
     });
 
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/coordenacao/professores'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'nome': _nomeController.text.trim(),
-          'email': _emailController.text.trim(),
-          'senha': _senhaController.text,
-          'disciplina': _disciplinaController.text.trim(),
-        }),
+      await _professoresService.cadastrarProfessor(
+        nome: _nomeController.text.trim(),
+        email: _emailController.text.trim(),
+        senha: _senhaController.text,
+        disciplina: _disciplinaController.text.trim(),
       );
 
-      if (response.statusCode == 201) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Professor cadastrado com sucesso')),
-        );
-        Navigator.pop(context, true); // volta pra lista avisando que deu certo
-      } else {
-        final dados = jsonDecode(response.body);
-        setState(() {
-          _mensagemErro = dados['erro'] ?? 'Erro ao cadastrar professor';
-        });
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Professor cadastrado com sucesso')),
+      );
+      Navigator.pop(context, true); // volta pra lista avisando que deu certo
     } catch (e) {
       setState(() {
         _mensagemErro = 'Não foi possível conectar ao servidor';

@@ -74,7 +74,7 @@ O sistema busca centralizar informações acadêmicas, facilitar a comunicação
 - `find_by_email(email)` — busca usuário por email
 - `usuarios_por_role(role)` — usuários filtrados por papel (procedure)
 
-### ClassRepository (`/backend/repositories/class_repository.py`)
+### TurmaRepository (`/backend/repositories/turma_repository.py`)
 - `find_by_name(name)` — busca turma por nome
 - `relatorio_turmas_atividades()` — relatório de turmas com contagem de atividades (procedure)
 
@@ -193,14 +193,14 @@ backend/
 │   └── activity_model.py
 ├── repositories/               # Consultas avançadas (procedures)
 │   ├── user_repository.py
-│   ├── class_repository.py
+│   ├── turma_repository.py
 │   ├── activity_repository.py
 │   └── report_repository.py
 ├── services/                   # Business logic (per use case)
-│   ├── user_service.py
-│   ├── class_service.py
-│   ├── activity_service.py
-│   └── dashboard_service.py
+│   ├── user/                   # create_user.py, get_user.py, get_users.py, get_users_by_role.py, update_user.py, delete_user.py
+│   ├── class_/                 # create_class.py, get_class.py, get_classes.py, get_class_report.py, update_class.py, delete_class.py
+│   ├── activity/               # create_activity.py, get_activity.py, get_activities.py, search_activities.py, update_activity.py, delete_activity.py
+│   └── dashboard/              # get_system_summary.py
 ├── routes/                     # Route definitions (Blueprints)
 │   ├── user_routes.py
 │   ├── class_routes.py
