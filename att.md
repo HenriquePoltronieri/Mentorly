@@ -26,8 +26,8 @@ Cada caso de uso possui seu próprio Service em forma de classe (1 caso de uso =
 | Criar/ajustar Models com ORM | ✅ | User (ajustado), Turma e Activity (criados) |
 | Implementar Create / List All / Find by ID / Update / Delete | ✅ | CRUD completo nas 3 entidades |
 | Criar Controllers (apenas HTTP) | ✅ | 3 controllers (user, class, activity) |
-| Services separados por caso de uso | ✅ | 15 services (5 por entidade) |
-| Rotas REST (POST, GET, GET/:id, PUT, DELETE) | ✅ | 15 rotas no total |
+| Services separados por caso de uso | ✅ | 19 services no total |
+| Rotas REST (POST, GET, GET/:id, PUT, DELETE) | ✅ | 19 rotas no total |
 | Tratamento de erros adequado | ✅ | ValueError → 404/409, validação → 400 |
 | Validar entradas dos usuários | ✅ | Campos obrigatórios, duplicatas, tipos |
 | Códigos HTTP corretos (200, 201, 204, 400, 404, 500) | ✅ | 201 no create, 204 no delete, etc. |
@@ -74,7 +74,7 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 |---------|-----------|
 | `backend/models/user_model.py` | Adicionado campo `updated_at` |
 | `backend/models/__init__.py` | Importados `Class` e `Activity` |
-| `backend/repositories/user_repository.py` | Adicionados métodos `update` e `delete` |
+| `backend/repositories/user_repository.py` | Deixou de ter CRUD; ficou só com `find_by_email` e a chamada da procedure |
 | `backend/controllers/user_controller.py` | Refatorado para usar services separados por caso de uso; adicionados endpoints PUT e DELETE |
 | `backend/controllers/class_controller.py` | Implementado Blueprint completo com CRUD (estava vazio) |
 | `backend/app.py` | Registrados `class_blueprint` e `activity_blueprint` |
@@ -151,7 +151,7 @@ CRUD completo das principais Models do sistema seguindo arquitetura em camadas:
 ## Bugs Encontrados e Corrigidos (Code Review)
 
 ### Bug 1 — `due_date` vazio quebra o banco
-**Arquivo:** `backend/repositories/activity_repository.py`
+**Arquivo:** `backend/services/activity/create_activity.py` e `update_activity.py`
 
 **Problema:** Se o `due_date` fosse enviado como string vazia `""`, o código chamava `datetime.fromisoformat("")`, que lança `ValueError` — resultando em erro 500.
 

@@ -2,9 +2,17 @@
 
 ## Sobre o Projeto
 
-O Mentorly é uma plataforma desenvolvida para auxiliar a coordenação escolar e os professores no acompanhamento e gerenciamento de aulas, atividades e desempenho das turmas.
+O Mentorly começou como uma ideia para ajudar a coordenação e os professores no
+acompanhamento de turmas e atividades escolares.
 
-O sistema busca centralizar informações acadêmicas, facilitar a comunicação entre coordenação e professores e oferecer recursos inteligentes para apoiar a tomada de decisões pedagógicas.
+No começo a gente pensou num sistema bem maior, que também trataria de professores,
+alunos, notas, etapas do ano letivo e critérios de avaliação. Várias telas desse plano
+inicial chegaram a ser feitas no Flutter antes de o backend correspondente existir, e
+por isso elas ainda não conversam com a API.
+
+Para esta entrega o grupo decidiu concentrar o trabalho em turmas e atividades, que são
+as partes que já funcionam do início ao fim: da tela em Flutter, passando pela API em
+Flask, até o banco de dados MySQL.
 
 ---
 
@@ -145,29 +153,64 @@ As procedures estão definidas em `/backend/database/procedures.sql` e são inst
 
 ## Funcionalidades Implementadas
 
-### Backend (API REST)
-- CRUD completo de Usuários
-- CRUD completo de Turmas
-- CRUD completo de Atividades
-- Arquitetura em camadas (Model → Repository → Service → Controller → Routes)
-- **Funcionalidades além do CRUD via Stored Procedures:**
-  - Relatório de turmas com contagem de atividades (LEFT JOIN + GROUP BY + ORDER BY)
-  - Busca de atividades por termo com ordenação (WHERE LIKE + ORDER BY)
-  - Usuários filtrados por papel (WHERE + ORDER BY)
-  - Resumo geral do sistema (subconsultas agregadas)
-- Tratamento de erros com códigos HTTP apropriados
-- Validação de entradas
-- Services separados por caso de uso
+Estas são as 10 funcionalidades que entram nesta entrega. Todas funcionam do início ao
+fim, ou seja, dá para usar pela tela do aplicativo e o dado realmente vai parar no banco.
 
-### Frontend (Flutter)
-- Tela inicial com navegação para cada entidade
-- Tela de listagem com refresh e exclusão com confirmação
-- Tela de cadastro com formulário validado
-- Tela de edição com dados preenchidos
-- Consumo da API REST
-- **Telas de funcionalidades além do CRUD:**
-  - Relatório de Turmas (coordenação) — contagem de atividades por turma
-  - Busca de Atividades (professor) — filtro por termo e ordenação
+| # | Funcionalidade | Tela | Endpoint |
+|---|----------------|------|----------|
+| 1 | Cadastrar Turma | Turmas → Adicionar turma | `POST /api/classes` |
+| 2 | Listar Turmas | Turmas | `GET /api/classes` |
+| 3 | Atualizar Turma | Turmas → ícone de editar | `PUT /api/classes/<id>` |
+| 4 | Excluir Turma | Turmas → ícone de excluir | `DELETE /api/classes/<id>` |
+| 5 | Cadastrar Atividade | Atividades da Turma → Adicionar atividade | `POST /api/activities` |
+| 6 | Listar Atividades por Turma | Turmas → toque na turma | `GET /api/activities?class_id=<id>` |
+| 7 | Atualizar Atividade | Atividades da Turma → ícone de editar | `PUT /api/activities/<id>` |
+| 8 | Excluir Atividade | Atividades da Turma → ícone de excluir | `DELETE /api/activities/<id>` |
+| 9 | Buscar Atividades | Buscar Atividades | `GET /api/activities/buscar` |
+| 10 | Relatório de Turmas/Atividades | Relatório de Turmas | `GET /api/classes/relatorio/atividades` |
+
+As funcionalidades 9 e 10 não são CRUD. Elas usam procedures do MySQL
+(`sp_buscar_atividades` e `sp_relatorio_turmas_atividades`), então o filtro, a ordenação
+e a contagem são feitos direto no banco.
+
+**O que ficou de fora desta entrega:** as telas de professores, alunos, notas, etapas,
+critérios de avaliação, login e importação por planilha. Elas existem no aplicativo
+porque foram feitas na primeira parte do projeto, mas o backend delas não foi
+desenvolvido, então ainda não funcionam. Como o login também não tem backend, na tela
+inicial existe um atalho "Entrar no painel da coordenação" para conseguir chegar nas
+telas de turmas e atividades.
+
+---
+
+## Arquitetura
+
+```
+Tela Flutter
+  → Service Dart          (TurmasService, AtividadesService)
+  → ApiService            (centraliza a URL da API)
+  → API Flask             (Blueprints em routes/)
+  → Controller            (classe, só HTTP)
+  → Service               (1 caso de uso = 1 classe)
+  → Model ou Repository
+  → MySQL
+```
+
+A ideia é que cada camada tenha uma responsabilidade só:
+
+- **Controller** — recebe a requisição, pega os dados que vieram, chama o Service e
+  devolve a resposta. Ele não mexe no banco nem tem regra de negócio. Por exemplo,
+  o `ClassController` lê o `name` e a `description` do corpo da requisição e repassa.
+- **Service** — cada caso de uso tem a sua própria classe, com um método `execute()`.
+  É onde ficam as validações. Por exemplo, o `CreateClassService` confere se o nome não
+  está vazio e se já não existe outra turma com o mesmo nome antes de mandar salvar.
+- **Model** — é onde fica o CRUD simples: criar, listar, buscar por ID, atualizar e
+  excluir. As Models `User`, `Class` e `Activity` herdam de `db.Model`.
+- **Repository** — usamos só para as consultas que não são CRUD, como o relatório e a
+  busca, que chamam procedures. O `TurmaRepository`, por exemplo, tem só a busca por
+  nome e a chamada da procedure do relatório.
+- **No Flutter** as telas não chamam a API direto. Elas usam um Service em Dart
+  (`TurmasService` e `AtividadesService`), que por sua vez usa o `ApiService`, onde fica
+  o endereço da API.
 
 ---
 
@@ -214,13 +257,24 @@ frontend/app_mentorly/
 │   ├── app/
 │   │   ├── routes.dart         # Rotas do app
 │   │   └── theme.dart
-│   ├── core/                   # Serviços e utilitários
+│   ├── core/
+│   │   └── services/
+│   │       └── apiService.dart # URL da API + get/post/put/delete
 │   ├── features/
-│   │   ├── auth/               # Autenticação
-│   │   ├── coordenacao/        # Telas da coordenação
-│   │   │   └── screens/relatorios/relatorioTurmasScreen.dart
-│   │   └── professor/          # Telas do professor
-│   │       └── screens/atividades/buscarAtividadesScreen.dart
+│   │   ├── coordenacao/
+│   │   │   ├── services/turmasService.dart      # Services Dart de Turma
+│   │   │   ├── models/turmaModel.dart
+│   │   │   └── screens/
+│   │   │       ├── turmas/gerenciarTurmasScreen.dart   # CRUD de turmas
+│   │   │       ├── turmas/adicionarTurmaModal.dart     # cadastrar/editar
+│   │   │       └── relatorios/relatorioTurmasScreen.dart
+│   │   └── professor/
+│   │       ├── services/atividadesService.dart  # Services Dart de Atividade
+│   │       ├── models/atividadeModel.dart
+│   │       └── screens/atividades/
+│   │           ├── turmaAtividadesScreen.dart      # atividades da turma
+│   │           ├── adicionarAtividadeModal.dart    # cadastrar/editar
+│   │           └── buscarAtividadesScreen.dart
 └── pubspec.yaml
 ```
 
@@ -256,20 +310,28 @@ flutter run
 
 Certifique-se de que o backend está rodando antes de iniciar o frontend.
 
+O endereço da API fica em um único lugar: `lib/core/services/apiService.dart`.
+Ajuste conforme onde o app for rodar:
+
+| Onde roda | `baseUrl` |
+|-----------|-----------|
+| Chrome / Web / Windows | `http://localhost:5000/api` |
+| Emulador Android | `http://10.0.2.2:5000/api` |
+
 ---
 
 ## Público-Alvo
 
 - Coordenadores pedagógicos;
-- Diretores escolares;
-- Professores do Ensino Fundamental e Médio;
-- Instituições de ensino que buscam otimizar seus processos pedagógicos.
+- Professores do Ensino Fundamental e Médio.
 
 ---
 
 ## Status do Projeto
 
-Em desenvolvimento
+Em desenvolvimento. Nesta entrega estão prontas as 10 funcionalidades de turmas e
+atividades listadas acima. As outras partes que o grupo tinha planejado no início ainda
+não foram implementadas no backend.
 
 ---
 
