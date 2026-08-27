@@ -218,63 +218,175 @@ A ideia é que cada camada tenha uma responsabilidade só:
 
 ```
 backend/
-├── app.py                      # Entry point, blueprint registration
-├── config.py                   # Database configuration
-├── controllers/                # HTTP request handling (Controllers finos)
-│   ├── user_controller.py
-│   ├── class_controller.py
+├── controllers/
+│   ├── __init__.py
 │   ├── activity_controller.py
-│   └── dashboard_controller.py
-├── database/                   # Database connection
-│   ├── __init__.py             # SQLAlchemy instance
-│   ├── connection.py           # Database creation + procedure install
-│   ├── procedure.py            # Helper para chamar procedures
-│   └── procedures.sql          # Definição das stored procedures
-├── models/                     # SQLAlchemy models (entidades + CRUD básico)
-│   ├── user_model.py
+│   ├── class_controller.py
+│   ├── dashboard_controller.py
+│   └── user_controller.py
+├── database/
+│   ├── __init__.py
+│   ├── connection.py
+│   ├── procedure.py
+│   └── procedures.sql
+├── models/
+│   ├── __init__.py
+│   ├── activity_model.py
 │   ├── class_model.py
-│   └── activity_model.py
-├── repositories/               # Consultas avançadas (procedures)
-│   ├── user_repository.py
-│   ├── turma_repository.py
+│   └── user_model.py
+├── repositories/
+│   ├── __init__.py
 │   ├── activity_repository.py
-│   └── report_repository.py
-├── services/                   # Business logic (per use case)
-│   ├── user/                   # create_user.py, get_user.py, get_users.py, get_users_by_role.py, update_user.py, delete_user.py
-│   ├── class_/                 # create_class.py, get_class.py, get_classes.py, get_class_report.py, update_class.py, delete_class.py
-│   ├── activity/               # create_activity.py, get_activity.py, get_activities.py, search_activities.py, update_activity.py, delete_activity.py
-│   └── dashboard/              # get_system_summary.py
-├── routes/                     # Route definitions (Blueprints)
-│   ├── user_routes.py
-│   ├── class_routes.py
+│   ├── report_repository.py
+│   ├── turma_repository.py
+│   └── user_repository.py
+├── routes/
+│   ├── __init__.py
 │   ├── activity_routes.py
-│   └── dashboard_routes.py
+│   ├── class_routes.py
+│   ├── dashboard_routes.py
+│   └── user_routes.py
+├── services/
+│   ├── __init__.py
+│   ├── activity/
+│   │   ├── __init__.py
+│   │   ├── create_activity.py
+│   │   ├── delete_activity.py
+│   │   ├── get_activities.py
+│   │   ├── get_activity.py
+│   │   ├── search_activities.py
+│   │   └── update_activity.py
+│   ├── class_/
+│   │   ├── __init__.py
+│   │   ├── create_class.py
+│   │   ├── delete_class.py
+│   │   ├── get_class.py
+│   │   ├── get_class_report.py
+│   │   ├── get_classes.py
+│   │   └── update_class.py
+│   ├── dashboard/
+│   │   ├── __init__.py
+│   │   └── get_system_summary.py
+│   └── user/
+│       ├── __init__.py
+│       ├── create_user.py
+│       ├── delete_user.py
+│       ├── get_user.py
+│       ├── get_users.py
+│       ├── get_users_by_role.py
+│       └── update_user.py
+├── app.py
+├── config.py
 └── requirements.txt
 
+docs/
+├── arquitetura.md
+├── banco-e-procedures.md
+├── como-executar.md
+├── funcionalidades.md
+├── historico-do-projeto.md
+├── roteiro-video.md
+└── visao-geral.md
+
 frontend/app_mentorly/
+├── android/
+├── ios/
 ├── lib/
-│   ├── main.dart               # App entry point
 │   ├── app/
-│   │   ├── routes.dart         # Rotas do app
+│   │   ├── routes.dart
 │   │   └── theme.dart
 │   ├── core/
-│   │   └── services/
-│   │       └── apiService.dart # URL da API + get/post/put/delete
+│   │   ├── services/
+│   │   │   ├── apiService.dart
+│   │   │   ├── authService.dart
+│   │   │   └── planilhaService.dart
+│   │   ├── utils/
+│   │   │   ├── gradeCalculator.dart
+│   │   │   └── validators.dart
+│   │   └── widgets/
+│   │       ├── customButton.dart
+│   │       ├── customTextfield.dart
+│   │       ├── loadingIndicator.dart
+│   │       └── successModal.dart
 │   ├── features/
-│   │   ├── coordenacao/
-│   │   │   ├── services/turmasService.dart      # Services Dart de Turma
-│   │   │   ├── models/turmaModel.dart
+│   │   ├── auth/
+│   │   │   ├── controllers/
+│   │   │   │   └── authController.dart
+│   │   │   ├── models/
+│   │   │   │   └── userModel.dart
 │   │   │   └── screens/
-│   │   │       ├── turmas/gerenciarTurmasScreen.dart   # CRUD de turmas
-│   │   │       ├── turmas/adicionarTurmaModal.dart     # cadastrar/editar
-│   │   │       └── relatorios/relatorioTurmasScreen.dart
+│   │   │       ├── cadastroScreen.dart
+│   │   │       ├── loginScreen.dart
+│   │   │       ├── perfilSelectionScreen.dart
+│   │   │       ├── professorLoginScreen.dart
+│   │   │       └── twoFactorScreen.dart
+│   │   ├── coordenacao/
+│   │   │   ├── controllers/
+│   │   │   │   ├── alunosController.dart
+│   │   │   │   ├── configAnoLetivoController.dart
+│   │   │   │   ├── professoresController.dart
+│   │   │   │   └── turmasController.dart
+│   │   │   ├── models/
+│   │   │   │   ├── alunoModel.dart
+│   │   │   │   ├── criterioAvaliacaoModel.dart
+│   │   │   │   ├── escolaModel.dart
+│   │   │   │   ├── etapaModel.dart
+│   │   │   │   ├── professorModel.dart
+│   │   │   │   └── turmaModel.dart
+│   │   │   ├── screens/
+│   │   │   │   ├── alunos/
+│   │   │   │   │   ├── adicionarAlunosModal.dart
+│   │   │   │   │   └── listaAlunosTurmaScreen.dart
+│   │   │   │   ├── config/
+│   │   │   │   │   ├── configCriteriosScreen.dart
+│   │   │   │   │   ├── configEtapasScreen.dart
+│   │   │   │   │   └── configNotasEtapaScreen.dart
+│   │   │   │   ├── professores/
+│   │   │   │   │   ├── cadastroProfessorScreen.dart
+│   │   │   │   │   └── listaProfessoresScreen.dart
+│   │   │   │   ├── relatorios/
+│   │   │   │   │   └── relatorioTurmasScreen.dart
+│   │   │   │   ├── turmas/
+│   │   │   │   │   ├── adicionarTurmaModal.dart
+│   │   │   │   │   ├── gerenciarTurmasScreen.dart
+│   │   │   │   │   └── listaTurmasProfessorScreen.dart
+│   │   │   │   └── coordenacaoHomeScreen.dart
+│   │   │   ├── services/
+│   │   │   │   ├── professoresService.dart
+│   │   │   │   └── turmasService.dart
+│   │   │   └── widgets/
+│   │   │       ├── professorCard.dart
+│   │   │       └── turmaCard.dart
 │   │   └── professor/
-│   │       ├── services/atividadesService.dart  # Services Dart de Atividade
-│   │       ├── models/atividadeModel.dart
-│   │       └── screens/atividades/
-│   │           ├── turmaAtividadesScreen.dart      # atividades da turma
-│   │           ├── adicionarAtividadeModal.dart    # cadastrar/editar
-│   │           └── buscarAtividadesScreen.dart
+│   │       ├── controllers/
+│   │       │   ├── alunoDetailController.dart
+│   │       │   ├── atividadesController.dart
+│   │       │   ├── dashboardController.dart
+│   │       │   └── turmasController.dart
+│   │       ├── models/
+│   │       │   ├── atividadeModel.dart
+│   │       │   ├── estatisticaAlunoModel.dart
+│   │       │   └── notaModel.dart
+│   │       ├── screens/
+│   │       │   ├── atividades/
+│   │       │   │   ├── adicionarAtividadeModal.dart
+│   │       │   │   ├── atividadeNotasScreen.dart
+│   │       │   │   ├── buscarAtividadesScreen.dart
+│   │       │   │   ├── lancarNotasModal.dart
+│   │       │   │   ├── listaAtividadesScreen.dart
+│   │       │   │   └── turmaAtividadesScreen.dart
+│   │       │   ├── turmas/
+│   │       │   │   ├── alunoDetailScreen.dart
+│   │       │   │   ├── listaTurmasScreen.dart
+│   │       │   │   └── turmaAlunosScreen.dart
+│   │       │   └── dashboardScreen.dart
+│   │       ├── services/
+│   │       │   ├── atividadesService.dart
+│   │       │   └── iaInsightsService.dart
+│   │       └── widgets/
+│   │           ├── alunoGraficoWidget.dart
+│   │           └── professorTopBar.dart
+│   └── main.dart
 └── pubspec.yaml
 ```
 
