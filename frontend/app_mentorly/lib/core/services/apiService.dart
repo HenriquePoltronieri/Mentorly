@@ -15,8 +15,12 @@ class ApiException implements Exception {
 }
 
 // Servico central que fala com o backend Flask
-// Troca a baseUrl pelo endereco real do seu servidor quando for pra producao
+// Singleton para compartilhar o token entre todos os services
 class ApiService {
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
+
   // Endereco unico da API, usado por todos os Services.
   // - Chrome / Web / Windows: 'http://localhost:5000/api'  (valor atual)
   // - Emulador Android:       'http://10.0.2.2:5000/api'
@@ -24,7 +28,7 @@ class ApiService {
   // no navegador esse endereco nao existe, por isso o padrao aqui e localhost.
   static const String baseUrl = 'http://localhost:5000/api';
 
-  static const Duration _timeout = Duration(seconds: 5);
+  static const Duration _timeout = Duration(seconds: 15);
 
   String? token;
 

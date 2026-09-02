@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../core/services/apiService.dart';
 import '../widgets/professorTopBar.dart';
+import '../services/professorDashboardService.dart';
 
 // dashboard do professor - so numeros/resumo, sem acao nenhuma aqui
 // IMPORTANTE PRO BACKEND:
@@ -27,9 +27,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorDashboardService _dashboardService = ProfessorDashboardService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -48,28 +46,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/dashboard'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _dados = jsonDecode(response.body);
-        });
-      } else {
-        setState(() {
-          _mensagemErro = 'Erro ao buscar dados do dashboard';
-        });
-      }
-    } catch (e) {
+      final dados = await _dashboardService.buscarDashboard();
       setState(() {
-        _mensagemErro = 'Não foi possível conectar ao servidor';
+        _dados = dados;
       });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar dados do dashboard: ${e.mensagem}');
+    } catch (e) {
+      setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
-        setState(() {
-          _carregando = false;
-        });
+        setState(() => _carregando = false);
       }
     }
   }

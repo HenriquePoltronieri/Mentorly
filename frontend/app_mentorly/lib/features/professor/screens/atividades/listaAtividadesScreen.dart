@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../widgets/professorTopBar.dart';
+import '../../services/professorTurmasService.dart';
 
 // tela que lista as turmas do professor pra ele escolher em qual
 // quer ver/criar atividades (mesmo conceito da lista de turmas,
@@ -19,9 +19,7 @@ class ListaAtividadesScreen extends StatefulWidget {
 }
 
 class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorTurmasService _turmasService = ProfessorTurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -40,18 +38,12 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/turmas'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final lista = jsonDecode(response.body) as List;
-        setState(() {
-          _turmas = lista.map((item) => TurmaModel.fromJson(item)).toList();
-        });
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar turmas');
-      }
+      final lista = await _turmasService.listarTurmas();
+      setState(() {
+        _turmas = lista.map((item) => TurmaModel.fromJson(item)).toList();
+      });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar turmas: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

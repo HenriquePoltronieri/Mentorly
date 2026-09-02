@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
 import '../../models/estatisticaAlunoModel.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../widgets/alunoGraficoWidget.dart';
+import '../../services/professorAlunoDetailService.dart';
 
 // tela de detalhe/estatisticas de um aluno especifico
 // recebe o aluno via Navigator.pushNamed(context, AppRoutes.alunoDetail, arguments: aluno)
@@ -27,9 +27,7 @@ class AlunoDetailScreen extends StatefulWidget {
 }
 
 class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorAlunoDetailService _detailService = ProfessorAlunoDetailService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -62,17 +60,12 @@ class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/alunos/${_aluno!['id']}/estatisticas'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _estatistica = EstatisticaAlunoModel.fromJson(jsonDecode(response.body));
-        });
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar estatísticas');
-      }
+      final dados = await _detailService.buscarEstatisticas(_aluno!['id'] as int);
+      setState(() {
+        _estatistica = EstatisticaAlunoModel.fromJson(dados);
+      });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar estatísticas: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

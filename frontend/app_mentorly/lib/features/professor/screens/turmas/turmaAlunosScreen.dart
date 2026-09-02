@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../widgets/professorTopBar.dart';
+import '../../services/professorAlunosService.dart';
 
 // tela que lista os alunos de uma turma especifica do professor
 // recebe a turma via Navigator.pushNamed(context, AppRoutes.turmaAlunos, arguments: turma)
@@ -21,9 +21,7 @@ class TurmaAlunosScreen extends StatefulWidget {
 }
 
 class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorAlunosService _alunosService = ProfessorAlunosService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -56,15 +54,10 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/turmas/${_turma!['id']}/alunos'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() => _alunos = jsonDecode(response.body));
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar alunos');
-      }
+      final alunos = await _alunosService.listarAlunos(_turma!['id'] as int);
+      setState(() => _alunos = alunos);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar alunos: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

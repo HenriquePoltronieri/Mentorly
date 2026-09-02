@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/services/apiService.dart';
+import '../../services/alunosService.dart';
 
 // modal pra coordenacao adicionar alunos numa turma - via planilha ou manual
 // IMPORTANTE PRO BACKEND:
@@ -31,9 +33,8 @@ class AdicionarAlunosModal extends StatefulWidget {
 }
 
 class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final AlunosService _alunosService = AlunosService();
+  final ApiService _api = ApiService();
 
   bool _enviando = false;
   String? _mensagemErro;
@@ -41,7 +42,7 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
 
   Future<void> _baixarModelo() async {
     final url = Uri.parse(
-      '$baseUrl/api/coordenacao/turmas/${widget.turmaId}/alunos/modelo-planilha',
+      '${ApiService.baseUrl}/coordenacao/turmas/${widget.turmaId}/alunos/modelo-planilha',
     );
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -77,8 +78,12 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/api/coordenacao/turmas/${widget.turmaId}/alunos/importar'),
+        Uri.parse('${ApiService.baseUrl}/coordenacao/turmas/${widget.turmaId}/alunos/importar'),
       );
+      // Add auth header if token exists
+      if (_api.token != null) {
+        request.headers['Authorization'] = 'Bearer ${_api.token}';
+      }
       request.files.add(
         http.MultipartFile.fromBytes('arquivo', arquivo.bytes!, filename: arquivo.name),
       );
@@ -151,22 +156,14 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
     });
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/coordenacao/turmas/${widget.turmaId}/alunos'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'nome': nomeController.text.trim(),
-              'matricula': matriculaController.text.trim(),
-            }),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 201) {
-        setState(() => _mensagemSucesso = 'Aluno adicionado com sucesso');
-      } else {
-        setState(() => _mensagemErro = 'Erro ao adicionar aluno');
-      }
+      await _alunosService.cadastrarAluno(
+        turmaId: widget.turmaId,
+        nome: nomeController.text.trim(),
+        matricula: matriculaController.text.trim(),
+      );
+      setState(() => _mensagemSucesso = 'Aluno adicionado com sucesso');
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = e.mensagem);
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

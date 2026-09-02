@@ -18,6 +18,19 @@ class AuthController {
     }
   }
 
+  Future<bool> loginProfessor({
+    required String email,
+    required String senha,
+  }) async {
+    try {
+      usuarioLogado = await _authService.loginProfessor(email: email, senha: senha);
+      return true;
+    } catch (e) {
+      erro = e.toString();
+      return false;
+    }
+  }
+
   Future<bool> cadastrar({
     required String nome,
     required String email,
@@ -42,12 +55,14 @@ class AuthController {
     required String email,
     required String senha,
     required String confirmarSenha,
+    required String token,
   }) async {
     try {
       usuarioLogado = await _authService.criarSenhaProfessor(
         email: email,
         senha: senha,
         confirmarSenha: confirmarSenha,
+        token: token,
       );
       return true;
     } catch (e) {

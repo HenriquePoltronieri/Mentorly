@@ -5,6 +5,7 @@ import '../features/auth/screens/perfilSelectionScreen.dart';
 import '../features/auth/screens/loginScreen.dart';
 import '../features/auth/screens/cadastroScreen.dart';
 import '../features/auth/screens/professorLoginScreen.dart';
+import '../features/auth/screens/definirSenhaProfessorScreen.dart';
 import '../features/auth/screens/twoFactorScreen.dart';
 
 // telas coordenacao
@@ -38,6 +39,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String cadastro = '/cadastro';
   static const String professorLogin = '/professor-login';
+  static const String definirSenha = '/definir-senha';
   static const String twoFactor = '/two-factor';
 
   // coordenacao
@@ -67,6 +69,7 @@ class AppRoutes {
     login: (context) => LoginScreen(),
     cadastro: (context) => CadastroScreen(),
     professorLogin: (context) => ProfessorLoginScreen(),
+    definirSenha: (context) => DefinirSenhaProfessorScreen(),
     twoFactor: (context) => TwoFactorScreen(),
 
     coordenacaoHome: (context) => CoordenacaoHomeScreen(),

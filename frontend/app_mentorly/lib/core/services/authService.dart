@@ -14,6 +14,18 @@ class AuthService {
     return UserModel.fromJson(resposta['usuario']);
   }
 
+  Future<UserModel> loginProfessor({
+    required String email,
+    required String senha,
+  }) async {
+    final resposta = await _api.post('/auth/login-professor', {
+      'email': email,
+      'senha': senha,
+    });
+    _api.token = resposta['token'];
+    return UserModel.fromJson(resposta['usuario']);
+  }
+
   Future<UserModel> cadastrarCoordenacao({
     required String nome,
     required String email,
@@ -35,6 +47,7 @@ class AuthService {
     required String email,
     required String senha,
     required String confirmarSenha,
+    required String token,
   }) async {
     if (senha != confirmarSenha) {
       throw Exception('As senhas nao coincidem');
@@ -42,6 +55,7 @@ class AuthService {
     final resposta = await _api.post('/auth/criar-senha-professor', {
       'email': email,
       'senha': senha,
+      'token': token,
     });
     _api.token = resposta['token'];
     return UserModel.fromJson(resposta['usuario']);

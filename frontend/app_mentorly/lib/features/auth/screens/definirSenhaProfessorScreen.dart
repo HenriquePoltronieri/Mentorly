@@ -5,28 +5,53 @@ import '../../../core/utils/validators.dart';
 import '../../../app/routes.dart';
 import '../controllers/authController.dart';
 
-// Tela de login do professor (para logins subsequentes, após já ter definido a senha)
-class ProfessorLoginScreen extends StatefulWidget {
-  const ProfessorLoginScreen({super.key});
+// Professor recebe o email por convite da coordenacao e cria a senha aqui
+// pela primeira vez (Confirmar senha garante que ele digitou certo)
+// O token vem na URL: /definir-senha?token=xxx
+class DefinirSenhaProfessorScreen extends StatefulWidget {
+  const DefinirSenhaProfessorScreen({super.key});
 
   @override
-  State<ProfessorLoginScreen> createState() => _ProfessorLoginScreenState();
+  State<DefinirSenhaProfessorScreen> createState() => _DefinirSenhaProfessorScreenState();
 }
 
-class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
+class _DefinirSenhaProfessorScreenState extends State<DefinirSenhaProfessorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
+  final _confirmarSenhaController = TextEditingController();
   final _authController = AuthController();
   bool _carregando = false;
+  String? _token;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['token'] != null) {
+      _token = args['token'] as String;
+    } else {
+      // Try to get from query parameters
+      final uri = Uri.base;
+      _token = uri.queryParameters['token'];
+    }
+  }
 
   Future<void> _entrar() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Token inválido ou ausente. Acesse pelo link do e-mail.')),
+      );
+      return;
+    }
 
     setState(() => _carregando = true);
-    final sucesso = await _authController.loginProfessor(
+    final sucesso = await _authController.criarSenhaProfessor(
       email: _emailController.text,
       senha: _senhaController.text,
+      confirmarSenha: _confirmarSenhaController.text,
+      token: _token!,
     );
     setState(() => _carregando = false);
 
@@ -34,16 +59,9 @@ class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
       Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_authController.erro ?? 'Erro ao entrar')),
+        SnackBar(content: Text(_authController.erro ?? 'Erro ao definir senha')),
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _senhaController.dispose();
-    super.dispose();
   }
 
   @override
@@ -58,7 +76,9 @@ class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Entrar como Professor', style: TextStyle(fontSize: 24)),
+                Text('Definir Senha', style: TextStyle(fontSize: 24)),
+                SizedBox(height: 8),
+                Text('Digite sua nova senha para ativar sua conta', style: TextStyle(color: Colors.grey[600])),
                 SizedBox(height: 24),
                 CustomTextfield(
                   label: 'Email',
@@ -67,23 +87,23 @@ class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
                 ),
                 SizedBox(height: 12),
                 CustomTextfield(
-                  label: 'Senha',
+                  label: 'Nova senha',
                   controller: _senhaController,
+                  senha: true,
+                  validator: Validators.validarSenha,
+                ),
+                SizedBox(height: 12),
+                CustomTextfield(
+                  label: 'Confirmar senha',
+                  controller: _confirmarSenhaController,
                   senha: true,
                   validator: Validators.validarSenha,
                 ),
                 SizedBox(height: 24),
                 CustomButton(
-                  texto: 'Entrar',
+                  texto: 'Definir senha e entrar',
                   onPressed: _entrar,
                   carregando: _carregando,
-                ),
-                SizedBox(height: 12),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, AppRoutes.definirSenha);
-                  },
-                  child: const Text('Primeiro acesso? Definir senha'),
                 ),
               ],
             ),

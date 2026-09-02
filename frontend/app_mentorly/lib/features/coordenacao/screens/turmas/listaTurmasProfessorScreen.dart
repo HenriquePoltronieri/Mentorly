@@ -1,18 +1,17 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
+import '../../services/professorTurmasService.dart';
 
 // tela que lista os professores; ao clicar num professor, abre um
 // dialogo pra escolher (multi-selecao) quais turmas ficam vinculadas a ele
 //
 // IMPORTANTE PRO BACKEND:
 // endpoint 1 -> GET {baseUrl}/api/coordenacao/professores
-// resposta esperada (200) -> [ { "id": 1, "nome": "...", "disciplina": "..." }, ... ]
+// resposta esperada (200) -> [ { "id": 1, "nome": "...", "disciplina": "...", "turmas": [...] }, ... ]
 //
-// endpoint 2 -> GET {baseUrl}/api/coordenacao/turmas
+// endpoint 2 -> GET {baseUrl}/api/classes
 // resposta esperada (200) -> lista assim:
-// [ { "id": 1, "nome": "9º Ano A", "professor_id": null }, ... ]
-// (professor_id vem preenchido quando a turma ja esta vinculada a alguem)
+// [ { "id": 1, "name": "9º Ano A", "description": "..." }, ... ]
 //
 // endpoint 3 -> POST {baseUrl}/api/coordenacao/professores/{professorId}/turmas
 // body enviado -> { "turma_ids": [1, 2, 3] }
@@ -27,9 +26,7 @@ class ListaTurmasProfessorScreen extends StatefulWidget {
 }
 
 class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorTurmasService _professorTurmasService = ProfessorTurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -49,39 +46,32 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
     });
 
     try {
-      final respostaProfessores = await http
-          .get(Uri.parse('$baseUrl/api/coordenacao/professores'))
-          .timeout(const Duration(seconds: 5));
-      final respostaTurmas = await http
-          .get(Uri.parse('$baseUrl/api/coordenacao/turmas'))
-          .timeout(const Duration(seconds: 5));
+      final professores = await _professorTurmasService.listarProfessores();
+      final turmas = await _professorTurmasService.listarTurmas();
 
-      if (respostaProfessores.statusCode == 200 && respostaTurmas.statusCode == 200) {
-        setState(() {
-          _professores = jsonDecode(respostaProfessores.body);
-          _turmas = jsonDecode(respostaTurmas.body);
-        });
-      } else {
-        setState(() {
-          _mensagemErro = 'Erro ao buscar dados';
-        });
-      }
-    } catch (e) {
       setState(() {
-        _mensagemErro = 'Não foi possível conectar ao servidor';
+        _professores = professores;
+        _turmas = turmas;
       });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar dados: ${e.mensagem}');
+    } catch (e) {
+      setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
-        setState(() {
-          _carregando = false;
-        });
+        setState(() => _carregando = false);
       }
     }
   }
 
   // quantas turmas esse professor ja tem vinculadas
   List<dynamic> _turmasDoProfessor(int professorId) {
-    return _turmas.where((t) => t['professor_id'] == professorId).toList();
+    final prof = _professores.firstWhere(
+      (p) => p['id'] == professorId,
+      orElse: () => null,
+    );
+    if (prof == null || prof['turmas'] == null) return [];
+    return List<dynamic>.from(prof['turmas']);
   }
 
   Future<void> _abrirSelecaoTurmas(dynamic professor) async {
@@ -110,8 +100,7 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
                   shrinkWrap: true,
                   children: _turmas.map((turma) {
                     final turmaId = turma['id'] as int;
-                    final vinculadaComOutro = turma['professor_id'] != null &&
-                        turma['professor_id'] != professor['id'];
+                    final vinculadaComOutro = _isTurmaVinculadaComOutro(turmaId, professor['id']);
 
                     return CheckboxListTile(
                       title: Text(turma['nome'] ?? ''),
@@ -155,24 +144,27 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
     await _salvarVinculo(professor['id'], resultado.toList());
   }
 
+  bool _isTurmaVinculadaComOutro(int turmaId, int professorIdAtual) {
+    for (final prof in _professores) {
+      if (prof['id'] == professorIdAtual) continue;
+      final turmas = prof['turmas'] as List<dynamic>? ?? [];
+      if (turmas.any((t) => t['id'] == turmaId)) return true;
+    }
+    return false;
+  }
+
   Future<void> _salvarVinculo(int professorId, List<int> turmaIds) async {
     try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/coordenacao/professores/$professorId/turmas'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'turma_ids': turmaIds}),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        _buscarDados(); // recarrega pra atualizar os vinculos na tela
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao salvar vínculo')),
-        );
-      }
+      await _professorTurmasService.vincularTurmas(
+        professorId: professorId,
+        turmaIds: turmaIds,
+      );
+      _buscarDados(); // recarrega pra atualizar os vinculos na tela
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar vínculo: ${e.mensagem}')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

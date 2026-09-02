@@ -15,13 +15,11 @@ class ProfessoresService {
   Future<Map<String, dynamic>> cadastrarProfessor({
     required String nome,
     required String email,
-    required String senha,
     required String disciplina,
   }) async {
     final resposta = await _api.post('/coordenacao/professores', {
       'nome': nome,
       'email': email,
-      'senha': senha,
       'disciplina': disciplina,
     });
     return resposta as Map<String, dynamic>;

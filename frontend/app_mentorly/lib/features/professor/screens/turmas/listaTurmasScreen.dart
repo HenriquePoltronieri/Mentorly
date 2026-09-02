@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../widgets/professorTopBar.dart';
+import '../../services/professorTurmasService.dart';
 
 // tela que lista as turmas vinculadas a esse professor (vinculo feito
 // pela coordenacao na tela "Vincular Professores")
@@ -19,9 +19,7 @@ class ListaTurmasScreen extends StatefulWidget {
 }
 
 class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final ProfessorTurmasService _turmasService = ProfessorTurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -40,15 +38,10 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/turmas'))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        setState(() => _turmas = jsonDecode(response.body));
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar turmas');
-      }
+      final turmas = await _turmasService.listarTurmas();
+      setState(() => _turmas = turmas);
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar turmas: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

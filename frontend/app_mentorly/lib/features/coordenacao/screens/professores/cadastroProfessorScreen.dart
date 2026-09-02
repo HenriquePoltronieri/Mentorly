@@ -4,7 +4,7 @@ import '../../services/professoresService.dart';
 // tela onde a coordenacao cadastra um novo professor
 // IMPORTANTE PRO BACKEND:
 // endpoint esperado -> POST {baseUrl}/api/coordenacao/professores
-// body enviado -> { "nome": "...", "email": "...", "senha": "...", "disciplina": "..." }
+// body enviado -> { "nome": "...", "email": "...", "disciplina": "..." }
 // resposta esperada em caso de sucesso (201) ->
 // { "id": 1, "nome": "...", "email": "...", "disciplina": "..." }
 // resposta esperada em caso de erro (400) ->
@@ -20,7 +20,6 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
   final _emailController = TextEditingController();
-  final _senhaController = TextEditingController();
   final _disciplinaController = TextEditingController();
   final ProfessoresService _professoresService = ProfessoresService();
 
@@ -39,18 +38,17 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
       await _professoresService.cadastrarProfessor(
         nome: _nomeController.text.trim(),
         email: _emailController.text.trim(),
-        senha: _senhaController.text,
         disciplina: _disciplinaController.text.trim(),
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Professor cadastrado com sucesso')),
+        const SnackBar(content: Text('Professor cadastrado com sucesso. Convite enviado por e-mail.')),
       );
       Navigator.pop(context, true); // volta pra lista avisando que deu certo
     } catch (e) {
       setState(() {
-        _mensagemErro = 'Não foi possível conectar ao servidor';
+        _mensagemErro = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -65,7 +63,6 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   void dispose() {
     _nomeController.dispose();
     _emailController.dispose();
-    _senhaController.dispose();
     _disciplinaController.dispose();
     super.dispose();
   }
@@ -108,24 +105,6 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
                   }
                   if (!valor.contains('@')) {
                     return 'Email inválido';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _senhaController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Senha provisória',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (valor) {
-                  if (valor == null || valor.isEmpty) {
-                    return 'Digite uma senha';
-                  }
-                  if (valor.length < 6) {
-                    return 'A senha precisa ter no mínimo 6 caracteres';
                   }
                   return null;
                 },

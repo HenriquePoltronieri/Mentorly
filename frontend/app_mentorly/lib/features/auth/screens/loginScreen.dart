@@ -135,6 +135,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       )
                     : const Text('Entrar'),
               ),
+                           const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.cadastro);
+                },
+                child: const Text('Não tem conta? Cadastre-se'),
+              ),
               const SizedBox(height: 12),
               // botao temporario so pra testar as telas sem precisar do backend
               // TODO: remover isso quando o backend estiver pronto

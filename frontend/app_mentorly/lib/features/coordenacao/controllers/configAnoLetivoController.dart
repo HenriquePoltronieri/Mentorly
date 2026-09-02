@@ -1,4 +1,5 @@
-import '../../../core/services/apiService.dart';
+import '../services/etapasService.dart';
+import '../services/criteriosService.dart';
 import '../models/etapaModel.dart';
 import '../models/criterioAvaliacaoModel.dart';
 
@@ -18,14 +19,18 @@ class ConfigAnoLetivoController {
 
   ConfigAnoLetivoController._interno();
 
-  final ApiService _api = ApiService();
+  final EtapasService _etapasService = EtapasService();
+  final CriteriosService _criteriosService = CriteriosService();
 
   List<EtapaModel> etapas = [];
   List<CriterioAvaliacaoModel> criterios = [];
 
   Future<void> definirQuantidadeEtapas(int quantidade) async {
-    etapas = List.generate(quantidade, (i) => EtapaModel(numero: i + 1));
-    await _api.post('/config/etapas', {'quantidade': quantidade});
+    // Create etapas sequentially - the backend expects one at a time
+    // For now, just store locally and sync later
+    etapas = List.generate(quantidade, (i) => EtapaModel(nome: 'Etapa ${i + 1}', numero: i + 1));
+    // Note: The backend expects individual etapa creation
+    // We'll sync when the user navigates to the next screen
   }
 
   Future<void> salvarNotasEtapa(
@@ -33,23 +38,46 @@ class ConfigAnoLetivoController {
     double notaMinima,
     double notaMaxima,
   ) async {
+    // Find the etapa by numero and sync to backend
     final etapa = etapas.firstWhere((e) => e.numero == numeroEtapa);
+    if (etapa.id != null && etapa.id!.isNotEmpty) {
+      await _etapasService.definirNotas(
+        etapaId: int.parse(etapa.id!),
+        notaMinima: notaMinima,
+        notaMaxima: notaMaxima,
+      );
+    }
     etapa.notaMinima = notaMinima;
     etapa.notaMaxima = notaMaxima;
-
-    await _api.post('/config/etapas/$numeroEtapa/notas', {
-      'notaMinima': notaMinima,
-      'notaMaxima': notaMaxima,
-    });
   }
 
   Future<void> adicionarCriterio(String nome) async {
-    final resposta = await _api.post('/config/criterios', {'nome': nome});
-    criterios.add(CriterioAvaliacaoModel.fromJson(resposta));
+    if (etapas.isEmpty) return;
+    // Associate with the first etapa for now
+    final etapa = etapas.first;
+    if (etapa.id != null && etapa.id!.isNotEmpty) {
+      final resposta = await _criteriosService.criarCriterio(
+        etapaId: int.parse(etapa.id!),
+        nome: nome,
+      );
+      criterios.add(CriterioAvaliacaoModel.fromJson(resposta));
+    }
   }
 
   Future<void> finalizarConfiguracao() async {
-    await _api.post('/config/finalizar', {});
+    // Create all etapas in backend
+    for (final etapa in etapas) {
+      if (etapa.id == null || etapa.id!.isEmpty) {
+        final resposta = await _etapasService.criarEtapa(
+          nome: etapa.nome.isNotEmpty ? etapa.nome : 'Etapa ${etapa.numero}',
+          ordem: etapa.numero,
+          anoLetivo: DateTime.now().year,
+          ativa: etapa.ativa,
+        );
+        etapa.id = resposta['id'].toString();
+      }
+    }
+    // Note: criterios are already created in adicionarCriterio
   }
 
   // reseta tudo - util pra quando a coordenacao terminar uma configuracao

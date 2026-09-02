@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../core/services/apiService.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../controllers/atividadesController.dart';
 import '../../models/atividadeModel.dart';
-import '../../models/notaModel.dart';
 import '../../widgets/professorTopBar.dart';
+import '../../services/professorAlunosService.dart';
 import 'lancarNotasModal.dart';
 
 // tela onde o professor lanca as notas dos alunos numa atividade especifica
@@ -23,11 +22,8 @@ class AtividadeNotasScreen extends StatefulWidget {
 }
 
 class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
-
-  final _controller = AtividadesController();
+  final ProfessorAlunosService _alunosService = ProfessorAlunosService();
+  final AtividadesController _controller = AtividadesController();
   final Map<String, TextEditingController> _controladoresNota = {};
 
   bool _carregando = true;
@@ -65,20 +61,15 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/api/professor/turmas/${_turma!.id}/alunos'))
-          .timeout(const Duration(seconds: 5));
-
+      final alunos = await _alunosService.listarAlunos(_turma!.id as int);
       await _controller.carregarNotas(_atividade!.id);
 
-      if (response.statusCode == 200) {
-        setState(() {
-          _alunos = jsonDecode(response.body);
-        });
-        _prepararControladores();
-      } else {
-        setState(() => _mensagemErro = 'Erro ao buscar alunos');
-      }
+      setState(() {
+        _alunos = alunos;
+      });
+      _prepararControladores();
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = 'Erro ao buscar alunos: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/services/apiService.dart';
+import '../../services/lancarNotasService.dart';
 
 // modal pra lancar notas em lote via planilha numa atividade
 // segue o mesmo padrao do AdicionarAlunosModal (coordenacao)
@@ -34,9 +36,8 @@ class LancarNotasModal extends StatefulWidget {
 }
 
 class _LancarNotasModalState extends State<LancarNotasModal> {
-  // ATENCAO: 10.0.2.2 so funciona no emulador Android.
-  // Testando no Chrome/Web, troca por 'http://localhost:5000'
-  static const String baseUrl = 'http://localhost:5000';
+  final LancarNotasService _lancarNotasService = LancarNotasService();
+  final ApiService _api = ApiService();
 
   bool _enviando = false;
   String? _mensagemErro;
@@ -44,7 +45,7 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
 
   Future<void> _baixarModelo() async {
     final url = Uri.parse(
-      '$baseUrl/api/atividades/${widget.atividadeId}/notas/modelo-planilha',
+      '${ApiService.baseUrl}/atividades/${widget.atividadeId}/notas/modelo-planilha',
     );
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -80,8 +81,11 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/api/atividades/${widget.atividadeId}/notas/importar'),
+        Uri.parse('${ApiService.baseUrl}/atividades/${widget.atividadeId}/notas/importar'),
       );
+      if (_api.token != null) {
+        request.headers['Authorization'] = 'Bearer ${_api.token}';
+      }
       request.files.add(
         http.MultipartFile.fromBytes('arquivo', arquivo.bytes!, filename: arquivo.name),
       );
