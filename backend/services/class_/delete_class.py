@@ -1,10 +1,10 @@
-from models.class_model import Class
+from models.turma_model import Turma
 
 
 class DeleteClassService:
-    def execute(self, class_id):
-        class_obj = Class.find_by_id(class_id)
-        if class_obj is None:
-            raise ValueError("Class not found")
+    """Exclui a turma. O schema cascateia alunos, atividades e notas dela."""
 
-        class_obj.delete()
+    def execute(self, turma_id, coordenacao_id):
+        if not Turma.find_by_id(turma_id, coordenacao_id):
+            raise LookupError("Turma nao encontrada")
+        Turma.delete(turma_id, coordenacao_id)

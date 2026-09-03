@@ -4,6 +4,10 @@ __pycache__/
 venv/
 .venv/
 
+# Banco local: data directory criado pelo mysqld em desenvolvimento.
+# Nao entra no repositorio - o schema versionado e backend/database/schema.sql.
+.mysql-data/
+
 # Editors / OS
 .vscode/
 .DS_Store

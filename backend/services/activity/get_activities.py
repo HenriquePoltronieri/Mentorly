@@ -1,12 +1,16 @@
-from models.activity_model import Activity
-from repositories.activity_repository import ActivityRepository
+from models.atividade_model import Atividade
 
 
 class GetActivitiesService:
-    def __init__(self):
-        self.repository = ActivityRepository()
+    """Lista atividades no recorte de quem esta pedindo.
 
-    def execute(self, class_id=None):
-        if class_id:
-            return self.repository.find_by_class_id(class_id)
-        return Activity.find_all()
+    Coordenacao ve as atividades da escola (so leitura, para relatorio e
+    busca). Professor ve so as das turmas vinculadas a ele.
+    """
+
+    def execute(self, coordenacao_id, professor_id=None, turma_id=None):
+        if professor_id is not None:
+            linhas = Atividade.find_all_by_professor(professor_id, turma_id)
+        else:
+            linhas = Atividade.find_all_by_coordenacao(coordenacao_id, turma_id)
+        return [Atividade.to_dict(linha) for linha in linhas]

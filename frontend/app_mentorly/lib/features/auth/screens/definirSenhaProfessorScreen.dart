@@ -30,10 +30,21 @@ class _DefinirSenhaProfessorScreenState extends State<DefinirSenhaProfessorScree
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map && args['token'] != null) {
       _token = args['token'] as String;
-    } else {
-      // Try to get from query parameters
-      final uri = Uri.base;
-      _token = uri.queryParameters['token'];
+      return;
+    }
+
+    // Link do convite: {app}/#/definir-senha?token=...
+    // No Flutter Web o que vem depois do '#' e o fragmento, entao o token
+    // NAO aparece em Uri.base.queryParameters - precisa ser lido do
+    // fragmento. A query normal fica como alternativa.
+    final uri = Uri.base;
+    _token = uri.queryParameters['token'];
+    if (_token != null) return;
+
+    final fragmento = uri.fragment;
+    final posicao = fragmento.indexOf('?');
+    if (posicao >= 0) {
+      _token = Uri.splitQueryString(fragmento.substring(posicao + 1))['token'];
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/services/apiService.dart';
+import '../../../../app/routes.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../models/atividadeModel.dart';
 import '../../services/atividadesService.dart';
@@ -73,6 +74,14 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     );
 
     if (salvou == true) _buscarAtividades();
+  }
+
+  Future<void> _abrirLancarNotas(AtividadeModel atividade) async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.atividadeNotas,
+      arguments: {'atividade': atividade, 'turma': _turma},
+    );
   }
 
   Future<void> _abrirEditarAtividade(AtividadeModel atividade) async {
@@ -196,13 +205,20 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
                   onPressed: () => _abrirEditarAtividade(atividade),
                 ),
                 IconButton(
+                  tooltip: 'Lançar notas',
+                  icon: const Icon(Icons.grading_outlined),
+                  onPressed: () => _abrirLancarNotas(atividade),
+                ),
+                IconButton(
                   tooltip: 'Excluir',
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   onPressed: () => _excluirAtividade(atividade),
                 ),
               ],
             ),
-            onTap: () => _abrirEditarAtividade(atividade),
+            // Tocar na atividade leva ao lancamento de notas, que era a
+            // tela orfa do app - nenhuma rota apontava para ela.
+            onTap: () => _abrirLancarNotas(atividade),
           ),
         );
       },

@@ -1,21 +1,23 @@
-from models.class_model import Class
-from repositories.turma_repository import TurmaRepository
+from models.turma_model import Turma
 
 
 class UpdateClassService:
-    def __init__(self):
-        self.repository = TurmaRepository()
+    def execute(self, turma_id, coordenacao_id, nome=None, descricao=None,
+                disciplina=None, turno=None, ano_letivo=None):
+        atual = Turma.find_by_id(turma_id, coordenacao_id)
+        if not atual:
+            raise LookupError("Turma nao encontrada")
 
-    def execute(self, class_id, name=None, description=None):
-        class_obj = Class.find_by_id(class_id)
-        if class_obj is None:
-            raise ValueError("Class not found")
+        if nome is not None:
+            nome = nome.strip()
+            if not nome:
+                raise ValueError("O nome da turma nao pode ficar vazio")
+            duplicada = Turma.find_by_nome(nome, coordenacao_id)
+            if duplicada and duplicada["id"] != turma_id:
+                raise ValueError("Ja existe uma turma com este nome nesta escola")
 
-        if name is not None:
-            if not name.strip():
-                raise ValueError("Name cannot be empty")
-            if name != class_obj.name:
-                if self.repository.find_by_name(name) is not None:
-                    raise ValueError("A class with this name already exists")
-
-        return class_obj.update(name, description)
+        Turma.update(
+            turma_id, coordenacao_id, nome, descricao, disciplina, turno,
+            ano_letivo,
+        )
+        return Turma.to_dict(Turma.find_by_id(turma_id, coordenacao_id))

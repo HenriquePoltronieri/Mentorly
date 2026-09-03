@@ -8,7 +8,7 @@ import 'adicionarTurmaModal.dart';
 // Tela da coordenacao com o CRUD de turmas.
 // Fluxo: tela -> TurmasService -> ApiService -> /api/classes
 //
-// Toque na turma -> abre as atividades dela (AppRoutes.turmaAtividades)
+// Toque na turma -> abre os alunos dela (AppRoutes.listaAlunosTurma)
 // Lapis -> editar     Lixeira -> excluir (com confirmacao)
 class GerenciarTurmasScreen extends StatefulWidget {
   const GerenciarTurmasScreen({super.key});
@@ -177,10 +177,15 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
               ),
             ],
           ),
+          // A Coordenacao gerencia ALUNOS da turma. Criar atividade e
+          // lancar nota sao acoes do Professor, entao esta tela nao leva
+          // mais para turmaAtividades (que tem o botao "Adicionar
+          // atividade"). O backend tambem recusa: POST /api/activities
+          // exige token de professor.
           onTap: () {
             Navigator.pushNamed(
               context,
-              AppRoutes.turmaAtividades,
+              AppRoutes.listaAlunosTurma,
               arguments: turma,
             );
           },

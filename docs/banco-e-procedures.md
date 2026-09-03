@@ -2,73 +2,104 @@
 
 ## Banco utilizado
 
-O projeto usa **MySQL**. O acesso é feito com SQLAlchemy (a biblioteca
-Flask-SQLAlchemy) e o driver PyMySQL.
+O projeto usa **MySQL 8**. O acesso é feito em **SQL puro**, com o driver PyMySQL —
+não há ORM. O schema fica versionado em `backend/database/schema.sql`, e as consultas
+ficam escritas à mão nas Models e nos Repositories.
 
-Quando o backend sobe com `python app.py`, ele cria o banco caso não exista, cria as
-tabelas e instala as procedures do arquivo `backend/database/procedures.sql`.
+Quando o backend sobe com `python app.py`, ele cria o banco caso não exista, aplica o
+`schema.sql` e instala as procedures do `backend/database/procedures.sql`. O mesmo pode
+ser feito sem subir o Flask:
 
-## Entidades atuais
+```bash
+cd backend
+python scripts/init_db.py
+```
 
-São três tabelas:
+## A regra central do desenho: cada Coordenação é uma escola
 
-| Tabela | Model | Campos principais |
+Todo dado pedagógico pendura, direta ou indiretamente, em uma `coordenacao_id`. É isso
+que impede uma escola de ver os dados da outra.
+
+| Tabela | O que guarda | Como chega na escola |
 |---|---|---|
-| `users` | `User` | id, name, email, password_hash, role, created_at, updated_at |
-| `classes` | `Class` | id, name, description, created_at, updated_at |
-| `activities` | `Activity` | id, title, description, class_id, due_date, created_at, updated_at |
+| `coordenacao` | A escola em si (login da Coordenação) | é a raiz |
+| `professor` | Professores da escola | `coordenacao_id` |
+| `turma` | Turmas da escola | `coordenacao_id` |
+| `professor_turma` | O vínculo que a Coordenação cria | `coordenacao_id` (FK composta) |
+| `aluno` | Alunos de uma turma | `turma_id` → `turma.coordenacao_id` |
+| `etapa` | Etapas do ano letivo (padrão da escola) | `coordenacao_id` |
+| `criterio` | Critérios de avaliação de cada etapa | `coordenacao_id` + `etapa_id` |
+| `atividade` | Atividades criadas pelo Professor | `turma_id` → `turma.coordenacao_id` |
+| `nota` | Nota de um aluno em uma atividade | `atividade_id` / `aluno_id` |
+| `codigo_verificacao` | Códigos da verificação em duas etapas | — |
 
-A tabela `activities` tem uma chave estrangeira `class_id` apontando para `classes`, ou
-seja, toda atividade pertence a uma turma.
+### Por que `professor_turma` carrega `coordenacao_id`
 
-Vale explicar um detalhe de nome: no banco e no código do backend a turma se chama
-`Class` (tabela `classes`), porque foi assim que a entidade nasceu. No aplicativo a gente
-usa "turma" em português. A tradução dos nomes acontece no `fromJson`/`toJson` dos Models
-em Dart, então o backend continua em inglês e a tela continua em português.
+Parece redundante, e é de propósito. As duas chaves estrangeiras da tabela são
+**compostas** e passam pela escola:
 
-As funcionalidades desta entrega usam `classes` e `activities`. A tabela `users` existe e
-tem CRUD pronto no backend, mas não tem tela ligada a ela nesta entrega.
+```sql
+FOREIGN KEY (coordenacao_id, turma_id)     REFERENCES turma (coordenacao_id, id)
+FOREIGN KEY (coordenacao_id, professor_id) REFERENCES professor (coordenacao_id, id)
+```
+
+O efeito prático: vincular um professor da escola A a uma turma da escola B é recusado
+pelo **próprio MySQL**, não só pela cláusula `WHERE` da query. O isolamento vira uma
+invariante do banco — um bug no service não consegue misturar escolas. O script
+`backend/scripts/smoke_db.py` prova isso, inclusive tentando forjar a `coordenacao_id`.
+
+Isso exige os índices `UNIQUE (coordenacao_id, id)` em `turma` e `professor`, que
+existem no schema só para servir de alvo dessas FKs.
+
+## Autenticação
+
+O login devolve um JWT (HS256) cujo payload carrega `{sub, tipo, coordenacao_id, exp}`.
+**Toda consulta lê a escola desse token, nunca de um parâmetro enviado pelo cliente** —
+não existe endpoint que aceite `coordenacao_id` na URL ou no corpo.
+
+Os decorators ficam em `backend/auth/decorators.py`:
+
+- `@auth_required` — qualquer usuário autenticado;
+- `@coordenacao_required` — cadastro de turma/aluno, vínculo de professor, configuração
+  do ano letivo;
+- `@professor_required` — criar/editar/excluir atividade e lançar nota.
+
+É `@professor_required` que garante, no backend, que a Coordenação **não** cria
+atividade nem lança nota: um token de coordenação recebe 403 mesmo que a chamada seja
+feita fora do app.
 
 ## CRUD simples e consultas especiais
 
-A gente separou o acesso ao banco em dois tipos:
+**CRUD simples** (criar, listar, buscar por id, atualizar, excluir) fica na própria
+Model, em `backend/models/`, com o SQL escrito à mão.
 
-**CRUD simples** é o básico de uma entidade: criar, listar todos, buscar por ID, atualizar
-e excluir. Isso fica dentro da própria Model. Por exemplo, `Class.create`, `Class.find_all`
-e `Class.delete` estão em `backend/models/class_model.py`.
+**Consultas especiais** — relatórios, contagens, buscas com filtro e ordenação — ficam
+no Repository.
 
-**Consultas especiais** são as que não se resolvem com um CRUD comum: relatórios,
-contagens, buscas com filtro e ordenação. Essas ficam no Repository.
-
-Foi um dos pontos que o professor apontou: o Repository não deve repetir o que a Model já
-faz. Hoje os Repositories do projeto têm poucos métodos, só o que realmente não é CRUD.
-
-## Por que as procedures ficam no Repository
-
-A regra da disciplina é que SQL e chamadas de procedure (`CALL`) não podem aparecer no
-Controller nem no Service. O motivo é manter cada camada com uma responsabilidade: o
-Controller cuida do HTTP, o Service cuida da regra de negócio, e quem conversa com o
-banco é a Model ou o Repository.
-
-No projeto, o `CALL` fica em um único arquivo, `backend/database/procedure.py`, que tem a
-função `call_procedure`. Só os Repositories chamam essa função.
+SQL e chamadas de procedure (`CALL`) não aparecem no Controller nem no Service. O `CALL`
+fica em um único arquivo, `backend/database/procedure.py`, e só os Repositories o
+chamam. A função valida o nome contra uma lista de procedures permitidas, já que o nome
+da procedure não pode ir como placeholder.
 
 ## Procedures existentes
 
-O arquivo `backend/database/procedures.sql` tem quatro procedures:
+Todas recebem `p_coordenacao_id`: nenhuma enxerga o sistema inteiro.
 
 | Procedure | O que faz | Usada por |
 |---|---|---|
-| `sp_relatorio_turmas_atividades` | Lista as turmas com a quantidade de atividades de cada uma, ordenando da que tem mais para a que tem menos. Usa LEFT JOIN e GROUP BY. | `TurmaRepository` (funcionalidade 10) |
-| `sp_buscar_atividades` | Busca atividades cujo título contenha um termo, e ordena por título, data de entrega ou nome da turma, em ordem crescente ou decrescente. | `ActivityRepository` (funcionalidade 9) |
-| `sp_usuarios_por_role` | Lista os usuários de um determinado papel (por exemplo, todos os professores), em ordem alfabética. | `UserRepository` |
-| `sp_resumo_sistema` | Devolve totais gerais do sistema: quantas turmas, quantas atividades, quantos usuários e quantas turmas já têm atividade. | `ReportRepository` |
+| `sp_relatorio_turmas_atividades(coordenacao_id)` | Turmas da escola com a contagem de atividades, da que tem mais para a que tem menos. LEFT JOIN + GROUP BY. | `TurmaRepository` |
+| `sp_buscar_atividades(coordenacao_id, professor_id, termo, ordenar_por, direcao)` | Busca atividades por termo no título, com ordenação. `professor_id` nulo = visão da Coordenação; preenchido = só as turmas vinculadas àquele professor. | `ActivityRepository` |
+| `sp_professores_por_coordenacao(coordenacao_id)` | Professores da escola, em ordem alfabética, com a contagem de turmas. Substitui a antiga `sp_usuarios_por_role`, que devolvia todos os professores do sistema sem filtro. | `ProfessorRepository` |
+| `sp_resumo_sistema(coordenacao_id)` | Totais da escola: turmas, professores, atividades, alunos. Subconsultas agregadas. | `ReportRepository` |
+| `sp_turmas_do_professor(professor_id)` | Turmas vinculadas ao professor, com a contagem de alunos. É a fonte de `GET /api/professor/turmas`. | `TurmaRepository` |
+| `sp_alunos_em_risco(professor_id, ano_letivo)` | Alunos com média abaixo da `nota_minima` configurada pela Coordenação, só nas turmas do professor. | `ProfessorRepository` |
 
-As duas primeiras são as que aparecem nas funcionalidades da entrega. As outras duas
-existem no backend e têm endpoint, mas não têm tela ligada nesta entrega.
+## Sobre o instalador de procedures
 
-## Observação sobre a versão do MySQL
+O `procedures.sql` usa `DROP PROCEDURE IF EXISTS` + `CREATE PROCEDURE`, em vez de
+`CREATE PROCEDURE IF NOT EXISTS`. A diferença importa: a segunda forma só existe a
+partir do MySQL 8.0.29, e além disso não atualizaria uma procedure já instalada.
 
-O `procedures.sql` usa `CREATE PROCEDURE IF NOT EXISTS`, que só existe a partir do
-**MySQL 8.0.29**. Em versão mais antiga, ou no MariaDB, o arquivo dá erro na primeira
-procedure.
+O parser de `backend/database/connection.py` respeita a diretiva `DELIMITER $$`. A
+versão anterior dividia o arquivo no texto `END;`, o que quebrava em qualquer procedure
+que tivesse um `IF ... END IF` dentro — e as procedures atuais têm.

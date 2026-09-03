@@ -2,8 +2,11 @@
 class Validators {
   static String? validarEmail(String? valor) {
     if (valor == null || valor.isEmpty) return 'Digite o email';
-    final regex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!regex.hasMatch(valor)) return 'Email invalido';
+    // Formato basico, igual ao que o backend valida. A regex anterior
+    // limitava o dominio final a 4 caracteres ([\w-]{2,4}), entao recusava
+    // enderecos validos como .local, .online e .company.
+    final regex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!regex.hasMatch(valor.trim())) return 'Email invalido';
     return null;
   }
 

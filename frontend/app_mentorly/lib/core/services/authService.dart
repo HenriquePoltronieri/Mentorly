@@ -1,17 +1,26 @@
 import 'apiService.dart';
 import '../../features/auth/models/userModel.dart';
 
-// Cuida de login, cadastro e verificacao em duas etapas
+// Cuida de login, cadastro e verificacao em duas etapas.
+//
+// Toda entrada bem-sucedida passa por _guardarSessao, que persiste token e
+// usuario no SharedPreferences. Sem isso o app perdia o login a cada
+// refresh da pagina e todas as chamadas voltavam 401.
 class AuthService {
   final ApiService _api = ApiService();
+
+  Future<UserModel> _guardarSessao(Map<String, dynamic> resposta) async {
+    final usuario = Map<String, dynamic>.from(resposta['usuario'] as Map);
+    await _api.salvarSessao(resposta['token'] as String, usuario);
+    return UserModel.fromJson(usuario);
+  }
 
   Future<UserModel> loginCoordenacao(String email, String senha) async {
     final resposta = await _api.post('/auth/login-coordenacao', {
       'email': email,
       'senha': senha,
     });
-    _api.token = resposta['token'];
-    return UserModel.fromJson(resposta['usuario']);
+    return _guardarSessao(resposta);
   }
 
   Future<UserModel> loginProfessor({
@@ -22,8 +31,7 @@ class AuthService {
       'email': email,
       'senha': senha,
     });
-    _api.token = resposta['token'];
-    return UserModel.fromJson(resposta['usuario']);
+    return _guardarSessao(resposta);
   }
 
   Future<UserModel> cadastrarCoordenacao({
@@ -38,8 +46,7 @@ class AuthService {
       'senha': senha,
       'telefone': telefone,
     });
-    _api.token = resposta['token'];
-    return UserModel.fromJson(resposta['usuario']);
+    return _guardarSessao(resposta);
   }
 
   // Professor recebe o email ja cadastrado pela coordenacao e so cria a senha
@@ -57,8 +64,7 @@ class AuthService {
       'senha': senha,
       'token': token,
     });
-    _api.token = resposta['token'];
-    return UserModel.fromJson(resposta['usuario']);
+    return _guardarSessao(resposta);
   }
 
   Future<bool> enviarCodigoDuasEtapas(String email) async {
@@ -73,4 +79,6 @@ class AuthService {
     });
     return resposta['valido'] ?? false;
   }
+
+  Future<void> sair() => _api.limparSessao();
 }

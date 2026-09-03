@@ -1,18 +1,56 @@
 import 'package:flutter/material.dart';
 import '../../../app/routes.dart';
+import '../../../core/services/apiService.dart';
+import '../../../core/services/authService.dart';
 
-// tela principal da coordenacao, depois do login
-// funciona como um menu que leva pras outras secoes
+// Tela principal da coordenacao, depois do login. Funciona como um menu.
+//
+// O que a Coordenacao faz: cadastrar turmas, adicionar alunos nas turmas,
+// vincular professores as turmas e configurar o ano letivo.
+// O que ela NAO faz: criar atividade e lancar nota - isso e do Professor,
+// e o backend recusa (403) mesmo que a chamada seja feita na mao.
 class CoordenacaoHomeScreen extends StatelessWidget {
   const CoordenacaoHomeScreen({super.key});
 
+  Future<void> _sair(BuildContext context) async {
+    await AuthService().sair();
+    if (!context.mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.perfilSelection,
+      (rota) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final nome = ApiService().usuario?['nome'] as String?;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Painel da Coordenação')),
+      appBar: AppBar(
+        title: const Text('Painel da Coordenação'),
+        actions: [
+          IconButton(
+            tooltip: 'Sair',
+            icon: const Icon(Icons.logout),
+            onPressed: () => _sair(context),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (nome != null && nome.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12, left: 4),
+              child: Text(
+                nome,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           _ItemMenu(
             titulo: 'Professores',
             subtitulo: 'Cadastrar e listar professores',
@@ -23,50 +61,38 @@ class CoordenacaoHomeScreen extends StatelessWidget {
           ),
           _ItemMenu(
             titulo: 'Gerenciar Turmas',
-            subtitulo: 'Criar, editar, excluir turmas e ver suas atividades',
+            subtitulo: 'Criar turmas, editar, excluir e gerenciar os alunos',
             icone: Icons.class_outlined,
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.gerenciarTurmas);
             },
           ),
           _ItemMenu(
-            titulo: 'Buscar Atividades',
-            subtitulo: 'Filtrar atividades por termo e ordenação',
-            icone: Icons.search,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.buscarAtividades);
-            },
-          ),
-          _ItemMenu(
             titulo: 'Vincular Professores',
-            subtitulo: 'Vincular professores às turmas',
+            subtitulo: 'Definir quais turmas cada professor leciona',
             icone: Icons.link,
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.listaTurmasProfessor);
             },
           ),
+          // As tres telas de configuracao formam UM fluxo com passos
+          // encadeados (etapas -> notas -> criterios). Entrar direto no
+          // passo 2 ou 3 deixava a tela sem as etapas carregadas, entao o
+          // menu agora tem uma unica porta de entrada: o passo 1.
           _ItemMenu(
-            titulo: 'Configurar Etapas',
-            subtitulo: 'Definir etapas do ano letivo',
+            titulo: 'Configurar Ano Letivo',
+            subtitulo: 'Etapas, notas de aprovação e critérios de avaliação',
             icone: Icons.calendar_month_outlined,
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.configEtapas);
             },
           ),
           _ItemMenu(
-            titulo: 'Configurar Critérios',
-            subtitulo: 'Definir critérios de avaliação',
-            icone: Icons.rule_outlined,
+            titulo: 'Buscar Atividades',
+            subtitulo: 'Consultar as atividades criadas pelos professores',
+            icone: Icons.search,
             onTap: () {
-              Navigator.pushNamed(context, AppRoutes.configCriterios);
-            },
-          ),
-          _ItemMenu(
-            titulo: 'Configurar Notas por Etapa',
-            subtitulo: 'Definir pesos e notas de cada etapa',
-            icone: Icons.grading_outlined,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.configNotasEtapa);
+              Navigator.pushNamed(context, AppRoutes.buscarAtividades);
             },
           ),
           _ItemMenu(

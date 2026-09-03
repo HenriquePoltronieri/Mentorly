@@ -1,5 +1,17 @@
+"""Controller de atividades (/api/activities).
+
+Regra de negocio central: criar, editar e excluir atividade e EXCLUSIVO do
+Professor. As rotas de escrita usam @professor_required, entao um token de
+Coordenacao recebe 403 - a validacao esta no backend, nao so escondendo o
+botao no app.
+
+A Coordenacao continua podendo LER (relatorio e busca), sempre filtrada
+pela escola dela.
+"""
+
 from flask import jsonify, request
 
+from auth.decorators import coordenacao_atual, eh_professor, usuario_atual_id
 from services.activity.create_activity import CreateActivityService
 from services.activity.delete_activity import DeleteActivityService
 from services.activity.get_activities import GetActivitiesService
@@ -8,63 +20,96 @@ from services.activity.search_activities import SearchActivitiesService
 from services.activity.update_activity import UpdateActivityService
 
 
+def _professor_id_ou_none():
+    """Professor -> o id dele (recorte pelas turmas). Coordenacao -> None."""
+    return usuario_atual_id() if eh_professor() else None
+
+
 class ActivityController:
     def list_activities(self):
-        class_id = request.args.get("class_id", type=int)
-        activities = GetActivitiesService().execute(class_id)
-        return jsonify([activity.to_dict() for activity in activities])
+        turma_id = request.args.get("class_id", type=int)
+        if turma_id is None:
+            turma_id = request.args.get("turma_id", type=int)
+
+        return jsonify(
+            GetActivitiesService().execute(
+                coordenacao_atual(), _professor_id_ou_none(), turma_id
+            )
+        )
 
     def buscar_atividades(self):
-        termo = request.args.get("termo")
-        ordenar_por = request.args.get("ordenar_por")
-        direcao = request.args.get("direcao")
-        atividades = SearchActivitiesService().execute(termo, ordenar_por, direcao)
-        return jsonify(atividades)
+        return jsonify(
+            SearchActivitiesService().execute(
+                coordenacao_atual(),
+                _professor_id_ou_none(),
+                request.args.get("termo"),
+                request.args.get("ordenar_por"),
+                request.args.get("direcao"),
+            )
+        )
 
     def get_activity(self, activity_id):
-        activity = GetActivityService().execute(activity_id)
-        if activity is None:
-            return jsonify({"error": "Activity not found"}), 404
-        return jsonify(activity.to_dict())
+        atividade = GetActivityService().execute(
+            activity_id, coordenacao_atual(), _professor_id_ou_none()
+        )
+        if atividade is None:
+            return jsonify({"error": "Atividade nao encontrada"}), 404
+        return jsonify(atividade)
 
     def create_activity(self):
-        data = request.get_json(silent=True) or {}
-        title = data.get("title")
-        class_id = data.get("class_id")
-        description = data.get("description")
-        due_date = data.get("due_date")
+        dados = request.get_json(silent=True) or {}
+        titulo = dados.get("title") or dados.get("titulo")
+        turma_id = dados.get("class_id") or dados.get("turma_id")
 
-        if not title or not class_id:
-            return jsonify({"error": "title and class_id are required"}), 400
+        if not titulo or not turma_id:
+            return jsonify(
+                {"error": "Informe o titulo e a turma da atividade"}
+            ), 400
 
         try:
-            activity = CreateActivityService().execute(title, class_id, description, due_date)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            atividade = CreateActivityService().execute(
+                usuario_atual_id(),
+                int(turma_id),
+                titulo,
+                dados.get("description") or dados.get("descricao"),
+                dados.get("due_date") or dados.get("data_entrega"),
+                dados.get("etapa_id"),
+                dados.get("criterio_id"),
+                dados.get("nota_maxima"),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except (ValueError, TypeError) as erro:
+            return jsonify({"error": str(erro)}), 400
 
-        return jsonify(activity.to_dict()), 201
+        return jsonify(atividade), 201
 
     def update_activity(self, activity_id):
-        data = request.get_json(silent=True) or {}
-        title = data.get("title")
-        description = data.get("description")
-        class_id = data.get("class_id")
-        due_date = data.get("due_date")
-
-        if not any([title, description is not None, class_id, due_date is not None]):
-            return jsonify({"error": "At least one field must be provided"}), 400
+        dados = request.get_json(silent=True) or {}
+        turma_id = dados.get("class_id") or dados.get("turma_id")
 
         try:
-            activity = UpdateActivityService().execute(activity_id, title, description, class_id, due_date)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            atividade = UpdateActivityService().execute(
+                activity_id,
+                usuario_atual_id(),
+                dados.get("title") or dados.get("titulo"),
+                dados.get("description") or dados.get("descricao"),
+                int(turma_id) if turma_id else None,
+                dados.get("due_date") or dados.get("data_entrega"),
+                dados.get("etapa_id"),
+                dados.get("criterio_id"),
+                dados.get("nota_maxima"),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except (ValueError, TypeError) as erro:
+            return jsonify({"error": str(erro)}), 400
 
-        return jsonify(activity.to_dict())
+        return jsonify(atividade)
 
     def delete_activity(self, activity_id):
         try:
-            DeleteActivityService().execute(activity_id)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 404
-
+            DeleteActivityService().execute(activity_id, usuario_atual_id())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
         return "", 204

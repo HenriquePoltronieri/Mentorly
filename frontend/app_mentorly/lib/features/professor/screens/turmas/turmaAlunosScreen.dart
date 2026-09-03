@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/services/apiService.dart';
+import '../../../../core/widgets/adicionarAlunosModal.dart';
 import '../../../../app/routes.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../services/professorAlunosService.dart';
@@ -37,6 +38,20 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
       _jaBuscou = true;
       _buscarAlunos();
     }
+  }
+
+  Future<void> _abrirAdicionarAlunos() async {
+    if (_turma == null) return;
+
+    final adicionou = await showDialog<bool>(
+      context: context,
+      builder: (_) => AdicionarAlunosModal(
+        turmaId: _turma!['id'] as int,
+        papel: PapelAluno.professor,
+      ),
+    );
+
+    if (adicionou == true) _buscarAlunos();
   }
 
   Future<void> _buscarAlunos() async {
@@ -78,6 +93,15 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const ProfessorTopBar(abaAtiva: 'turmas'),
+      // O professor tambem adiciona alunos, mas so nas turmas vinculadas a
+      // ele - o backend valida isso em /api/professor/turmas/{id}/alunos.
+      floatingActionButton: _turma == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _abrirAdicionarAlunos,
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('Adicionar alunos'),
+            ),
       body: Column(
         children: [
           if (_turma != null)

@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../core/services/apiService.dart';
 import '../../services/professoresService.dart';
 
-// tela onde a coordenacao cadastra um novo professor
-// IMPORTANTE PRO BACKEND:
-// endpoint esperado -> POST {baseUrl}/api/coordenacao/professores
-// body enviado -> { "nome": "...", "email": "...", "disciplina": "..." }
-// resposta esperada em caso de sucesso (201) ->
-// { "id": 1, "nome": "...", "email": "...", "disciplina": "..." }
-// resposta esperada em caso de erro (400) ->
-// { "erro": "mensagem explicando o erro" } (ex: "email ja cadastrado")
+// Cadastro de professor pela Coordenacao.
+//
+// O professor nao cria a propria conta: a Coordenacao o cadastra e ele
+// recebe por email um convite para definir a senha.
+//
+// POST /api/coordenacao/professores
+//   body -> { "nome", "email", "disciplina" }
+//   201  -> { "id", "nome", "email", "disciplina", "conviteEnviado", ... }
+//
+// Quando o backend esta sem SMTP configurado (modo dev), a resposta traz
+// tambem "conviteToken" - a tela mostra o link para que o primeiro acesso
+// do professor possa ser feito localmente.
 class CadastroProfessorScreen extends StatefulWidget {
   const CadastroProfessorScreen({super.key});
 
@@ -25,6 +31,7 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
 
   bool _carregando = false;
   String? _mensagemErro;
+  String? _conviteToken;
 
   Future<void> _cadastrarProfessor() async {
     if (!_formKey.currentState!.validate()) return;
@@ -35,17 +42,30 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
     });
 
     try {
-      await _professoresService.cadastrarProfessor(
+      final professor = await _professoresService.cadastrarProfessor(
         nome: _nomeController.text.trim(),
         email: _emailController.text.trim(),
         disciplina: _disciplinaController.text.trim(),
       );
 
       if (!mounted) return;
+
+      final token = professor['conviteToken'] as String?;
+      if (token != null) {
+        // Backend sem SMTP: mostra o convite em vez de fechar a tela, se
+        // nao o professor nao tem como fazer o primeiro acesso.
+        setState(() => _conviteToken = token);
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Professor cadastrado com sucesso. Convite enviado por e-mail.')),
+        const SnackBar(
+          content: Text('Professor cadastrado. Convite enviado por e-mail.'),
+        ),
       );
       Navigator.pop(context, true); // volta pra lista avisando que deu certo
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = e.mensagem);
     } catch (e) {
       setState(() {
         _mensagemErro = e.toString().replaceFirst('Exception: ', '');
@@ -57,6 +77,63 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
         });
       }
     }
+  }
+
+  // Mostrado so quando o backend esta em modo dev (sem SMTP configurado).
+  Widget _blocoConvite() {
+    final link =
+        Uri.base.origin + '/#/definir-senha?token=' + (_conviteToken ?? '');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: 0.10),
+          border: Border.all(color: Colors.amber.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Professor cadastrado',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'O servidor esta sem e-mail configurado, entao o convite nao '
+              'foi enviado. Passe este link para o professor fazer o '
+              'primeiro acesso:',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            SelectableText(link, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: link));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Link copiado')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('Copiar link'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Concluir'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -133,7 +210,9 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
                   ),
                 ),
               ElevatedButton(
-                onPressed: _carregando ? null : _cadastrarProfessor,
+                onPressed: _carregando || _conviteToken != null
+                    ? null
+                    : _cadastrarProfessor,
                 child: _carregando
                     ? const SizedBox(
                         height: 20,
@@ -142,6 +221,7 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
                       )
                     : const Text('Cadastrar'),
               ),
+              if (_conviteToken != null) _blocoConvite(),
             ],
           ),
         ),

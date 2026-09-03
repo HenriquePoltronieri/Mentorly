@@ -41,8 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
         _senhaController.text,
       );
 
-      // login deu certo
-      // por enquanto so navega, depois a gente salva o token (SharedPreferences)
+      // Login ok: o AuthService ja gravou token e usuario no
+      // SharedPreferences, entao um refresh da pagina nao desloga.
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.coordenacaoHome);
     } on ApiException catch (e) {
@@ -141,15 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   Navigator.pushNamed(context, AppRoutes.cadastro);
                 },
                 child: const Text('Não tem conta? Cadastre-se'),
-              ),
-              const SizedBox(height: 12),
-              // botao temporario so pra testar as telas sem precisar do backend
-              // TODO: remover isso quando o backend estiver pronto
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, AppRoutes.coordenacaoHome);
-                },
-                child: const Text('Pular login (modo teste)'),
               ),
             ],
           ),

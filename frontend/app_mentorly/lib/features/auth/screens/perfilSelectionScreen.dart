@@ -86,22 +86,6 @@ class PerfilSelectionScreen extends StatelessWidget {
                 },
               ),
 
-              const SizedBox(height: 28),
-
-              // Acesso direto ao painel da coordenacao, sem passar pelo login.
-              // O backend de autenticacao ainda nao existe (nao ha rota /auth
-              // no Flask), entao esse atalho e o caminho usado pra demonstrar
-              // as funcionalidades de turmas e atividades.
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.coordenacaoHome);
-                },
-                icon: const Icon(Icons.login, color: Colors.white70, size: 18),
-                label: const Text(
-                  'Entrar no painel da coordenação (demonstração)',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ),
             ],
           ),
         ),

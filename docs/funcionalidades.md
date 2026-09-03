@@ -1,7 +1,7 @@
 # Funcionalidades da Entrega
 
 São 10 funcionalidades. Todas passam pelas camadas explicadas em
-[arquitetura.md](arquitetura.md).
+[architecture.md](arquitetura.md).
 
 | # | Funcionalidade | Tela Flutter | Service Dart | Endpoint | Service backend | Model / Repository |
 |---|---|---|---|---|---|---|

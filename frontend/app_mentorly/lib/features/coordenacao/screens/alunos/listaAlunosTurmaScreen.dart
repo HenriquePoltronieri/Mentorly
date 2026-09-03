@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../../../core/services/apiService.dart';
+import '../../models/turmaModel.dart';
+import '../../../../core/widgets/adicionarAlunosModal.dart';
 import '../../services/alunosService.dart';
-import 'adicionarAlunosModal.dart';
 
-// tela que lista os alunos de uma turma especifica
-// recebe a turma via Navigator.pushNamed(context, AppRoutes.listaAlunosTurma, arguments: turma)
-// onde "turma" é o Map que veio da gerenciarTurmasScreen (tem id e nome)
+// Alunos de uma turma, na visao da Coordenacao.
+// Chegou aqui pelo toque na turma em gerenciarTurmasScreen, que passa um
+// TurmaModel em arguments.
 //
-// IMPORTANTE PRO BACKEND:
-// endpoint -> GET {baseUrl}/api/coordenacao/turmas/{turmaId}/alunos
-// resposta esperada (200) -> [ { "id": 1, "nome": "...", "matricula": "..." }, ... ]
+// Esta e a acao que a Coordenacao tem sobre uma turma: adicionar e ver
+// alunos. Criar atividade e lancar nota sao do Professor.
+//
+// Endpoint: GET {baseUrl}/api/coordenacao/turmas/{turmaId}/alunos
 class ListaAlunosTurmaScreen extends StatefulWidget {
   const ListaAlunosTurmaScreen({super.key});
 
@@ -23,21 +25,34 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   bool _carregando = true;
   String? _mensagemErro;
   List<dynamic> _alunos = [];
-  Map<String, dynamic>? _turma;
+  int? _turmaId;
+  String _turmaNome = '';
   bool _jaBuscou = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_jaBuscou) {
-      _turma = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-      _jaBuscou = true;
-      _buscarAlunos();
+    if (_jaBuscou) return;
+    _jaBuscou = true;
+
+    // gerenciarTurmasScreen manda um TurmaModel; outras telas mandam o Map
+    // cru da API. Aceita os dois para nao depender de quem navegou até aqui.
+    final argumentos = ModalRoute.of(context)!.settings.arguments;
+    if (argumentos is TurmaModel) {
+      _turmaId = int.tryParse(argumentos.id);
+      _turmaNome = argumentos.nome;
+    } else if (argumentos is Map) {
+      _turmaId = argumentos['id'] is int
+          ? argumentos['id'] as int
+          : int.tryParse('${argumentos['id']}');
+      _turmaNome = (argumentos['nome'] ?? argumentos['name'] ?? '').toString();
     }
+
+    _buscarAlunos();
   }
 
   Future<void> _buscarAlunos() async {
-    if (_turma == null) {
+    if (_turmaId == null) {
       setState(() {
         _carregando = false;
         _mensagemErro = 'Turma não informada';
@@ -51,7 +66,7 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
     });
 
     try {
-      final alunos = await _alunosService.listarAlunos(_turma!['id'] as int);
+      final alunos = await _alunosService.listarAlunos(_turmaId!);
       setState(() => _alunos = alunos);
     } on ApiException catch (e) {
       setState(() => _mensagemErro = 'Erro ao buscar alunos: ${e.mensagem}');
@@ -65,11 +80,14 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   }
 
   Future<void> _abrirAdicionarAlunos() async {
-    if (_turma == null) return;
+    if (_turmaId == null) return;
 
     final adicionou = await showDialog<bool>(
       context: context,
-      builder: (_) => AdicionarAlunosModal(turmaId: _turma!['id']),
+      builder: (_) => AdicionarAlunosModal(
+        turmaId: _turmaId!,
+        papel: PapelAluno.coordenacao,
+      ),
     );
 
     if (adicionou == true) _buscarAlunos();
@@ -78,10 +96,13 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_turma != null ? 'Alunos - ${_turma!['nome']}' : 'Alunos')),
-      floatingActionButton: FloatingActionButton(
+      appBar: AppBar(
+        title: Text(_turmaNome.isEmpty ? 'Alunos' : 'Alunos - $_turmaNome'),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirAdicionarAlunos,
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.person_add_alt),
+        label: const Text('Adicionar alunos'),
       ),
       body: RefreshIndicator(
         onRefresh: _buscarAlunos,
@@ -126,7 +147,11 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
         return ListTile(
           leading: const CircleAvatar(child: Icon(Icons.person)),
           title: Text(aluno['nome'] ?? ''),
-          subtitle: Text('Matrícula: ${aluno['matricula'] ?? ''}'),
+          subtitle: Text(
+            (aluno['matricula'] ?? '').toString().isEmpty
+                ? 'Sem matrícula'
+                : 'Matrícula: ${aluno['matricula']}',
+          ),
         );
       },
     );

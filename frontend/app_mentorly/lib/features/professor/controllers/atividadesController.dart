@@ -1,63 +1,36 @@
 import '../../../core/services/apiService.dart';
-import '../models/atividadeModel.dart';
 import '../models/notaModel.dart';
 
-// Cadastro de atividades e lancamento de notas
+// Lancamento de notas de uma atividade.
+//
+// Endpoints (exclusivos do Professor; a Coordenacao recebe 403):
+//   GET  /api/atividades/{id}/notas
+//   POST /api/atividades/{id}/notas
+//
+// O CRUD de atividade em si fica no AtividadesService
+// (features/professor/services/atividadesService.dart), que fala com
+// /api/activities.
 class AtividadesController {
   final ApiService _api = ApiService();
 
-  List<AtividadeModel> atividades = [];
   List<NotaModel> notas = [];
-
-  Future<void> carregarAtividades(String turmaId) async {
-    final resposta = await _api.get('/turmas/$turmaId/atividades');
-    atividades = (resposta as List)
-        .map((item) => AtividadeModel.fromJson(item))
-        .toList();
-  }
-
-  Future<void> adicionarAtividade({
-    required String turmaId,
-    required String nome,
-    required String tipo,
-    required int etapa,
-    required double valor,
-  }) async {
-    final resposta = await _api.post('/turmas/$turmaId/atividades', {
-      'nome': nome,
-      'tipo': tipo,
-      'etapa': etapa,
-      'valor': valor,
-    });
-    atividades.add(AtividadeModel.fromJson(resposta));
-  }
 
   Future<void> carregarNotas(String atividadeId) async {
     final resposta = await _api.get('/atividades/$atividadeId/notas');
-    notas =
-        (resposta as List).map((item) => NotaModel.fromJson(item)).toList();
+    final lista = (resposta['notas'] as List?) ?? [];
+    notas = lista.map((item) => NotaModel.fromJson(item)).toList();
   }
 
-  Future<void> lancarNota({
+  // Manda a turma inteira de uma vez. Antes era uma requisicao por aluno,
+  // o que deixava as notas pela metade se a conexao caisse no meio.
+  Future<int> salvarNotas({
     required String atividadeId,
-    required String alunoId,
-    required double valorObtido,
-    required double valorTotal,
+    required List<Map<String, dynamic>> lancamentos,
   }) async {
-    await _api.post('/atividades/$atividadeId/notas', {
-      'alunoId': alunoId,
-      'valorObtido': valorObtido,
-      'valorTotal': valorTotal,
+    if (lancamentos.isEmpty) return 0;
+    final resposta = await _api.post('/atividades/$atividadeId/notas', {
+      'notas': lancamentos,
     });
-  }
-
-  // Lancamento de notas em lote via planilha
-  Future<void> lancarNotasPlanilha(
-    String atividadeId,
-    List<Map<String, dynamic>> linhas,
-  ) async {
-    await _api.post('/atividades/$atividadeId/notas/lote', {
-      'notas': linhas,
-    });
+    return resposta['lancadas'] ?? 0;
   }
 }

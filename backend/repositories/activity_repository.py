@@ -1,13 +1,20 @@
+"""Consultas de atividade que nao sao CRUD simples."""
+
 from database.procedure import call_procedure
-from models.activity_model import Activity
+from models.utils import normalizar_lista
 
 
 class ActivityRepository:
-    def find_by_class_id(self, class_id):
-        return Activity.query.filter_by(class_id=class_id).all()
+    def buscar_atividades(self, coordenacao_id, professor_id=None, termo=None,
+                          ordenar_por=None, direcao=None):
+        """Busca por termo no titulo, com ordenacao (procedure).
 
-    def buscar_atividades(self, termo=None, ordenar_por=None, direcao=None):
-        """Busca de atividades por termo e ordenação (procedure)."""
-        return call_procedure(
-            "sp_buscar_atividades", termo, ordenar_por, direcao
+        professor_id None = visao da Coordenacao (toda a escola).
+        professor_id preenchido = so as turmas vinculadas aquele professor.
+        """
+        return normalizar_lista(
+            call_procedure(
+                "sp_buscar_atividades",
+                coordenacao_id, professor_id, termo, ordenar_por, direcao,
+            )
         )

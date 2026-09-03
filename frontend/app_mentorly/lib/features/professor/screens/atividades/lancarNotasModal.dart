@@ -1,31 +1,20 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/services/apiService.dart';
-import '../../services/lancarNotasService.dart';
 
-// modal pra lancar notas em lote via planilha numa atividade
-// segue o mesmo padrao do AdicionarAlunosModal (coordenacao)
+// Lancamento de notas em lote por planilha, numa atividade.
+// Mesmo padrao do AdicionarAlunosModal.
 //
-// IMPORTANTE PRO BACKEND:
-// endpoint 1 (baixar modelo) -> GET {baseUrl}/api/atividades/{atividadeId}/notas/modelo-planilha
-// deve vir com a lista de alunos ja preenchida (nome/matricula) e coluna
-// vazia pra nota, facilitando o preenchimento
+// Endpoints (exclusivos do Professor - a Coordenacao recebe 403):
+//   GET  {baseUrl}/atividades/{id}/notas/modelo-planilha
+//        vem com os alunos da turma ja preenchidos e a coluna nota vazia
+//   POST {baseUrl}/atividades/{id}/notas/importar
+//        multipart, campo "arquivo"
+//        resposta 201 -> { "lancadas": 8, "erros": [{ "linha": 3, "motivo": "..." }] }
 //
-// endpoint 2 (importar) -> POST {baseUrl}/api/atividades/{atividadeId}/notas/importar
-// multipart/form-data, campo do arquivo chamado "arquivo"
-// resposta esperada (201) -> { "lancadas": 8 }
-// resposta esperada em erro (400) -> { "erro": "mensagem" }
-//
-// NOTA PRO BACKEND: esse fluxo manda o arquivo bruto direto pro servidor
-// (o servidor que le a planilha), diferente do metodo
-// "lancarNotasPlanilha" do AtividadesController, que espera receber os
-// dados ja convertidos em lista. Usar UM dos dois - nao os dois juntos.
-//
-// uso: showDialog(context: context, builder: (_) => LancarNotasModal(atividadeId: atividade.id))
-// retorna 'true' via Navigator.pop se alguma nota foi lancada
+// uso: showDialog(context: context, builder: (_) => LancarNotasModal(atividadeId: ...))
+// retorna true via Navigator.pop se alguma nota foi lancada.
 class LancarNotasModal extends StatefulWidget {
   final String atividadeId;
 
@@ -36,24 +25,25 @@ class LancarNotasModal extends StatefulWidget {
 }
 
 class _LancarNotasModalState extends State<LancarNotasModal> {
-  final LancarNotasService _lancarNotasService = LancarNotasService();
   final ApiService _api = ApiService();
 
   bool _enviando = false;
+  bool _lancouAlguma = false;
   String? _mensagemErro;
   String? _mensagemSucesso;
+  List<dynamic> _errosDaPlanilha = [];
+
+  String get _base => '/atividades/${widget.atividadeId}/notas';
 
   Future<void> _baixarModelo() async {
-    final url = Uri.parse(
-      '${ApiService.baseUrl}/atividades/${widget.atividadeId}/notas/modelo-planilha',
-    );
+    // launchUrl abre outra aba e nao manda cabecalho: o token vai na query
+    // string, que o backend aceita so nos downloads de modelo.
+    final url = Uri.parse(_api.urlComToken('$_base/modelo-planilha'));
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível baixar o modelo')),
-      );
+      setState(() => _mensagemErro = 'Não foi possível baixar o modelo');
     }
   }
 
@@ -76,40 +66,36 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
       _enviando = true;
       _mensagemErro = null;
       _mensagemSucesso = null;
+      _errosDaPlanilha = [];
     });
 
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiService.baseUrl}/atividades/${widget.atividadeId}/notas/importar'),
-      );
-      if (_api.token != null) {
-        request.headers['Authorization'] = 'Bearer ${_api.token}';
-      }
-      request.files.add(
-        http.MultipartFile.fromBytes('arquivo', arquivo.bytes!, filename: arquivo.name),
+      final dados = await _api.enviarArquivo(
+        '$_base/importar',
+        bytes: arquivo.bytes!,
+        nomeArquivo: arquivo.name,
       );
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
-      final response = await http.Response.fromStream(streamedResponse);
+      final lancadas = dados['lancadas'] ?? 0;
+      final erros = (dados['erros'] as List?) ?? [];
 
-      if (response.statusCode == 201) {
-        final dados = jsonDecode(response.body);
-        setState(() {
-          _mensagemSucesso = '${dados['lancadas']} nota(s) lançada(s) com sucesso';
-        });
-      } else {
-        final dados = jsonDecode(response.body);
-        setState(() {
-          _mensagemErro = dados['erro'] ?? 'Erro ao importar planilha';
-        });
-      }
-    } catch (e) {
+      setState(() {
+        _errosDaPlanilha = erros;
+        _lancouAlguma = _lancouAlguma || lancadas > 0;
+        _mensagemSucesso =
+            lancadas > 0 ? '$lancadas nota(s) lançada(s) com sucesso' : null;
+        if (lancadas == 0) {
+          _mensagemErro = erros.isEmpty
+              ? 'Nenhuma nota foi lançada'
+              : 'Nenhuma nota foi lançada: todas as linhas tinham erro';
+        }
+      });
+    } on ApiException catch (e) {
+      setState(() => _mensagemErro = e.mensagem);
+    } catch (_) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
-      if (mounted) {
-        setState(() => _enviando = false);
-      }
+      if (mounted) setState(() => _enviando = false);
     }
   }
 
@@ -117,85 +103,139 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        width: 440,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Lançar Notas', style: TextStyle(fontSize: 22)),
-                IconButton(
-                  onPressed: () => Navigator.pop(context, _mensagemSucesso != null),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 600),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.description_outlined, color: Colors.green),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Importar Planilha',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Baixe o modelo (já vem com os alunos da turma), preencha as notas e envie de volta',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _baixarModelo,
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Baixar Modelo'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _enviando ? null : _enviarArquivo,
-                        icon: const Icon(Icons.upload_file_outlined, size: 18),
-                        label: const Text('Enviar Arquivo'),
-                      ),
-                    ],
+                  const Text('Lançar Notas', style: TextStyle(fontSize: 22)),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context, _lancouAlguma),
+                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),
-            ),
-            if (_enviando)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.description_outlined, color: Colors.green),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Importar Planilha',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'O modelo já vem com os alunos da turma. Preencha só a '
+                      'coluna nota e envie de volta.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _enviando ? null : _baixarModelo,
+                          icon: const Icon(Icons.download_outlined, size: 18),
+                          label: const Text('Baixar Modelo'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _enviando ? null : _enviarArquivo,
+                          icon: const Icon(Icons.upload_file_outlined, size: 18),
+                          label: const Text('Enviar Arquivo'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            if (_mensagemErro != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
-              ),
-            if (_mensagemSucesso != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(_mensagemSucesso!, style: const TextStyle(color: Colors.green)),
-              ),
-          ],
+              if (_enviando) ...[
+                const SizedBox(height: 16),
+                const Center(child: CircularProgressIndicator()),
+              ],
+              if (_mensagemSucesso != null) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline,
+                        color: Colors.green, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_mensagemSucesso!,
+                          style: const TextStyle(color: Colors.green)),
+                    ),
+                  ],
+                ),
+              ],
+              if (_mensagemErro != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_mensagemErro!,
+                          style: const TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              ],
+              // Mostra a linha exata e o motivo, pra pessoa corrigir sem
+              // ter que adivinhar o que a planilha tinha de errado.
+              if (_errosDaPlanilha.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.08),
+                      border: Border.all(color: Colors.orange.shade200),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_errosDaPlanilha.length} linha(s) não lançada(s):',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        ..._errosDaPlanilha.map(
+                          (erro) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              'Linha ${erro['linha']}: ${erro['motivo']}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

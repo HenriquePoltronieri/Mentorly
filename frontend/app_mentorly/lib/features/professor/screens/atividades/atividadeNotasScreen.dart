@@ -61,7 +61,7 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     });
 
     try {
-      final alunos = await _alunosService.listarAlunos(_turma!.id as int);
+      final alunos = await _alunosService.listarAlunos(int.parse(_turma!.id));
       await _controller.carregarNotas(_atividade!.id);
 
       setState(() {
@@ -83,7 +83,8 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     for (final aluno in _alunos) {
       final alunoId = aluno['id'].toString();
       final nota = _controller.notas.where((n) => n.alunoId.toString() == alunoId);
-      final valorExistente = nota.isNotEmpty ? nota.first.valorObtido : null;
+      final valorExistente =
+          nota.isNotEmpty ? nota.first.valor : null;
 
       _controladoresNota[alunoId] = TextEditingController(
         text: valorExistente != null ? valorExistente.toString() : '',
@@ -97,25 +98,33 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     setState(() => _salvando = true);
 
     try {
+      // Monta a turma inteira e manda em UMA requisicao. Campo em branco
+      // significa "ainda nao lancada" e simplesmente nao vai.
+      final lancamentos = <Map<String, dynamic>>[];
       for (final aluno in _alunos) {
         final alunoId = aluno['id'].toString();
         final texto = _controladoresNota[alunoId]?.text.trim() ?? '';
         if (texto.isEmpty) continue;
 
-        final valor = double.tryParse(texto);
+        final valor = double.tryParse(texto.replaceAll(',', '.'));
         if (valor == null) continue;
 
-        await _controller.lancarNota(
-          atividadeId: _atividade!.id,
-          alunoId: alunoId,
-          valorObtido: valor,
-          valorTotal: _atividade!.valor,
-        );
+        lancamentos.add({'aluno_id': aluno['id'], 'valor': valor});
       }
+
+      final salvas = await _controller.salvarNotas(
+        atividadeId: _atividade!.id,
+        lancamentos: lancamentos,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notas salvas com sucesso')),
+        SnackBar(content: Text('$salvas nota(s) salva(s) com sucesso')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.mensagem)),
       );
     } catch (e) {
       if (!mounted) return;

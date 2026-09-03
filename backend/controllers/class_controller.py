@@ -1,5 +1,18 @@
+"""Controller de turmas (/api/classes).
+
+Regra de papel aplicada aqui:
+  - Coordenacao cria, edita e exclui turma.
+  - Professor so LE, e so as turmas que a Coordenacao vinculou a ele.
+
+O id da escola sai sempre de coordenacao_atual() (o token), nunca do corpo
+ou da query string da requisicao.
+"""
+
 from flask import jsonify, request
 
+from auth.decorators import coordenacao_atual, eh_professor, usuario_atual_id
+from models.professor_turma_model import ProfessorTurma
+from models.turma_model import Turma
 from services.class_.create_class import CreateClassService
 from services.class_.delete_class import DeleteClassService
 from services.class_.get_class import GetClassService
@@ -10,53 +23,80 @@ from services.class_.update_class import UpdateClassService
 
 class ClassController:
     def list_classes(self):
-        classes = GetClassesService().execute()
-        return jsonify([class_obj.to_dict() for class_obj in classes])
+        # O professor que bate em /api/classes recebe apenas as turmas dele.
+        if eh_professor():
+            linhas = ProfessorTurma.turmas_do_professor(usuario_atual_id())
+            return jsonify([Turma.to_dict(linha) for linha in linhas])
+
+        return jsonify(GetClassesService().execute(coordenacao_atual()))
 
     def relatorio_turmas_atividades(self):
-        relatorio = GetClassReportService().execute()
-        return jsonify(relatorio)
+        return jsonify(GetClassReportService().execute(coordenacao_atual()))
 
     def get_class(self, class_id):
-        class_obj = GetClassService().execute(class_id)
-        if class_obj is None:
-            return jsonify({"error": "Class not found"}), 404
-        return jsonify(class_obj.to_dict())
+        if eh_professor():
+            linha = Turma.find_by_id_para_professor(class_id, usuario_atual_id())
+            if not linha:
+                return jsonify({"error": "Turma nao encontrada"}), 404
+            return jsonify(Turma.to_dict(linha))
+
+        turma = GetClassService().execute(class_id, coordenacao_atual())
+        if turma is None:
+            return jsonify({"error": "Turma nao encontrada"}), 404
+        return jsonify(turma)
 
     def create_class(self):
-        data = request.get_json(silent=True) or {}
-        name = data.get("name")
-        description = data.get("description")
+        dados = request.get_json(silent=True) or {}
+        # O frontend manda "name"/"description"; aceita tambem em portugues.
+        nome = dados.get("name") or dados.get("nome")
+        descricao = dados.get("description")
+        if descricao is None:
+            descricao = dados.get("descricao")
 
-        if not name:
-            return jsonify({"error": "name is required"}), 400
+        if not nome:
+            return jsonify({"error": "O nome da turma e obrigatorio"}), 400
 
         try:
-            class_obj = CreateClassService().execute(name, description)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 409
+            turma = CreateClassService().execute(
+                coordenacao_atual(),
+                nome,
+                descricao,
+                dados.get("disciplina"),
+                dados.get("turno"),
+                dados.get("ano_letivo") or dados.get("anoLetivo"),
+            )
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 409
 
-        return jsonify(class_obj.to_dict()), 201
+        return jsonify(turma), 201
 
     def update_class(self, class_id):
-        data = request.get_json(silent=True) or {}
-        name = data.get("name")
-        description = data.get("description")
-
-        if not name and description is None:
-            return jsonify({"error": "At least one field must be provided"}), 400
+        dados = request.get_json(silent=True) or {}
+        nome = dados.get("name") or dados.get("nome")
+        descricao = dados.get("description")
+        if descricao is None:
+            descricao = dados.get("descricao")
 
         try:
-            class_obj = UpdateClassService().execute(class_id, name, description)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            turma = UpdateClassService().execute(
+                class_id,
+                coordenacao_atual(),
+                nome,
+                descricao,
+                dados.get("disciplina"),
+                dados.get("turno"),
+                dados.get("ano_letivo") or dados.get("anoLetivo"),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
 
-        return jsonify(class_obj.to_dict())
+        return jsonify(turma)
 
     def delete_class(self, class_id):
         try:
-            DeleteClassService().execute(class_id)
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 404
-
+            DeleteClassService().execute(class_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
         return "", 204

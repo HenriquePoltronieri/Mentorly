@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../app/routes.dart';
+import '../../../core/services/apiService.dart';
+import '../../../core/services/authService.dart';
 
 // barra de navegacao superior usada nas telas principais do professor
 // (Dashboard, Turmas, Atividades) - fica fixa no topo
@@ -16,6 +18,16 @@ class ProfessorTopBar extends StatelessWidget implements PreferredSizeWidget {
   void _navegar(BuildContext context, String rota, String aba) {
     if (aba == abaAtiva) return; // ja esta nessa aba
     Navigator.pushReplacementNamed(context, rota);
+  }
+
+  Future<void> _sair(BuildContext context) async {
+    await AuthService().sair();
+    if (!context.mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.perfilSelection,
+      (rota) => false,
+    );
   }
 
   @override
@@ -53,9 +65,17 @@ class ProfessorTopBar extends StatelessWidget implements PreferredSizeWidget {
               const Spacer(),
               const Icon(Icons.account_circle_outlined, size: 22),
               const SizedBox(width: 6),
+              // Sem parametro, mostra o email da sessao salva.
               Text(
-                emailProfessor ?? '',
+                emailProfessor ??
+                    (ApiService().usuario?['email'] as String? ?? ''),
                 style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Sair',
+                icon: const Icon(Icons.logout, size: 20),
+                onPressed: () => _sair(context),
               ),
             ],
           ),

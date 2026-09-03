@@ -10,14 +10,26 @@ class GradeCalculator {
 
     final notaMaxima = etapa.notaMaxima ?? 10;
 
+    // Converte cada nota para a escala da etapa. A referencia e a
+    // notaMaxima da propria atividade; quando ela nao foi definida, a nota
+    // ja esta na escala da etapa e entra direto.
     double somaConvertida = 0;
+    int consideradas = 0;
     for (final nota in notas) {
-      final proporcao =
-          nota.valorTotal == 0 ? 0.0 : nota.valorObtido / nota.valorTotal;
-      somaConvertida += proporcao * notaMaxima;
+      final valor = nota.valor;
+      if (valor == null) continue; // aluno sem nota lancada nao entra na media
+
+      final total = nota.notaMaxima;
+      if (total == null || total == 0) {
+        somaConvertida += valor;
+      } else {
+        somaConvertida += (valor / total) * notaMaxima;
+      }
+      consideradas++;
     }
 
-    return somaConvertida / notas.length;
+    if (consideradas == 0) return 0;
+    return somaConvertida / consideradas;
   }
 
   static bool aprovado(double media, EtapaModel etapa) {
