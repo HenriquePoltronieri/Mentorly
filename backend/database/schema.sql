@@ -165,35 +165,53 @@ CREATE TABLE IF NOT EXISTS criterio (
 -- -----------------------------------------------------
 -- atividade e conteudo pedagogico: so o Professor cria.
 -- professor_id nunca vem do cliente, sai sempre do token.
--- A regra "so nas turmas dele" e validada no service; a FK aqui e simples
--- de proposito, para que apagar uma turma nao esbarre no vinculo.
+--
+-- coordenacao_id e redundante de proposito, pela mesma razao de
+-- professor_turma: as FKs para turma, etapa e criterio sao COMPOSTAS e
+-- passam pela escola, entao o proprio MySQL recusa uma atividade que use
+-- a etapa ou o criterio de outra coordenacao. Um id adulterado no corpo da
+-- requisicao nao atravessa nem que o service falhe.
+--
+-- etapa_id e criterio_id continuam NULL-aveis por causa das atividades
+-- legadas, criadas antes desta regra. Em FK composta o MySQL nao checa a
+-- constraint quando alguma coluna da chave e NULL, entao a linha antiga
+-- segue valida - nenhum dado precisa ser destruido.
+--
+-- As duas FKs usam ON DELETE RESTRICT, nao SET NULL: e o unico modo valido
+-- quando uma coluna da chave (coordenacao_id) e NOT NULL - SET NULL exigiria
+-- zerar as duas colunas juntas, o que violaria o NOT NULL. Na pratica isso
+-- significa que a Coordenacao nao pode excluir uma etapa ou criterio que
+-- ja tenha atividade usando - o que e a regra certa mesmo.
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS atividade (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    turma_id     INT NOT NULL,
-    professor_id INT NOT NULL,
-    etapa_id     INT NULL,
-    criterio_id  INT NULL,
-    titulo       VARCHAR(200) NOT NULL,
-    descricao    TEXT NULL,
-    data_entrega DATETIME NULL,
-    nota_maxima  DECIMAL(5,2) NULL,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    KEY idx_atividade_turma (turma_id),
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    coordenacao_id INT NOT NULL,
+    turma_id       INT NOT NULL,
+    professor_id   INT NOT NULL,
+    etapa_id       INT NULL,
+    criterio_id    INT NULL,
+    titulo         VARCHAR(200) NOT NULL,
+    descricao      TEXT NULL,
+    data_entrega   DATETIME NULL,
+    nota_maxima    DECIMAL(5,2) NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_atividade_turma (coordenacao_id, turma_id),
     KEY idx_atividade_professor (professor_id),
+    KEY idx_atividade_etapa (coordenacao_id, etapa_id),
+    KEY idx_atividade_criterio (coordenacao_id, criterio_id),
     CONSTRAINT fk_atividade_turma
-        FOREIGN KEY (turma_id) REFERENCES turma (id)
+        FOREIGN KEY (coordenacao_id, turma_id) REFERENCES turma (coordenacao_id, id)
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_atividade_professor
         FOREIGN KEY (professor_id) REFERENCES professor (id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_atividade_etapa
-        FOREIGN KEY (etapa_id) REFERENCES etapa (id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+        FOREIGN KEY (coordenacao_id, etapa_id) REFERENCES etapa (coordenacao_id, id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_atividade_criterio
-        FOREIGN KEY (criterio_id) REFERENCES criterio (id)
-        ON DELETE SET NULL ON UPDATE CASCADE
+        FOREIGN KEY (coordenacao_id, criterio_id) REFERENCES criterio (coordenacao_id, id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------

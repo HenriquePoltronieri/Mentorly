@@ -1,28 +1,129 @@
-// Estatisticas de um aluno especifico, usadas no grafico da tela de detalhes
+// Desempenho de um aluno, usado na tela de detalhes.
+//
+// Vem de GET /api/professor/alunos/{id}/estatisticas. Desde o Marco 2 o
+// campo que importa e "etapas": o desempenho do aluno calculado pela
+// regra central do backend (services/academico/calculo.py), ja
+// ponderado pelos criterios e comparado com a nota minima de CADA etapa
+// - nunca um numero calculado aqui no app.
+class CriterioDesempenhoModel {
+  final String criterio;
+  final double? peso;
+  final bool temAtividade;
+  final double? pontosObtidos;
+  final double? pontosPossiveis;
+  final double? desempenhoPercentual;
+  final double? contribuicao;
+  final bool completo;
+
+  CriterioDesempenhoModel({
+    required this.criterio,
+    this.peso,
+    this.temAtividade = false,
+    this.pontosObtidos,
+    this.pontosPossiveis,
+    this.desempenhoPercentual,
+    this.contribuicao,
+    this.completo = false,
+  });
+
+  factory CriterioDesempenhoModel.fromJson(Map<String, dynamic> json) {
+    double? paraDouble(dynamic v) => v == null ? null : (v as num).toDouble();
+    return CriterioDesempenhoModel(
+      criterio: json['criterio'] ?? '',
+      peso: paraDouble(json['peso']),
+      temAtividade: json['tem_atividade'] ?? false,
+      pontosObtidos: paraDouble(json['pontos_obtidos']),
+      pontosPossiveis: paraDouble(json['pontos_possiveis']),
+      desempenhoPercentual: paraDouble(json['desempenho_percentual']),
+      contribuicao: paraDouble(json['contribuicao']),
+      completo: json['completo'] ?? false,
+    );
+  }
+}
+
+// situacao: "adequado" | "abaixo_do_minimo" | "em_andamento" |
+// "configuracao_invalida" - ver services/academico/calculo.py no backend
+// para o significado exato de cada uma.
+class EtapaDesempenhoModel {
+  final int etapaId;
+  final String etapa;
+  final int? ordem;
+  final double? notaMinima;
+  final double? notaMaxima;
+  final bool completo;
+  final String situacao;
+  final String? mensagem;
+  final double? notaCalculada;
+  final double? percentual;
+  final List<CriterioDesempenhoModel> criterios;
+
+  EtapaDesempenhoModel({
+    required this.etapaId,
+    required this.etapa,
+    this.ordem,
+    this.notaMinima,
+    this.notaMaxima,
+    this.completo = false,
+    required this.situacao,
+    this.mensagem,
+    this.notaCalculada,
+    this.percentual,
+    this.criterios = const [],
+  });
+
+  bool get emRisco => situacao == 'abaixo_do_minimo';
+  bool get configuracaoInvalida => situacao == 'configuracao_invalida';
+
+  factory EtapaDesempenhoModel.fromJson(Map<String, dynamic> json) {
+    double? paraDouble(dynamic v) => v == null ? null : (v as num).toDouble();
+    return EtapaDesempenhoModel(
+      etapaId: json['etapa_id'] as int,
+      etapa: json['etapa'] ?? 'Etapa',
+      ordem: json['ordem'] as int?,
+      notaMinima: paraDouble(json['nota_minima']),
+      notaMaxima: paraDouble(json['nota_maxima']),
+      completo: json['completo'] ?? false,
+      situacao: json['situacao'] ?? 'em_andamento',
+      mensagem: json['mensagem'] as String?,
+      notaCalculada: paraDouble(json['nota_calculada']),
+      percentual: paraDouble(json['percentual']),
+      criterios: ((json['criterios'] as List?) ?? [])
+          .map((c) => CriterioDesempenhoModel.fromJson(c as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
 class EstatisticaAlunoModel {
   final String alunoId;
-  final List<double> notas;
-  final double media;
-  final double percentualConclusao;
-  final bool emRisco;
+  final String nome;
+  final String turma;
+  final double? media; // media bruta, sem peso - so um numero rapido
+  final int totalNotas;
+  final List<EtapaDesempenhoModel> etapas;
+  final int? etapaAtualId;
 
   EstatisticaAlunoModel({
     required this.alunoId,
-    required this.notas,
-    required this.media,
-    required this.percentualConclusao,
-    this.emRisco = false,
+    this.nome = '',
+    this.turma = '',
+    this.media,
+    this.totalNotas = 0,
+    this.etapas = const [],
+    this.etapaAtualId,
   });
 
   factory EstatisticaAlunoModel.fromJson(Map<String, dynamic> json) {
     return EstatisticaAlunoModel(
-      alunoId: json['alunoId'].toString(),
-      notas: List<double>.from(
-        (json['notas'] ?? []).map((n) => n.toDouble()),
-      ),
-      media: (json['media'] ?? 0).toDouble(),
-      percentualConclusao: (json['percentualConclusao'] ?? 0).toDouble(),
-      emRisco: json['emRisco'] ?? false,
+      alunoId: (json['id'] ?? '').toString(),
+      nome: json['nome'] ?? '',
+      turma: json['turma'] ?? '',
+      media: (json['media'] as num?)?.toDouble(),
+      totalNotas: json['totalNotas'] ?? 0,
+      etapas: ((json['etapas'] as List?) ?? [])
+          .map((e) => EtapaDesempenhoModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      etapaAtualId: json['etapaAtualId'] as int?,
     );
   }
 }

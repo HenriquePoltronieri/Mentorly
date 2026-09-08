@@ -29,7 +29,7 @@ que impede uma escola de ver os dados da outra.
 | `aluno` | Alunos de uma turma | `turma_id` → `turma.coordenacao_id` |
 | `etapa` | Etapas do ano letivo (padrão da escola) | `coordenacao_id` |
 | `criterio` | Critérios de avaliação de cada etapa | `coordenacao_id` + `etapa_id` |
-| `atividade` | Atividades criadas pelo Professor | `turma_id` → `turma.coordenacao_id` |
+| `atividade` | Atividades criadas pelo Professor | `coordenacao_id` (FK composta) |
 | `nota` | Nota de um aluno em uma atividade | `atividade_id` / `aluno_id` |
 | `codigo_verificacao` | Códigos da verificação em duas etapas | — |
 
@@ -50,6 +50,30 @@ invariante do banco — um bug no service não consegue misturar escolas. O scri
 
 Isso exige os índices `UNIQUE (coordenacao_id, id)` em `turma` e `professor`, que
 existem no schema só para servir de alvo dessas FKs.
+
+### O mesmo vale para `atividade`
+
+`atividade` carrega `coordenacao_id` pela mesma razão, e com **três** FKs compostas:
+
+```sql
+FOREIGN KEY (coordenacao_id, turma_id)    REFERENCES turma (coordenacao_id, id)
+FOREIGN KEY (coordenacao_id, etapa_id)    REFERENCES etapa (coordenacao_id, id)
+FOREIGN KEY (coordenacao_id, criterio_id) REFERENCES criterio (coordenacao_id, id)
+```
+
+Antes disso as FKs eram simples (`REFERENCES etapa (id)`), e o banco aceitaria uma atividade
+da escola A apontando para a etapa da escola B — bastava adulterar o `etapa_id` no corpo da
+requisição. Agora o próprio MySQL recusa. Os índices-alvo `uk_etapa_escola` e
+`uk_criterio_escola` existem no schema exatamente para isso.
+
+**`etapa_id` e `criterio_id` continuam NULL-áveis**, por causa das atividades criadas antes
+dessa regra. Em FK composta o MySQL não checa a constraint quando alguma coluna da chave é
+NULL, então a linha antiga segue válida: nenhum dado precisou ser apagado. As atividades
+**novas** exigem etapa, critério e valor — isso é validado no service, em
+`backend/services/activity/validacao.py`.
+
+`backend/scripts/smoke_db.py` prova os dois lados: recusa a atividade cruzada e aceita tanto
+a legada (sem etapa) quanto a coerente.
 
 ## Autenticação
 
@@ -92,7 +116,35 @@ Todas recebem `p_coordenacao_id`: nenhuma enxerga o sistema inteiro.
 | `sp_professores_por_coordenacao(coordenacao_id)` | Professores da escola, em ordem alfabética, com a contagem de turmas. Substitui a antiga `sp_usuarios_por_role`, que devolvia todos os professores do sistema sem filtro. | `ProfessorRepository` |
 | `sp_resumo_sistema(coordenacao_id)` | Totais da escola: turmas, professores, atividades, alunos. Subconsultas agregadas. | `ReportRepository` |
 | `sp_turmas_do_professor(professor_id)` | Turmas vinculadas ao professor, com a contagem de alunos. É a fonte de `GET /api/professor/turmas`. | `TurmaRepository` |
-| `sp_alunos_em_risco(professor_id, ano_letivo)` | Alunos com média abaixo da `nota_minima` configurada pela Coordenação, só nas turmas do professor. | `ProfessorRepository` |
+
+`sp_alunos_em_risco` existiu até o Marco 2 e foi removida: ela fazia `AVG()` de
+**todas** as notas do aluno, misturando etapas, contra a nota mínima fixa da etapa de
+ordem 1 — sempre, mesmo quando o aluno já estava em outra etapa. "Aluno em risco" agora
+é calculado em Python, em `services/professor/dashboard.py`, usando o motor central do
+Marco 2 (ver abaixo) na etapa atual de verdade da escola.
+
+## Marco 2 — o motor de cálculo acadêmico
+
+`backend/services/academico/calculo.py` é a única fonte de verdade para desempenho de
+aluno: nem o Flutter, nem nenhum outro service do backend calculam nota por conta
+própria. Dashboard (`alunos em risco`) e a tela de estatísticas do aluno passam por lá.
+
+A regra, por etapa: cada critério pondera `pontos_obtidos / pontos_possiveis` das
+atividades **daquele critério que já têm nota lançada para o aluno** — uma atividade sem
+nota não entra como zero, fica de fora do cálculo até ser avaliada. O critério só é
+"completo" quando todas as atividades dele têm nota; a etapa só ganha `nota_calculada`
+quando todos os critérios com peso maior que zero estão completos. Enquanto isso, a
+situação é `"em_andamento"` — nunca um número inventado.
+
+`criterio.peso` é um valor de 0 a 100 (pontos percentuais). Os pesos ativos de uma etapa
+precisam somar 100 (tolerância 0,01) para ela poder ser calculada; se não somarem, a
+situação vira `"configuracao_invalida"` com uma mensagem explicando o motivo, em vez de
+calcular silenciosamente com uma configuração que a Coordenação nunca validou. `GET
+/api/config/etapas` já devolve `pesoTotal`/`pesoValido` por etapa, para a tela de
+configuração avisar antes mesmo de alguém tentar ver o desempenho de um aluno.
+
+Arredondamento acontece uma vez só, na saída — o cálculo interno usa float cheio do
+início ao fim, para não acumular erro de arredondamentos intermediários.
 
 ## Sobre o instalador de procedures
 

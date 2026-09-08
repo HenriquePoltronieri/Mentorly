@@ -41,14 +41,22 @@ São opcionais. Sem definir nada, valem os padrões de `backend/config.py`:
 | `SMTP_HOST` | vazio | servidor de e-mail |
 | `APP_BASE_URL` | `http://localhost:3000` | monta o link do convite do professor |
 
-Se o seu MySQL tiver senha no root:
+Se o seu MySQL tiver senha no root, o jeito mais prático é criar um arquivo
+`backend/.env` (ignorado pelo git) com uma variável por linha:
+
+```
+DB_PASSWORD=sua_senha
+```
+
+O `config.py` lê esse arquivo ao subir. Uma variável já definida no ambiente sempre
+vence a do arquivo, então dá para sobrescrever pontualmente:
 
 ```bash
 # Windows (PowerShell)
-$env:DB_PASSWORD = "sua_senha"
+$env:DB_PASSWORD = "outra_senha"
 
 # Linux / macOS
-export DB_PASSWORD="sua_senha"
+export DB_PASSWORD="outra_senha"
 ```
 
 **Em produção, `SECRET_KEY` precisa vir do ambiente.** Com o valor padrão, qualquer
@@ -63,9 +71,13 @@ cd backend
 python scripts/init_db.py
 ```
 
-Isso cria o banco `mentorly_db`, aplica o `database/schema.sql` (10 tabelas) e instala as
-6 procedures. O `python app.py` faz o mesmo ao subir, então este passo é opcional — serve
-para recriar o banco sem subir o Flask.
+Isso cria o banco `mentorly_db`, aplica o `database/schema.sql` (10 tabelas), roda as
+migrações de `database/migrations.py` e instala as 6 procedures. O `python app.py` faz o
+mesmo ao subir, então este passo é opcional — serve para recriar o banco sem subir o Flask.
+
+As migrações existem porque o `schema.sql` só cria o que ainda não existe
+(`CREATE TABLE IF NOT EXISTS`): num banco já criado, uma coluna nova nunca chegaria. Cada
+migração consulta o `information_schema` antes de agir, então rodar de novo não faz nada.
 
 Para conferir que a conexão e o isolamento por escola estão de pé:
 
@@ -93,9 +105,10 @@ cd backend
 python scripts/smoke_api.py
 ```
 
-São 53 verificações que cobrem login, isolamento entre duas escolas, permissões por
-papel, configuração do ano letivo e importação de planilha. Ele limpa os próprios dados
-ao terminar.
+Cobre login, isolamento entre duas escolas, permissões por papel, configuração do ano
+letivo, importação de planilha e a avaliação acadêmica — atividade ligada a etapa e
+critério, valor máximo, e o lançamento de nota respeitando aluno, turma e teto. Ele limpa
+os próprios dados ao terminar.
 
 ### E-mail em desenvolvimento
 

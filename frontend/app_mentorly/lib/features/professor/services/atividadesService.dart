@@ -30,9 +30,14 @@ class AtividadesService {
     return AtividadeModel.fromJson(resposta);
   }
 
+  // etapa, criterio e notaMaxima sao obrigatorios: o backend recusa (400/404)
+  // uma atividade sem eles, ou com etapa/criterio de outra escola.
   Future<AtividadeModel> cadastrarAtividade({
     required String turmaId,
     required String nome,
+    required int etapaId,
+    required int criterioId,
+    required double notaMaxima,
     String descricao = '',
     String dataEntrega = '',
   }) async {
@@ -41,6 +46,9 @@ class AtividadesService {
       'description': descricao,
       'class_id': int.tryParse(turmaId) ?? turmaId,
       'due_date': dataEntrega,
+      'etapa_id': etapaId,
+      'criterio_id': criterioId,
+      'nota_maxima': notaMaxima,
     });
     return AtividadeModel.fromJson(resposta);
   }
@@ -49,6 +57,9 @@ class AtividadesService {
     required String id,
     required String turmaId,
     required String nome,
+    required int etapaId,
+    required int criterioId,
+    required double notaMaxima,
     String descricao = '',
     String dataEntrega = '',
   }) async {
@@ -57,6 +68,9 @@ class AtividadesService {
       'description': descricao,
       'class_id': int.tryParse(turmaId) ?? turmaId,
       'due_date': dataEntrega,
+      'etapa_id': etapaId,
+      'criterio_id': criterioId,
+      'nota_maxima': notaMaxima,
     });
     return AtividadeModel.fromJson(resposta);
   }

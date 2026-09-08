@@ -195,7 +195,23 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.assignment)),
             title: Text(atividade.nome),
-            subtitle: Text(_montarSubtitulo(atividade)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_montarSubtitulo(atividade)),
+                if (!atividade.configuracaoCompleta)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Sem etapa, critério ou valor definido — edite a '
+                      'atividade para poder lançar notas.',
+                      style: TextStyle(fontSize: 12, color: Colors.orange[800]),
+                    ),
+                  ),
+              ],
+            ),
+            isThreeLine: !atividade.configuracaoCompleta,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -225,8 +241,19 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     );
   }
 
+  // "1º Bimestre • Prova • Vale 20 pontos • Entrega: 2026-09-15"
+  //
+  // Atividade legada (criada antes de etapa/criterio/valor virarem
+  // obrigatorios) simplesmente omite o que nao tem, em vez de mostrar
+  // "Vale 0 pontos" - que era o valor default de um campo que a API nunca
+  // mandou.
   String _montarSubtitulo(AtividadeModel atividade) {
     final partes = <String>[];
+    if (atividade.etapaNome.isNotEmpty) partes.add(atividade.etapaNome);
+    if (atividade.criterioNome.isNotEmpty) partes.add(atividade.criterioNome);
+    if (atividade.notaMaxima != null) {
+      partes.add('Vale ${_formatarValor(atividade.notaMaxima!)} pontos');
+    }
     if (atividade.descricao.isNotEmpty) partes.add(atividade.descricao);
     if (atividade.dataEntrega.isNotEmpty) {
       final data = atividade.dataEntrega.contains('T')
@@ -236,4 +263,9 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     }
     return partes.isEmpty ? 'Sem descrição' : partes.join(' • ');
   }
+
+  // 20.0 vira "20"; 13.5 continua "13.5".
+  static String _formatarValor(double valor) => valor == valor.roundToDouble()
+      ? valor.toInt().toString()
+      : valor.toString();
 }

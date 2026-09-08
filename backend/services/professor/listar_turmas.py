@@ -36,11 +36,36 @@ class ListarTurmasDoProfessorService:
 
 
 class ListarAlunosDaTurmaService:
-    """Alunos de uma turma do professor."""
+    """Alunos de uma turma do professor.
+
+    Cada aluno ganha "media": a nota_calculada dele na etapa atual da
+    escola (Marco 2), pela mesma regra central que o dashboard e a tela de
+    estatisticas usam - nunca um calculo proprio desta tela. Fica None
+    quando a etapa atual ainda nao esta completa para aquele aluno (nao
+    inventa numero) ou quando a escola nao tem etapa configurada.
+    """
 
     def execute(self, turma_id, professor_id):
-        from models.aluno_model import Aluno
+        from datetime import date
 
-        if not Turma.find_by_id_para_professor(turma_id, professor_id):
+        from models.aluno_model import Aluno
+        from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
+
+        turma = Turma.find_by_id_para_professor(turma_id, professor_id)
+        if not turma:
             raise LookupError("Turma nao encontrada")
-        return [Aluno.to_dict(a) for a in Aluno.find_all_by_turma(turma_id)]
+
+        ano_letivo = turma.get("ano_letivo") or date.today().year
+        etapa, _regra = etapa_atual(turma["coordenacao_id"], ano_letivo)
+
+        alunos = []
+        for linha in Aluno.find_all_by_turma(turma_id):
+            aluno = Aluno.to_dict(linha)
+            media = None
+            if etapa is not None:
+                calculo = calcular_desempenho_etapa(aluno["id"], turma_id, etapa)
+                if calculo["completo"]:
+                    media = calculo["nota_calculada"]
+            aluno["media"] = media
+            alunos.append(aluno)
+        return alunos

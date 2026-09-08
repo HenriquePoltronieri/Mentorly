@@ -33,10 +33,15 @@ class Aluno:
 
     @staticmethod
     def find_com_turma(aluno_id):
-        """Traz a coordenacao_id junto, para o service checar a posse."""
+        """Traz a coordenacao_id e o ano_letivo da turma junto.
+
+        coordenacao_id e para o service checar a posse; ano_letivo e o
+        que decide quais etapas entram no calculo academico do aluno
+        (Marco 2) - sem ano_letivo na turma, o service cai no ano corrente.
+        """
         return query_one(
             "SELECT al.id, al.turma_id, al.nome, al.matricula, al.email, "
-            "       t.nome AS turma_nome, t.coordenacao_id "
+            "       t.nome AS turma_nome, t.coordenacao_id, t.ano_letivo "
             "FROM aluno al INNER JOIN turma t ON t.id = al.turma_id "
             "WHERE al.id = %s",
             (aluno_id,),

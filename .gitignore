@@ -11,3 +11,7 @@ venv/
 # Editors / OS
 .vscode/
 .DS_Store
+
+# Segredos locais: senha do MySQL de desenvolvimento, SMTP.
+# Nunca versionado. Ver docs/como-executar.md.
+backend/.env

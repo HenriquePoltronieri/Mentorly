@@ -143,27 +143,13 @@ BEGIN
     ORDER BY t.nome ASC;
 END$$
 
--- 6. Alunos em risco: media abaixo da nota minima definida pela Coordenacao
---    para o ano letivo. Considera so as turmas vinculadas ao professor.
-CREATE PROCEDURE sp_alunos_em_risco(IN p_professor_id INT, IN p_ano_letivo INT)
-BEGIN
-    SELECT
-        al.id,
-        al.nome,
-        t.nome AS turma,
-        ROUND(AVG(n.valor), 2) AS media,
-        e.nota_minima
-    FROM aluno al
-    INNER JOIN turma t            ON t.id = al.turma_id
-    INNER JOIN professor_turma pt ON pt.turma_id = t.id AND pt.professor_id = p_professor_id
-    INNER JOIN nota n             ON n.aluno_id = al.id
-    INNER JOIN atividade a        ON a.id = n.atividade_id
-    LEFT JOIN etapa e             ON e.coordenacao_id = t.coordenacao_id
-                                 AND e.ano_letivo = p_ano_letivo
-                                 AND e.ordem = 1
-    GROUP BY al.id, al.nome, t.nome, e.nota_minima
-    HAVING e.nota_minima IS NOT NULL AND AVG(n.valor) < e.nota_minima
-    ORDER BY media ASC;
-END$$
+-- sp_alunos_em_risco foi REMOVIDA no Marco 2. Ela fazia AVG() de todas as
+-- notas do aluno (misturando etapas) contra a nota minima fixa da etapa
+-- de ordem 1, sempre - mesmo quando o aluno ja estava em outra etapa. A
+-- regra de "aluno em risco" agora vive em Python, em
+-- services/professor/dashboard.py, usando o motor central de calculo
+-- (services/academico/calculo.py) na etapa atual de verdade. O
+-- DROP PROCEDURE IF EXISTS acima remove a versao antiga de bancos que
+-- ja tinham essa procedure instalada.
 
 DELIMITER ;

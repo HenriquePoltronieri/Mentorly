@@ -16,7 +16,6 @@ PROCEDURES_PERMITIDAS = {
     "sp_professores_por_coordenacao",
     "sp_resumo_sistema",
     "sp_turmas_do_professor",
-    "sp_alunos_em_risco",
 }
 
 

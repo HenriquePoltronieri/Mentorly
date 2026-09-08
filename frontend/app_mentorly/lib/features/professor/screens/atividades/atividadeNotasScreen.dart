@@ -183,7 +183,7 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          'Vale ${_atividade!.valor} pontos',
+                          _descricaoDaAtividade(),
                           style: const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
@@ -270,7 +270,9 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
-                  hintText: '0-${_atividade?.valor.toStringAsFixed(0) ?? '10'}',
+                  hintText: _atividade?.notaMaxima == null
+                      ? 'nota'
+                      : '0-${_formatarValor(_atividade!.notaMaxima!)}',
                   border: const OutlineInputBorder(),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -282,4 +284,27 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
       },
     );
   }
+
+  // "1º Bimestre • Prova • Vale 20 pontos". Atividade legada (sem esses
+  // campos) diz isso em vez de "Vale 0 pontos" - o backend recusa lancar
+  // nota nela enquanto o professor nao definir quanto ela vale.
+  String _descricaoDaAtividade() {
+    final atividade = _atividade;
+    if (atividade == null) return '';
+
+    if (atividade.notaMaxima == null) {
+      return 'Sem valor definido — edite a atividade antes de lançar notas';
+    }
+
+    final partes = <String>[];
+    if (atividade.etapaNome.isNotEmpty) partes.add(atividade.etapaNome);
+    if (atividade.criterioNome.isNotEmpty) partes.add(atividade.criterioNome);
+    partes.add('Vale ${_formatarValor(atividade.notaMaxima!)} pontos');
+    return partes.join(' • ');
+  }
+
+  // 20.0 vira "20"; 13.5 continua "13.5".
+  static String _formatarValor(double valor) => valor == valor.roundToDouble()
+      ? valor.toInt().toString()
+      : valor.toString();
 }

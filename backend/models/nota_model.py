@@ -62,6 +62,39 @@ class Nota:
         return {"media": numero(linha["media"]), "total": linha["total"]}
 
     @staticmethod
+    def valores_por_atividade(aluno_id, atividade_ids):
+        """{atividade_id: valor} so das atividades que TEM nota lancada.
+
+        Uma atividade sem linha em nota nao entra no dict - e assim que o
+        calculo academico (Marco 2) distingue "nota zero" (linha existe,
+        valor 0) de "nota ausente" (linha nao existe). Nunca usar
+        dict.get(id, 0): o 0 default confundiria as duas coisas.
+        """
+        if not atividade_ids:
+            return {}
+        marcadores = ", ".join(["%s"] * len(atividade_ids))
+        linhas = query_all(
+            "SELECT atividade_id, valor FROM nota "
+            "WHERE aluno_id = %%s AND atividade_id IN (%s)" % marcadores,
+            tuple([aluno_id] + list(atividade_ids)),
+        )
+        return {linha["atividade_id"]: numero(linha["valor"]) for linha in linhas}
+
+    @staticmethod
+    def maior_nota_da_atividade(atividade_id):
+        """Maior nota ja lancada, ou None se ainda nao ha nenhuma.
+
+        Usada para impedir que o professor reduza o valor maximo da
+        atividade para baixo de uma nota que ja existe - o que deixaria
+        aluno com nota acima do teto.
+        """
+        linha = query_one(
+            "SELECT MAX(valor) AS maior FROM nota WHERE atividade_id = %s",
+            (atividade_id,),
+        )
+        return numero(linha["maior"]) if linha else None
+
+    @staticmethod
     def media_por_atividade(turma_id):
         """Media da turma em cada atividade, da pior para a melhor."""
         return query_all(

@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 class AlunoGraficoWidget extends StatelessWidget {
   final List<double> notas;
   final double notaMaxima;
+  // Rotulo de cada barra. Se null, mantem o "Ativ. N" de sempre - usado
+  // agora tambem para notas calculadas por etapa ("1º Bimestre", etc).
+  final List<String>? rotulos;
 
   const AlunoGraficoWidget({
     super.key,
     required this.notas,
     this.notaMaxima = 10,
+    this.rotulos,
   });
 
   @override
@@ -56,7 +60,10 @@ class AlunoGraficoWidget extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Ativ. ${indice + 1}',
+                    (rotulos != null && indice < rotulos!.length)
+                        ? rotulos![indice]
+                        : 'Ativ. ${indice + 1}',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 11, color: Colors.black54),
                   ),
                 ],

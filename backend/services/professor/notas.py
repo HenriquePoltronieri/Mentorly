@@ -1,3 +1,4 @@
+from models.aluno_model import Aluno
 from models.atividade_model import Atividade
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
@@ -45,6 +46,16 @@ class LancarNotasService:
         if brutas is None:
             brutas = [payload]
 
+        # Quem pode receber nota nesta atividade: os alunos da turma DELA.
+        # Sem esta lista, trocar o aluno_id na requisicao lancava nota em
+        # aluno de outra turma - a FK de nota aponta para aluno(id) global,
+        # entao o banco aceitaria. Uma consulta so, fora do laco.
+        alunos_da_turma = {
+            aluno["id"] for aluno in Aluno.find_all_by_turma(
+                atividade["turma_id"]
+            )
+        }
+
         nota_maxima = atividade.get("nota_maxima")
         lancamentos = []
         for item in brutas:
@@ -60,19 +71,36 @@ class LancarNotasService:
                 continue
 
             try:
+                aluno_id = int(aluno_id)
+            except (TypeError, ValueError):
+                raise ValueError("Aluno invalido")
+
+            # 404 e nao 403: confirmar que o aluno existe em outra turma ja
+            # seria vazar dado de outra turma (ou de outra escola).
+            if aluno_id not in alunos_da_turma:
+                raise LookupError("Aluno nao encontrado nesta turma")
+
+            try:
                 valor = float(str(valor).replace(",", "."))
             except ValueError:
                 raise ValueError("Nota invalida para o aluno %s" % aluno_id)
 
             if valor < 0:
                 raise ValueError("A nota nao pode ser negativa")
-            if nota_maxima is not None and valor > float(nota_maxima):
+            # Atividade sem valor maximo e legado: nao da para dizer se a
+            # nota cabe, entao recusa em vez de aceitar qualquer numero.
+            if nota_maxima is None:
                 raise ValueError(
-                    "A nota nao pode passar de %s" % float(nota_maxima)
+                    "Esta atividade ainda nao tem valor maximo definido. "
+                    "Edite a atividade e informe quanto ela vale."
+                )
+            if valor > float(nota_maxima):
+                raise ValueError(
+                    "A nota nao pode passar de %s" % _limpo(nota_maxima)
                 )
 
             lancamentos.append({
-                "aluno_id": int(aluno_id),
+                "aluno_id": aluno_id,
                 "valor": valor,
                 "observacao": item.get("observacao"),
             })
@@ -81,3 +109,9 @@ class LancarNotasService:
             Nota.lancar_em_lote(atividade_id, lancamentos)
 
         return {"lancadas": len(lancamentos)}
+
+
+def _limpo(valor):
+    """20.0 vira "20"; 13.5 continua "13.5". So para a mensagem de erro."""
+    numero = float(valor)
+    return str(int(numero)) if numero == int(numero) else str(numero)

@@ -206,8 +206,19 @@ def _rodar_arquivo_sql(caminho):
 
 
 def install_schema():
-    """Cria as tabelas a partir de database/schema.sql."""
-    return _rodar_arquivo_sql(SCHEMA_FILE)
+    """Cria as tabelas a partir de database/schema.sql e aplica as migracoes.
+
+    O schema.sql so cria o que ainda nao existe (CREATE TABLE IF NOT EXISTS),
+    entao ele sozinho nunca alcanca um banco antigo. As migracoes cobrem esse
+    caso; em banco novo elas nao acham nada para fazer.
+    """
+    resultado = _rodar_arquivo_sql(SCHEMA_FILE)
+
+    # Import local: migrations.py importa os helpers deste modulo.
+    from database.migrations import aplicar_migracoes
+    aplicar_migracoes()
+
+    return resultado
 
 
 def install_procedures():

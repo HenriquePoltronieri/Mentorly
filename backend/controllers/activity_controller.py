@@ -68,6 +68,7 @@ class ActivityController:
 
         try:
             atividade = CreateActivityService().execute(
+                coordenacao_atual(),
                 usuario_atual_id(),
                 int(turma_id),
                 titulo,
@@ -91,6 +92,7 @@ class ActivityController:
         try:
             atividade = UpdateActivityService().execute(
                 activity_id,
+                coordenacao_atual(),
                 usuario_atual_id(),
                 dados.get("title") or dados.get("titulo"),
                 dados.get("description") or dados.get("descricao"),

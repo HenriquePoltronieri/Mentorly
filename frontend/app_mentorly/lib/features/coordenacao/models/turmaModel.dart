@@ -14,6 +14,10 @@ class TurmaModel {
   final String turno;
   final String professorId;
 
+  // Ano letivo da turma. Nulo enquanto a Coordenacao nao informar - quem
+  // precisa do ano (as etapas configuradas) cai no ano corrente.
+  final int? anoLetivo;
+
   TurmaModel({
     required this.id,
     required this.nome,
@@ -21,6 +25,7 @@ class TurmaModel {
     this.disciplina = '',
     this.turno = '',
     this.professorId = '',
+    this.anoLetivo,
   });
 
   factory TurmaModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +36,10 @@ class TurmaModel {
       disciplina: json['disciplina'] ?? '',
       turno: json['turno'] ?? '',
       professorId: (json['professorId'] ?? '').toString(),
+      anoLetivo: json['anoLetivo'] is int
+          ? json['anoLetivo']
+          : int.tryParse((json['anoLetivo'] ?? json['ano_letivo'] ?? '')
+              .toString()),
     );
   }
 

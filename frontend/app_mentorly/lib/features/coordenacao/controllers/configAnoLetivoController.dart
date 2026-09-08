@@ -133,6 +133,34 @@ class ConfigAnoLetivoController {
     }
   }
 
+  // Grava o peso de um criterio em TODAS as etapas onde ele existe - o
+  // mesmo nome de criterio ("Provas") vale para o ano letivo inteiro,
+  // entao o peso tambem. Backend valida no calculo (Marco 2) que a soma
+  // dos pesos ativos de cada etapa fecha em 100; esta tela so evita que
+  // uma configuracao errada chegue ate la sem o usuario perceber.
+  Future<void> definirPeso(String nome, double peso) async {
+    final alvos = criterios.where((c) => c.nome == nome).toList();
+    for (final criterio in alvos) {
+      final id = int.tryParse(criterio.id);
+      if (id == null) continue;
+      await _criteriosService.atualizarCriterio(criterioId: id, peso: peso);
+      criterio.peso = peso;
+    }
+  }
+
+  // Soma dos pesos dos criterios selecionados, pelo nome (um por nome,
+  // ja que o mesmo peso vale em todas as etapas). Usada pela tela para
+  // mostrar "Soma: X%" antes mesmo de salvar.
+  double somaPesos(Iterable<String> nomesSelecionados) {
+    double soma = 0;
+    for (final nome in nomesSelecionados) {
+      final criterio =
+          criterios.where((c) => c.nome == nome).firstOrNull;
+      if (criterio != null) soma += criterio.peso;
+    }
+    return soma;
+  }
+
   Future<void> removerCriterio(String nome) async {
     final alvos = criterios.where((c) => c.nome == nome).toList();
     for (final criterio in alvos) {

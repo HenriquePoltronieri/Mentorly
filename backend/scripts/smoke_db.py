@@ -33,6 +33,7 @@ def limpar():
     )
     for escola in escolas:
         cid = escola["id"]
+        execute("DELETE FROM atividade WHERE coordenacao_id = %s", (cid,))
         execute(
             "DELETE FROM professor_turma WHERE coordenacao_id = %s", (cid,)
         )
@@ -40,6 +41,8 @@ def limpar():
             "DELETE FROM aluno WHERE turma_id IN "
             "(SELECT id FROM turma WHERE coordenacao_id = %s)", (cid,)
         )
+        execute("DELETE FROM criterio WHERE coordenacao_id = %s", (cid,))
+        execute("DELETE FROM etapa WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM turma WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM professor WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM coordenacao WHERE id = %s", (cid,))
@@ -73,7 +76,18 @@ def criar_escola(rotulo):
         "INSERT INTO aluno (turma_id, nome, matricula) VALUES (%s, %s, %s)",
         (turma_id, "Aluno Teste %s" % rotulo, "MAT-%s-1" % rotulo),
     )
-    return coordenacao_id, turma_id, professor_id
+    etapa_id = insert(
+        "INSERT INTO etapa "
+        "(coordenacao_id, nome, ordem, ano_letivo, nota_minima, nota_maxima) "
+        "VALUES (%s, %s, %s, %s, %s, %s)",
+        (coordenacao_id, "1 Etapa", 1, 2026, 6, 10),
+    )
+    criterio_id = insert(
+        "INSERT INTO criterio (coordenacao_id, etapa_id, nome, peso) "
+        "VALUES (%s, %s, %s, %s)",
+        (coordenacao_id, etapa_id, "Provas", 5),
+    )
+    return coordenacao_id, turma_id, professor_id, etapa_id, criterio_id
 
 
 def main():
@@ -86,11 +100,13 @@ def main():
     print("\n[1] Escrita: criando duas escolas independentes")
     escola_a = criar_escola("A")
     escola_b = criar_escola("B")
-    print("    escola A -> coordenacao=%s turma=%s professor=%s" % escola_a)
-    print("    escola B -> coordenacao=%s turma=%s professor=%s" % escola_b)
+    print("    escola A -> coordenacao=%s turma=%s professor=%s "
+          "etapa=%s criterio=%s" % escola_a)
+    print("    escola B -> coordenacao=%s turma=%s professor=%s "
+          "etapa=%s criterio=%s" % escola_b)
 
-    coord_a, turma_a, prof_a = escola_a
-    coord_b, turma_b, prof_b = escola_b
+    coord_a, turma_a, prof_a, etapa_a, criterio_a = escola_a
+    coord_b, turma_b, prof_b, etapa_b, criterio_b = escola_b
 
     # ---------------------------------------------------------------
     print("\n[2] Leitura: buscando de volta o que foi gravado")
@@ -152,7 +168,66 @@ def main():
         print("    OK: o banco recusou (%s)" % str(erro)[:90])
 
     # ---------------------------------------------------------------
-    print("\n[6] Procedures: rodando com o filtro de escola")
+    # Marco 1: a atividade tambem carrega a escola, com FK composta para
+    # turma, etapa e criterio. Antes disso as FKs eram simples
+    # (REFERENCES etapa (id)), e o banco aceitava a etapa de outra escola.
+    print("\n[6] Atividade da escola A apontando para a etapa da escola B")
+    try:
+        insert(
+            "INSERT INTO atividade "
+            "(coordenacao_id, turma_id, professor_id, etapa_id, criterio_id, "
+            " titulo, nota_maxima) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (coord_a, turma_a, prof_a, etapa_b, criterio_a,
+             "Atividade cruzada", 20),
+        )
+        falhas.append("o banco ACEITOU atividade com etapa de outra escola")
+        print("    FALHOU: a atividade cruzada foi aceita")
+    except pymysql.err.IntegrityError as erro:
+        print("    OK: o banco recusou (%s)" % str(erro)[:90])
+
+    print("\n[7] Mesma atividade com o criterio da escola B")
+    try:
+        insert(
+            "INSERT INTO atividade "
+            "(coordenacao_id, turma_id, professor_id, etapa_id, criterio_id, "
+            " titulo, nota_maxima) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (coord_a, turma_a, prof_a, etapa_a, criterio_b,
+             "Atividade cruzada", 20),
+        )
+        falhas.append("o banco ACEITOU atividade com criterio de outra escola")
+        print("    FALHOU: o criterio cruzado foi aceito")
+    except pymysql.err.IntegrityError as erro:
+        print("    OK: o banco recusou (%s)" % str(erro)[:90])
+
+    print("\n[8] Atividade legada: sem etapa nem criterio, continua valida")
+    legada = insert(
+        "INSERT INTO atividade "
+        "(coordenacao_id, turma_id, professor_id, titulo) "
+        "VALUES (%s, %s, %s, %s)",
+        (coord_a, turma_a, prof_a, "Atividade sem etapa"),
+    )
+    if legada:
+        print("    OK: em FK composta, chave com NULL nao e checada")
+    else:
+        falhas.append("atividade legada (sem etapa) foi recusada")
+
+    print("\n[9] Atividade coerente dentro da escola A")
+    valida = insert(
+        "INSERT INTO atividade "
+        "(coordenacao_id, turma_id, professor_id, etapa_id, criterio_id, "
+        " titulo, nota_maxima) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (coord_a, turma_a, prof_a, etapa_a, criterio_a, "Prova 1", 20),
+    )
+    if valida:
+        print("    OK: a combinacao correta e aceita")
+    else:
+        falhas.append("atividade valida da propria escola foi recusada")
+
+    # ---------------------------------------------------------------
+    print("\n[10] Procedures: rodando com o filtro de escola")
     relatorio = call_procedure("sp_relatorio_turmas_atividades", coord_a)
     print("    sp_relatorio_turmas_atividades(A): %s" % relatorio)
     if any(l["id"] == turma_b for l in relatorio):

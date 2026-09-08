@@ -2,8 +2,34 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Conexao com o MySQL. Tudo vem de variavel de ambiente, com um default
-# que funciona no XAMPP local (root sem senha).
+
+def _carregar_env():
+    """Le backend/.env, se existir, para dentro de os.environ.
+
+    Serve para a senha do MySQL local nao precisar ser exportada a mao a
+    cada terminal novo. O arquivo e ignorado pelo git; uma variavel ja
+    definida no ambiente sempre vence a do arquivo.
+    """
+    caminho = os.path.join(BASE_DIR, ".env")
+    if not os.path.exists(caminho):
+        return
+
+    with open(caminho, "r", encoding="utf-8") as arquivo:
+        for linha in arquivo:
+            linha = linha.strip()
+            if not linha or linha.startswith("#") or "=" not in linha:
+                continue
+            chave, _, valor = linha.partition("=")
+            chave = chave.strip()
+            valor = valor.strip().strip('"').strip("'")
+            if chave and chave not in os.environ:
+                os.environ[chave] = valor
+
+
+_carregar_env()
+
+# Conexao com o MySQL. Tudo vem de variavel de ambiente (ou de backend/.env),
+# com um default que funciona em um MySQL local de root sem senha.
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
     "port": int(os.environ.get("DB_PORT", 3306)),

@@ -2,6 +2,7 @@ from datetime import date
 
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
+from services.academico.calculo import resumo_pesos
 
 
 class ListarEtapasService:
@@ -17,10 +18,14 @@ class ListarEtapasService:
         resultado = []
         for linha in linhas:
             etapa = Etapa.to_dict(linha)
-            etapa["criterios"] = [
-                Criterio.to_dict(c)
-                for c in Criterio.find_all_by_etapa(linha["id"], coordenacao_id)
-            ]
+            criterios = Criterio.find_all_by_etapa(linha["id"], coordenacao_id)
+            etapa["criterios"] = [Criterio.to_dict(c) for c in criterios]
+            # Feedback imediato pra tela de configuracao: sem isso a
+            # Coordenacao so descobre que os pesos estao errados quando
+            # o Professor tentar ver o desempenho de um aluno.
+            soma, valido = resumo_pesos(criterios)
+            etapa["pesoTotal"] = soma
+            etapa["pesoValido"] = valido
             resultado.append(etapa)
         return resultado
 
@@ -31,10 +36,11 @@ class BuscarEtapaService:
         if not linha:
             raise LookupError("Etapa nao encontrada")
         etapa = Etapa.to_dict(linha)
-        etapa["criterios"] = [
-            Criterio.to_dict(c)
-            for c in Criterio.find_all_by_etapa(etapa_id, coordenacao_id)
-        ]
+        criterios = Criterio.find_all_by_etapa(etapa_id, coordenacao_id)
+        etapa["criterios"] = [Criterio.to_dict(c) for c in criterios]
+        soma, valido = resumo_pesos(criterios)
+        etapa["pesoTotal"] = soma
+        etapa["pesoValido"] = valido
         return etapa
 
 

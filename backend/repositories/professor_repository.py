@@ -15,8 +15,3 @@ class ProfessorRepository:
             call_procedure("sp_professores_por_coordenacao", coordenacao_id)
         )
 
-    def alunos_em_risco(self, professor_id, ano_letivo):
-        """Alunos com media abaixo da nota minima da escola (procedure)."""
-        return normalizar_lista(
-            call_procedure("sp_alunos_em_risco", professor_id, ano_letivo)
-        )

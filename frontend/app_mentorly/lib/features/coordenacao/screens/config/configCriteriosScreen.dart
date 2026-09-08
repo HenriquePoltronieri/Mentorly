@@ -12,7 +12,12 @@ import 'passoAnoLetivo.dart';
 //    sem alternativa, mesmo que a escola ja tivesse professores. Agora o
 //    fim do fluxo e "Concluir configuracao", e cadastrar professor e uma
 //    opcao - que some quando a escola ja tem professores cadastrados;
-//  - os criterios nao eram gravados, porque as etapas ainda nao tinham id.
+//  - os criterios nao eram gravados, porque as etapas ainda nao tinham id;
+//  - a tela deixava escolher NOME do criterio, mas nunca perguntava o
+//    PESO - todo criterio nascia com peso 0, e o calculo por etapa
+//    (Marco 2) nao tem como funcionar sem isso. Agora cada criterio
+//    selecionado ganha um campo de peso, com a soma sempre visivel: o
+//    calculo so roda quando os pesos ativos de uma etapa somam 100%.
 class ConfigCriteriosScreen extends StatefulWidget {
   const ConfigCriteriosScreen({super.key});
 
@@ -31,6 +36,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
   ];
   final List<String> _criteriosPersonalizados = [];
   final List<String> _criteriosSelecionados = [];
+  final Map<String, TextEditingController> _pesoControllers = {};
 
   bool _carregando = false;
   bool _salvo = false;
@@ -43,6 +49,43 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     _carregarEstadoAtual();
   }
 
+  @override
+  void dispose() {
+    for (final controller in _pesoControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _pesoController(String nome) {
+    return _pesoControllers.putIfAbsent(nome, () {
+      final existente = _controller.criterios
+          .where((c) => c.nome == nome)
+          .map((c) => c.peso)
+          .firstOrNull;
+      final texto = (existente != null && existente > 0)
+          ? _formatarPeso(existente)
+          : '';
+      return TextEditingController(text: texto);
+    });
+  }
+
+  String _formatarPeso(double valor) =>
+      valor == valor.roundToDouble()
+          ? valor.toInt().toString()
+          : valor.toString();
+
+  double _pesoDigitado(String nome) {
+    final texto = _pesoControllers[nome]?.text.trim() ?? '';
+    return double.tryParse(texto.replaceAll(',', '.')) ?? 0;
+  }
+
+  double get _somaPesos => _criteriosSelecionados
+      .map(_pesoDigitado)
+      .fold(0.0, (soma, peso) => soma + peso);
+
+  bool get _pesosValidos => (_somaPesos - 100).abs() < 0.01;
+
   Future<void> _carregarEstadoAtual() async {
     // Criterios ja configurados aparecem marcados: reconfigurar e edicao.
     final jaConfigurados = _controller.nomesDosCriterios;
@@ -51,6 +94,10 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       _criteriosPersonalizados.addAll(
         jaConfigurados.where((c) => !_criteriosPadrao.contains(c)),
       );
+      // Prepara o campo de peso de cada um ja com o valor salvo.
+      for (final nome in jaConfigurados) {
+        _pesoController(nome);
+      }
     });
 
     // Saber se a escola ja tem professor decide se faz sentido sugerir o
@@ -97,12 +144,20 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     setState(() {
       _criteriosPersonalizados.add(nome);
       _criteriosSelecionados.add(nome);
+      _pesoController(nome);
     });
   }
 
   Future<bool> _salvar() async {
     if (_criteriosSelecionados.isEmpty) {
       setState(() => _mensagemErro = 'Selecione ao menos um critério');
+      return false;
+    }
+    if (!_pesosValidos) {
+      setState(() {
+        _mensagemErro = 'A soma dos pesos precisa ser 100%'
+            ' (está em ${_formatarPeso(_somaPesos)}%)';
+      });
       return false;
     }
 
@@ -116,6 +171,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
 
       for (final nome in _criteriosSelecionados) {
         await _controller.adicionarCriterio(nome);
+        await _controller.definirPeso(nome, _pesoDigitado(nome));
       }
       // Criterio desmarcado sai da configuracao da escola.
       for (final nome in jaConfigurados) {
@@ -196,6 +252,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
                       setState(() {
                         if (marcado) {
                           _criteriosSelecionados.add(criterio);
+                          _pesoController(criterio);
                         } else {
                           _criteriosSelecionados.remove(criterio);
                         }
@@ -210,6 +267,62 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
                 ),
               ],
             ),
+            if (_criteriosSelecionados.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const Text(
+                'Peso de cada critério',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'A soma dos pesos precisa fechar em 100%.',
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              ..._criteriosSelecionados.map((nome) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(nome)),
+                        SizedBox(
+                          width: 90,
+                          child: TextField(
+                            controller: _pesoController(nome),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                              suffixText: '%',
+                              isDense: true,
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+              Row(
+                children: [
+                  Icon(
+                    _pesosValidos ? Icons.check_circle : Icons.error_outline,
+                    size: 18,
+                    color: _pesosValidos ? Colors.green : Colors.orange[800],
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Soma: ${_formatarPeso(_somaPesos)}%'
+                    '${_pesosValidos ? '' : ' — precisa ser 100%'}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _pesosValidos ? Colors.green[800] : Colors.orange[800],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (_mensagemErro != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
@@ -270,4 +383,8 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       ),
     );
   }
+}
+
+extension _PrimeiroOuNulo<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
