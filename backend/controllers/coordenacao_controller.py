@@ -8,6 +8,8 @@ que aceite a escola como parametro.
 from flask import Response, jsonify, request
 
 from auth.decorators import coordenacao_atual
+from models.turma_model import Turma
+from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
 from services.aluno.listar_alunos import ListarAlunosService
 from services.coordenacao.cadastrar_professor import CadastrarProfessorService
@@ -121,3 +123,12 @@ class CoordenacaoController:
         except PlanilhaInvalida as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(resultado), 201
+
+    # -----------------------------------------------------------------
+    # Boletim academico (Marco 3)
+    # -----------------------------------------------------------------
+    def boletim_turma(self, turma_id):
+        turma = Turma.find_by_id(turma_id, coordenacao_atual())
+        if not turma:
+            return jsonify({"error": "Turma nao encontrada"}), 404
+        return jsonify(montar_boletim_turma(turma, coordenacao_atual()))

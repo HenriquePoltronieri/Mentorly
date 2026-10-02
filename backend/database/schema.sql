@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS etapa (
     nota_minima    DECIMAL(5,2) NULL,
     nota_maxima    DECIMAL(5,2) NULL,
     ativa          TINYINT(1) NOT NULL DEFAULT 1,
+    fechada        TINYINT(1) NOT NULL DEFAULT 0,
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_etapa_ordem (coordenacao_id, ano_letivo, ordem),

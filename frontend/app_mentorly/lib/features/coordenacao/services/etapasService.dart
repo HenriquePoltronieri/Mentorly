@@ -65,6 +65,20 @@ class EtapasService {
     await _api.delete('/config/etapas/$etapaId');
   }
 
+  // POST {baseUrl}/api/config/etapas/{etapaId}/fechar
+  // Congela o resultado da etapa: professor deixa de poder lançar nota ou
+  // criar/editar atividade nela até a coordenação reabrir.
+  Future<Map<String, dynamic>> fecharEtapa(int etapaId) async {
+    final resposta = await _api.post('/config/etapas/$etapaId/fechar', {});
+    return resposta as Map<String, dynamic>;
+  }
+
+  // POST {baseUrl}/api/config/etapas/{etapaId}/reabrir
+  Future<Map<String, dynamic>> reabrirEtapa(int etapaId) async {
+    final resposta = await _api.post('/config/etapas/$etapaId/reabrir', {});
+    return resposta as Map<String, dynamic>;
+  }
+
   // POST {baseUrl}/api/config/etapas/{etapaId}/notas
   Future<Map<String, dynamic>> definirNotas({
     required int etapaId,

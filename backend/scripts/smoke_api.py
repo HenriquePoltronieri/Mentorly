@@ -953,6 +953,107 @@ def main():
         checar("Risco Escola B" not in nomes_a_de_novo,
                "T13: dashboard da escola A nao ve o aluno em risco da escola B")
 
+        # ---------------------------------------------------------
+        print("\n[11] Marco 3 - boletim e fechamento de etapa")
+
+        boletim_prof = professor_a.get(
+            "/api/professor/turmas/%d/boletim" % turma_c["id"]
+        )
+        checar(boletim_prof.status_code == 200,
+               "professor consulta o boletim da turma")
+        boletim_dados = boletim_prof.get_json()
+        boletim_joao = next(
+            a for a in boletim_dados["alunos"] if a["aluno_id"] == aluno_joao["id"]
+        )
+        etapa_c_no_boletim = next(
+            e for e in boletim_joao["etapas"] if e["etapa_id"] == etapa_c["id"]
+        )
+        checar(etapa_c_no_boletim["nota_calculada"] == 21.5,
+               "boletim da turma usa o mesmo motor de calculo (21,5)")
+        checar(etapa_c_no_boletim["fechada"] is False, "etapa comeca aberta")
+        checar(etapa_c_no_boletim["atividades_avaliadas"] == 4
+               and etapa_c_no_boletim["atividades_sem_nota"] == 0,
+               "boletim conta atividades avaliadas/sem nota da etapa")
+
+        checar(coord_a.get(
+            "/api/coordenacao/turmas/%d/boletim" % turma_c["id"]
+        ).status_code == 200, "coordenacao tambem consulta o boletim")
+
+        checar(professor_a.get(
+            "/api/professor/turmas/%d/boletim" % turma_b["id"]
+        ).status_code == 404, "professor nao ve boletim de turma de outra escola")
+        checar(coord_b.get(
+            "/api/coordenacao/turmas/%d/boletim" % turma_c["id"]
+        ).status_code == 404, "coordenacao B nao ve boletim de turma da escola A")
+
+        est_joao_antes = estatisticas_de(professor_a, aluno_joao["id"])
+        checar(est_joao_antes["consolidado"]["situacao"] == "em_andamento",
+               "consolidado sem nenhuma etapa fechada fica em_andamento")
+
+        checar(professor_a.post(
+            "/api/config/etapas/%d/fechar" % etapa_c["id"]
+        ).status_code == 403, "PROFESSOR recebe 403 ao fechar etapa")
+
+        fechar = coord_a.post("/api/config/etapas/%d/fechar" % etapa_c["id"])
+        checar(fechar.status_code == 200 and fechar.get_json()["fechada"] is True,
+               "COORDENACAO fecha a etapa")
+        checar(coord_a.post(
+            "/api/config/etapas/%d/fechar" % etapa_c["id"]
+        ).status_code == 400, "fechar etapa ja fechada responde 400")
+
+        checar(professor_a.post("/api/atividades/%d/notas" % prova1["id"], {
+            "notas": [{"aluno_id": aluno_joao["id"], "valor": 5}]
+        }).status_code == 400, "lancar nota em etapa fechada responde 400")
+
+        checar(professor_a.post("/api/activities", {
+            "title": "Nova na etapa fechada", "class_id": turma_c["id"],
+            "etapa_id": etapa_c["id"], "criterio_id": crit_provas["id"],
+            "nota_maxima": 10,
+        }).status_code == 400, "criar atividade em etapa fechada responde 400")
+
+        checar(professor_a.put("/api/activities/%d" % prova1["id"], {
+            "nota_maxima": 30,
+        }).status_code == 400, "editar atividade de etapa fechada responde 400")
+
+        checar(professor_a.delete(
+            "/api/activities/%d" % participacao1["id"]
+        ).status_code == 400, "excluir atividade de etapa fechada responde 400")
+
+        est_joao_fechada = estatisticas_de(professor_a, aluno_joao["id"])
+        etapa_c_fechada = etapa_por_id(est_joao_fechada, etapa_c["id"])
+        checar(etapa_c_fechada["fechada"] is True
+               and etapa_c_fechada["nota_calculada"] == 21.5,
+               "etapa fechada continua com o resultado ja calculado")
+        checar(est_joao_fechada["consolidado"]["situacao"] == "adequado"
+               and est_joao_fechada["consolidado"]["etapas_consideradas"] == 1,
+               "consolidado passa a considerar a etapa fechada")
+
+        checar(professor_a.post(
+            "/api/config/etapas/%d/reabrir" % etapa_c["id"]
+        ).status_code == 403, "PROFESSOR recebe 403 ao reabrir etapa")
+
+        reabrir = coord_a.post("/api/config/etapas/%d/reabrir" % etapa_c["id"])
+        checar(reabrir.status_code == 200 and reabrir.get_json()["fechada"] is False,
+               "COORDENACAO reabre a etapa")
+        checar(coord_a.post(
+            "/api/config/etapas/%d/reabrir" % etapa_c["id"]
+        ).status_code == 400, "reabrir etapa ja aberta responde 400")
+
+        relancar = professor_a.post("/api/atividades/%d/notas" % prova1["id"], {
+            "notas": [{"aluno_id": aluno_joao["id"], "valor": 20}]
+        })
+        checar(relancar.status_code == 201,
+               "apos reabrir, professor altera nota normalmente")
+
+        est_joao_reaberta = estatisticas_de(professor_a, aluno_joao["id"])
+        etapa_c_reaberta = etapa_por_id(est_joao_reaberta, etapa_c["id"])
+        checar(etapa_c_reaberta["nota_calculada"] != 21.5,
+               "nota da etapa reflete a nota alterada apos a reabertura")
+
+        checar(coord_a.post(
+            "/api/config/etapas/%d/fechar" % etapa_b_risco["id"]
+        ).status_code == 404, "fechar etapa de outra escola responde 404")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

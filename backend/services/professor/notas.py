@@ -1,5 +1,6 @@
 from models.aluno_model import Aluno
 from models.atividade_model import Atividade
+from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 
@@ -41,6 +42,13 @@ class LancarNotasService:
 
     def execute(self, atividade_id, professor_id, payload):
         atividade = _atividade_do_professor(atividade_id, professor_id)
+
+        if atividade.get("etapa_id") and Etapa.esta_fechada(
+            atividade["etapa_id"], atividade["coordenacao_id"]
+        ):
+            raise ValueError(
+                "Nao e possivel lancar nota: a etapa ja esta fechada."
+            )
 
         brutas = payload.get("notas")
         if brutas is None:

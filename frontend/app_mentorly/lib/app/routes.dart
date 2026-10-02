@@ -19,12 +19,16 @@ import '../features/coordenacao/screens/turmas/gerenciarTurmasScreen.dart';
 import '../features/coordenacao/screens/turmas/listaTurmasProfessorScreen.dart';
 import '../features/coordenacao/screens/alunos/listaAlunosTurmaScreen.dart';
 import '../features/coordenacao/screens/relatorios/relatorioTurmasScreen.dart';
+import '../features/coordenacao/screens/academico/boletimTurmasScreen.dart';
+import '../features/coordenacao/screens/academico/boletimTurmaScreen.dart'
+    as coordenacao_boletim;
 
 // telas professor
 import '../features/professor/screens/dashboardScreen.dart';
 import '../features/professor/screens/turmas/listaTurmasScreen.dart';
 import '../features/professor/screens/turmas/turmaAlunosScreen.dart';
 import '../features/professor/screens/turmas/alunoDetailScreen.dart';
+import '../features/professor/screens/turmas/boletimTurmaScreen.dart';
 import '../features/professor/screens/atividades/listaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/turmaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/atividadeNotasScreen.dart';
@@ -53,12 +57,15 @@ class AppRoutes {
   static const String listaTurmasProfessor = '/coordenacao/turmas';
   static const String listaAlunosTurma = '/coordenacao/alunos';
   static const String relatorioTurmas = '/coordenacao/relatorio-turmas';
+  static const String boletimTurmas = '/coordenacao/boletim-turmas';
+  static const String boletimTurmaCoordenacao = '/coordenacao/boletim-turma';
 
   // professor
   static const String dashboard = '/professor/dashboard';
   static const String listaTurmas = '/professor/turmas';
   static const String turmaAlunos = '/professor/turma-alunos';
   static const String alunoDetail = '/professor/aluno-detail';
+  static const String boletimTurma = '/professor/boletim-turma';
   static const String listaAtividades = '/professor/atividades';
   static const String turmaAtividades = '/professor/turma-atividades';
   static const String atividadeNotas = '/professor/atividade-notas';
@@ -82,12 +89,16 @@ class AppRoutes {
     listaTurmasProfessor: (context) => ListaTurmasProfessorScreen(),
     listaAlunosTurma: (context) => ListaAlunosTurmaScreen(),
     relatorioTurmas: (context) => RelatorioTurmasScreen(),
+    boletimTurmas: (context) => BoletimTurmasScreen(),
+    boletimTurmaCoordenacao: (context) =>
+        coordenacao_boletim.BoletimTurmaScreen(),
 
     // professor
     dashboard: (context) => DashboardScreen(),
     listaTurmas: (context) => ListaTurmasScreen(),
     turmaAlunos: (context) => TurmaAlunosScreen(),
     alunoDetail: (context) => AlunoDetailScreen(),
+    boletimTurma: (context) => BoletimTurmaScreen(),
     listaAtividades: (context) => ListaAtividadesScreen(),
     turmaAtividades: (context) => TurmaAtividadesScreen(),
     atividadeNotas: (context) => AtividadeNotasScreen(),

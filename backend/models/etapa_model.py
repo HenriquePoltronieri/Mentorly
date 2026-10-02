@@ -11,7 +11,7 @@ from models.utils import booleano, iso, numero
 
 _COLUNAS = (
     "id, coordenacao_id, nome, ordem, ano_letivo, data_inicio, data_fim, "
-    "nota_minima, nota_maxima, ativa, created_at, updated_at"
+    "nota_minima, nota_maxima, ativa, fechada, created_at, updated_at"
 )
 
 
@@ -118,6 +118,29 @@ class Etapa:
             (etapa_id, coordenacao_id),
         )
 
+    @staticmethod
+    def fechar(etapa_id, coordenacao_id):
+        """Congela a etapa: novas notas/atividades passam a ser recusadas
+        (ver services/activity/validacao.py e services/professor/notas.py)
+        ate a Coordenacao reabrir."""
+        return execute(
+            "UPDATE etapa SET fechada = 1 WHERE id = %s AND coordenacao_id = %s",
+            (etapa_id, coordenacao_id),
+        )
+
+    @staticmethod
+    def reabrir(etapa_id, coordenacao_id):
+        return execute(
+            "UPDATE etapa SET fechada = 0 WHERE id = %s AND coordenacao_id = %s",
+            (etapa_id, coordenacao_id),
+        )
+
+    @staticmethod
+    def esta_fechada(etapa_id, coordenacao_id):
+        """Guarda usada por atividade/nota antes de aceitar uma escrita."""
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        return bool(etapa and etapa.get("fechada"))
+
     # -----------------------------------------------------------------
     # Serializacao
     # -----------------------------------------------------------------
@@ -139,6 +162,7 @@ class Etapa:
             "nota_maxima": numero(linha.get("nota_maxima")),
             "notaMaxima": numero(linha.get("nota_maxima")),
             "ativa": booleano(linha.get("ativa")),
+            "fechada": booleano(linha.get("fechada")),
             "created_at": iso(linha.get("created_at")),
             "updated_at": iso(linha.get("updated_at")),
         }

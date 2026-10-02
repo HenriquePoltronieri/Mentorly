@@ -116,3 +116,36 @@ class ExcluirEtapaService:
         if not Etapa.find_by_id(etapa_id, coordenacao_id):
             raise LookupError("Etapa nao encontrada")
         Etapa.delete(etapa_id, coordenacao_id)
+
+
+class FecharEtapaService:
+    """Fecha a etapa: o resultado calculado fica congelado ate a reabertura.
+
+    So a Coordenacao chama isto (rota com @coordenacao_required). Depois do
+    fechamento, criar/editar atividade e lancar/importar nota nesta etapa
+    passam a ser recusados - ver services/activity/validacao.py e
+    services/professor/notas.py.
+    """
+
+    def execute(self, etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
+            raise LookupError("Etapa nao encontrada")
+        if etapa.get("fechada"):
+            raise ValueError("Etapa ja esta fechada")
+
+        Etapa.fechar(etapa_id, coordenacao_id)
+        return Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
+
+
+class ReabrirEtapaService:
+    """Reabre uma etapa fechada, para a Coordenacao corrigir alguma nota."""
+
+    def execute(self, etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
+            raise LookupError("Etapa nao encontrada")
+        if not etapa.get("fechada"):
+            raise ValueError("Etapa ja esta aberta")
+        Etapa.reabrir(etapa_id, coordenacao_id)
+        return Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))

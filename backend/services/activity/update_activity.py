@@ -1,4 +1,5 @@
 from models.atividade_model import Atividade
+from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 from services.activity.create_activity import parse_data
@@ -29,6 +30,19 @@ class UpdateActivityService:
             professor_id, atual["turma_id"]
         ):
             raise LookupError("Atividade nao encontrada")
+
+        # Atividade de etapa ja fechada fica congelada por inteiro (mesmo
+        # so trocando o titulo): senao o resultado que a Coordenacao ja deu
+        # como definitivo mudaria sozinho. validar_etapa_e_criterio cobre o
+        # caso de mover a atividade PARA uma etapa fechada; isto aqui cobre
+        # o caso de ela ja estar em uma.
+        if atual.get("etapa_id") and Etapa.esta_fechada(
+            atual["etapa_id"], coordenacao_id
+        ):
+            raise ValueError(
+                "Esta atividade pertence a uma etapa fechada. Peca a "
+                "coordenacao para reabri-la antes de editar."
+            )
 
         if titulo is not None:
             titulo = titulo.strip()

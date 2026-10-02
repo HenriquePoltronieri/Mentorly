@@ -7,6 +7,7 @@ class EtapaModel {
   final String? dataInicio;
   final String? dataFim;
   final bool ativa;
+  final bool fechada;
   double? notaMinima;
   double? notaMaxima;
 
@@ -18,6 +19,7 @@ class EtapaModel {
     this.dataInicio,
     this.dataFim,
     this.ativa = true,
+    this.fechada = false,
     this.notaMinima,
     this.notaMaxima,
   });
@@ -31,6 +33,7 @@ class EtapaModel {
       dataInicio: json['data_inicio'],
       dataFim: json['data_fim'],
       ativa: json['ativa'] ?? true,
+      fechada: json['fechada'] ?? false,
       notaMinima: (json['nota_minima'] as num?)?.toDouble(),
       notaMaxima: (json['nota_maxima'] as num?)?.toDouble(),
     );

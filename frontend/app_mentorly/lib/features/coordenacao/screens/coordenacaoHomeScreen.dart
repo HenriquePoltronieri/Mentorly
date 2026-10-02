@@ -103,6 +103,14 @@ class CoordenacaoHomeScreen extends StatelessWidget {
               Navigator.pushNamed(context, AppRoutes.relatorioTurmas);
             },
           ),
+          _ItemMenu(
+            titulo: 'Desempenho Acadêmico',
+            subtitulo: 'Boletim por turma e fechamento de etapa',
+            icone: Icons.grading_outlined,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.boletimTurmas);
+            },
+          ),
         ],
       ),
     );

@@ -114,4 +114,6 @@ class ActivityController:
             DeleteActivityService().execute(activity_id, usuario_atual_id())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
         return "", 204

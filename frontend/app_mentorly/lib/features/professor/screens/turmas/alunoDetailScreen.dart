@@ -144,6 +144,8 @@ class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
           ),
         ],
         const SizedBox(height: 20),
+        _CardConsolidado(consolidado: estatistica.consolidado),
+        const SizedBox(height: 20),
         const Text(
           'Desempenho por etapa',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -211,8 +213,26 @@ class _CardEtapa extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
+              if (etapa.fechada)
+                Container(
+                  margin: const EdgeInsets.only(left: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_outline, size: 12),
+                      SizedBox(width: 4),
+                      Text('fechada', style: TextStyle(fontSize: 11)),
+                    ],
+                  ),
+                ),
               if (ehAtual)
                 Container(
+                  margin: const EdgeInsets.only(left: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.blue[100],
@@ -227,6 +247,14 @@ class _CardEtapa extends StatelessWidget {
             _descricaoSituacao(),
             style: TextStyle(color: cor, fontWeight: FontWeight.w600),
           ),
+          if (etapa.totalAtividades > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${etapa.atividadesAvaliadas} avaliada(s) · '
+              '${etapa.atividadesSemNota} sem nota',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
           if (etapa.criterios.isNotEmpty) ...[
             const SizedBox(height: 10),
             ...etapa.criterios.map((c) => Padding(
@@ -265,5 +293,59 @@ class _CardEtapa extends StatelessWidget {
       default:
         return 'Em andamento — ainda faltam notas para calcular';
     }
+  }
+}
+
+// Consolidado geral: media das etapas ja FECHADAS (ver ConsolidadoModel).
+// Sem etapa fechada ainda, mostra "em andamento" em vez de inventar nota.
+class _CardConsolidado extends StatelessWidget {
+  final ConsolidadoModel consolidado;
+
+  const _CardConsolidado({required this.consolidado});
+
+  @override
+  Widget build(BuildContext context) {
+    final emAndamento = consolidado.situacao == 'em_andamento';
+    final cor = emAndamento
+        ? Colors.grey
+        : consolidado.situacao == 'adequado'
+            ? Colors.green
+            : Colors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.summarize_outlined, color: cor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Consolidado geral',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  emAndamento
+                      ? (consolidado.mensagem ??
+                          'Em andamento — nenhuma etapa fechada ainda')
+                      : '${consolidado.percentual!.toStringAsFixed(0)}% — '
+                          '${consolidado.situacao == 'adequado' ? 'adequado' : 'abaixo do mínimo'} '
+                          '(${consolidado.etapasConsideradas} etapa(s) fechada(s))',
+                  style: TextStyle(color: cor, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

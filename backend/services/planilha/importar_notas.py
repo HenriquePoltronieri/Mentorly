@@ -6,6 +6,7 @@ A planilha identifica o aluno por matricula ou, na falta dela, pelo nome.
 
 from models.aluno_model import Aluno
 from models.atividade_model import Atividade
+from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 from services.planilha.leitor import PlanilhaInvalida, ler_planilha
@@ -22,6 +23,13 @@ class ImportarNotasService:
             professor_id, atividade["turma_id"]
         ):
             raise LookupError("Atividade nao encontrada")
+
+        if atividade.get("etapa_id") and Etapa.esta_fechada(
+            atividade["etapa_id"], atividade["coordenacao_id"]
+        ):
+            raise PlanilhaInvalida(
+                "Nao e possivel importar notas: a etapa ja esta fechada."
+            )
 
         if not conteudo:
             raise PlanilhaInvalida("Nenhum arquivo foi enviado")

@@ -21,7 +21,9 @@ from services.config.etapas import (
     BuscarEtapaService,
     DefinirNotasEtapaService,
     ExcluirEtapaService,
+    FecharEtapaService,
     ListarEtapasService,
+    ReabrirEtapaService,
     SalvarEtapaService,
 )
 
@@ -99,6 +101,24 @@ class ConfigController:
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
         return "", 204
+
+    def fechar_etapa(self, etapa_id):
+        try:
+            etapa = FecharEtapaService().execute(etapa_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(etapa)
+
+    def reabrir_etapa(self, etapa_id):
+        try:
+            etapa = ReabrirEtapaService().execute(etapa_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(etapa)
 
     # -----------------------------------------------------------------
     # Criterios

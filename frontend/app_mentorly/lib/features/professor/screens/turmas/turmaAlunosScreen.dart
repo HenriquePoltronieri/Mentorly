@@ -114,9 +114,20 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.arrow_back),
                   ),
-                  Text(
-                    _turma!['nome'] ?? '',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  Expanded(
+                    child: Text(
+                      _turma!['nome'] ?? '',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.boletimTurma,
+                      arguments: _turma,
+                    ),
+                    icon: const Icon(Icons.grading_outlined, size: 18),
+                    label: const Text('Boletim'),
                   ),
                 ],
               ),

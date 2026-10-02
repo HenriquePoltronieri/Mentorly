@@ -38,6 +38,8 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
         "criterio": criterio["nome"],
         "peso": numero(criterio.get("peso")),
         "tem_atividade": bool(atividades),
+        "total_atividades": len(atividades),
+        "atividades_avaliadas": 0,
         "pontos_obtidos": None,
         "pontos_possiveis": None,
         "desempenho_percentual": None,
@@ -52,6 +54,7 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
     valores = Nota.valores_por_atividade(aluno_id, ids)
 
     avaliadas = [a for a in atividades if a["id"] in valores]
+    resultado["atividades_avaliadas"] = len(avaliadas)
     resultado["completo"] = len(avaliadas) == len(atividades)
 
     if not avaliadas:
@@ -93,6 +96,9 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
         for c in criterios
     ]
 
+    total_atividades = sum(c["total_atividades"] for c in criterios_calc)
+    atividades_avaliadas = sum(c["atividades_avaliadas"] for c in criterios_calc)
+
     base = {
         "etapa_id": etapa["id"],
         "etapa": etapa.get("nome"),
@@ -100,7 +106,14 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
         "nota_minima": etapa.get("nota_minima"),
         "nota_maxima": etapa.get("nota_maxima"),
         "peso_total": soma_pesos,
+        "fechada": bool(etapa.get("fechada")),
         "criterios": criterios_calc,
+        # Contagem agregada dos criterios - para o boletim mostrar quantas
+        # atividades ja foram avaliadas e quantas ainda faltam, sem o
+        # frontend precisar somar os criterios na mao.
+        "total_atividades": total_atividades,
+        "atividades_avaliadas": atividades_avaliadas,
+        "atividades_sem_nota": total_atividades - atividades_avaliadas,
         "completo": False,
         "mensagem": None,
         "nota_calculada": None,
@@ -187,3 +200,43 @@ def etapa_atual(coordenacao_id, ano_letivo):
     etapa = Etapa.to_dict(maior_ordem)
     etapa["coordenacao_id"] = coordenacao_id
     return etapa, "maior_ordem_configurada"
+
+
+def calcular_consolidado_geral(etapas_calculadas):
+    """Consolidado do aluno usando so etapas FECHADAS com resultado pronto.
+
+    Etapa aberta, em_andamento ou com configuracao_invalida nunca entra -
+    contar uma etapa ainda em curso equivaleria a trata-la como zero, o que
+    o Marco 2 ja proibe para nota ausente. Sem nenhuma etapa fechada e
+    completa, o consolidado fica "em_andamento": a funcao nunca inventa uma
+    media. A situacao geral e simples de proposito (Marco 3 pede uma regra
+    simples, nao um sistema de auditoria): abaixo do minimo se QUALQUER
+    etapa fechada considerada estiver abaixo do minimo dela.
+    """
+    consideradas = [
+        etapa for etapa in etapas_calculadas
+        if etapa.get("fechada") and etapa.get("completo")
+        and etapa.get("percentual") is not None
+    ]
+
+    if not consideradas:
+        return {
+            "situacao": "em_andamento",
+            "percentual": None,
+            "etapas_consideradas": 0,
+            "mensagem": "Nenhuma etapa fechada ainda para consolidar.",
+        }
+
+    percentual_medio = round(
+        sum(etapa["percentual"] for etapa in consideradas) / len(consideradas), 2
+    )
+    abaixo_do_minimo = any(
+        etapa["situacao"] == "abaixo_do_minimo" for etapa in consideradas
+    )
+
+    return {
+        "situacao": "abaixo_do_minimo" if abaixo_do_minimo else "adequado",
+        "percentual": percentual_medio,
+        "etapas_consideradas": len(consideradas),
+        "mensagem": None,
+    }

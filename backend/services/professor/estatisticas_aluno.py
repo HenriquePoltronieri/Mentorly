@@ -1,7 +1,11 @@
 from datetime import date
 
 from models.nota_model import Nota
-from services.academico.calculo import calcular_todas_etapas, etapa_atual
+from services.academico.calculo import (
+    calcular_consolidado_geral,
+    calcular_todas_etapas,
+    etapa_atual,
+)
 from services.aluno.acesso_turma import aluno_acessivel
 
 
@@ -20,6 +24,7 @@ class EstatisticasAlunoService:
         etapas = calcular_todas_etapas(
             aluno_id, aluno["turma_id"], coordenacao_id, ano_letivo
         )
+        consolidado = calcular_consolidado_geral(etapas)
         atual, regra_etapa_atual = etapa_atual(coordenacao_id, ano_letivo)
 
         # Media bruta (nao pondera por criterio, nao converte de escala):
@@ -39,6 +44,7 @@ class EstatisticasAlunoService:
             "media": resumo["media"],
             "totalNotas": resumo["total"],
             "etapas": etapas,
+            "consolidado": consolidado,
             "etapaAtualId": atual["id"] if atual else None,
             "regraEtapaAtual": regra_etapa_atual,
             # Lista plana, para o grafico que ja existe no app.

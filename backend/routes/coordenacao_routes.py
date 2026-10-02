@@ -57,3 +57,9 @@ def modelo_planilha_alunos(turma_id):
 @coordenacao_required
 def importar_alunos(turma_id):
     return coordenacao_controller.importar_alunos(turma_id)
+
+
+@coordenacao_blueprint.get("/turmas/<int:turma_id>/boletim")
+@coordenacao_required
+def boletim_turma(turma_id):
+    return coordenacao_controller.boletim_turma(turma_id)

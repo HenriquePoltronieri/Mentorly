@@ -50,6 +50,19 @@ def excluir_etapa(etapa_id):
     return config_controller.excluir_etapa(etapa_id)
 
 
+# Fechamento: so a Coordenacao fecha/reabre a etapa da propria escola.
+@config_blueprint.post("/etapas/<int:etapa_id>/fechar")
+@coordenacao_required
+def fechar_etapa(etapa_id):
+    return config_controller.fechar_etapa(etapa_id)
+
+
+@config_blueprint.post("/etapas/<int:etapa_id>/reabrir")
+@coordenacao_required
+def reabrir_etapa(etapa_id):
+    return config_controller.reabrir_etapa(etapa_id)
+
+
 # ---------------------------------------------------------------------
 # Criterios
 # ---------------------------------------------------------------------

@@ -143,8 +143,25 @@ def _atividade_ganha_coordenacao_id():
     return True
 
 
+# ---------------------------------------------------------------------
+# Marco 3: fechamento de etapa
+# ---------------------------------------------------------------------
+
+def _etapa_ganha_fechada():
+    """Adiciona etapa.fechada, para o schema.sql nao alcancar em banco antigo."""
+    if _coluna_existe("etapa", "fechada"):
+        return False
+    print("  [migracao] etapa.fechada")
+    execute(
+        "ALTER TABLE etapa ADD COLUMN fechada TINYINT(1) NOT NULL DEFAULT 0 "
+        "AFTER ativa"
+    )
+    return True
+
+
 _MIGRACOES = (
     _atividade_ganha_coordenacao_id,
+    _etapa_ganha_fechada,
 )
 
 

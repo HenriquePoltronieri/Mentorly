@@ -73,6 +73,11 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
     etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
     if not etapa:
         raise LookupError("Etapa nao encontrada")
+    if etapa.get("fechada"):
+        raise ValueError(
+            "Esta etapa ja esta fechada. Peca a coordenacao para reabri-la "
+            "antes de criar ou editar atividades nela."
+        )
 
     criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
     if not criterio:

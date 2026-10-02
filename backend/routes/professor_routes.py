@@ -61,6 +61,12 @@ def estatisticas_aluno(aluno_id):
     return professor_controller.estatisticas_aluno(aluno_id)
 
 
+@professor_blueprint.get("/turmas/<int:turma_id>/boletim")
+@professor_required
+def boletim_turma(turma_id):
+    return professor_controller.boletim_turma(turma_id)
+
+
 # ---------------------------------------------------------------------
 # /api/atividades/<id>/notas - lancamento de notas
 # Conteudo pedagogico: a Coordenacao recebe 403 aqui.
