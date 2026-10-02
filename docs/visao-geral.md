@@ -2,57 +2,69 @@
 
 ## O que é o Mentorly
 
-O Mentorly é um sistema para ajudar a coordenação e os professores a organizar turmas e
-atividades escolares.
+O Mentorly é um sistema de acompanhamento acadêmico para escolas. Ele ajuda a coordenação e os
+professores a organizar turmas, atividades e notas, e mostra, com base nas regras da própria
+escola, como cada aluno está indo.
 
-A ideia surgiu porque, na escola, o controle de turmas e das atividades passadas para
-cada uma costuma ficar espalhado em cadernos, planilhas e mensagens. A gente quis fazer
-um lugar só onde a coordenação consegue cadastrar as turmas e acompanhar quantas
-atividades cada uma tem.
+A ideia surgiu porque, na escola, o controle de turmas, atividades e notas costuma ficar
+espalhado em cadernos, planilhas e mensagens, e a média de cada aluno depende de contas feitas à
+mão. O Mentorly reúne tudo em um só lugar e faz o cálculo de forma única e explícita.
 
-O público que pensamos foi coordenadores pedagógicos e professores do Ensino Fundamental
-e Médio.
+O público são coordenadores pedagógicos e professores do Ensino Fundamental e Médio.
 
-## Ideia inicial
+## Como funciona
 
-Quando o grupo começou, o plano era bem maior. As telas do aplicativo foram desenhadas
-pensando em:
+Dois papéis usam o sistema:
 
-- coordenação e professores;
-- alunos;
-- lançamento de notas;
-- etapas do ano letivo;
-- critérios de avaliação;
-- importação de alunos e notas por planilha;
-- login com verificação em duas etapas;
-- alguns recursos de IA para sugerir onde a turma estava com dificuldade.
+- **Coordenação.** Cria a conta da escola e configura o ano letivo: etapas (por exemplo, quatro
+  bimestres), nota mínima e máxima de cada etapa e os critérios de avaliação com seus pesos
+  (por exemplo, Provas 70% e Trabalhos 30%). Cadastra turmas, alunos (à mão ou por planilha) e
+  professores, e vincula cada professor às turmas que ele leciona. Acompanha o boletim das turmas
+  e fecha cada etapa quando o resultado está definido.
+- **Professor.** Recebe um convite, define a senha e passa a ver **somente as turmas vinculadas a
+  ele**. Cria atividades escolhendo a etapa, o critério e o valor máximo, lança notas (na tela ou
+  por planilha), corrige ou exclui uma nota e acompanha o desempenho dos alunos.
 
-Boa parte dessas telas chegou a ser feita no Flutter antes de existir um backend para
-elas. Elas continuam no projeto, mas não conversam com a API, porque os endpoints delas
-nunca foram desenvolvidos.
+O Mentorly calcula a média de cada etapa, indica os alunos abaixo da nota mínima, gera o boletim
+da turma e um consolidado do aluno. Uma etapa fechada fica protegida contra alterações até que a
+Coordenação a reabra.
 
-## Produto atual
+Cada cadastro de Coordenação é uma **escola independente**: uma escola nunca vê os dados de outra.
 
-Conforme o projeto avançou, ficou claro que dava para fazer muita coisa pela metade ou
-poucas coisas inteiras. O grupo preferiu a segunda opção e concentrou esta entrega em:
+## Ciclo acadêmico atual
 
-- gestão de turmas (cadastrar, listar, editar e excluir);
-- gestão de atividades de cada turma (cadastrar, listar, editar e excluir);
-- busca de atividades por termo, com ordenação;
-- relatório de turmas com a contagem de atividades.
+```
+Coordenação configura        Professor avalia            Mentorly mostra o resultado
+─────────────────────        ────────────────            ───────────────────────────
+Etapas e critérios     →     Cria atividade        →     Média por etapa
+Turmas e alunos              (etapa + critério +         Alunos em risco
+Professores e vínculos        valor máximo)              Boletim da turma
+                             Lança / importa notas       Consolidado do aluno
+                                                          Fechamento da etapa
+```
 
-São 10 funcionalidades, e todas funcionam do começo ao fim: a pessoa usa a tela no
-Flutter, a informação vai para a API em Flask e é gravada no banco MySQL.
+As regras do cálculo estão em [banco-e-procedures.md](banco-e-procedures.md) e a tabela das 20
+funcionalidades demonstráveis, em [funcionalidades.md](funcionalidades.md).
 
-A escolha por turmas e atividades foi porque essas duas entidades já tinham Model,
-Controller e Service prontos no backend, então dava para fechar a integração completa
-sem precisar criar entidades novas.
+## Como o projeto evoluiu
 
-## O que não está pronto
+O projeto começou pelo frontend: as telas de um sistema escolar completo foram desenhadas antes
+de existir um backend. Depois vieram uma primeira entrega, focada em turmas e atividades, e a
+construção do backend de verdade: login com JWT, isolamento entre escolas, professores, alunos,
+etapas, critérios, notas e planilhas. Os Marcos 1 a 5 (avaliação, desempenho, ciclo escolar,
+gerenciamento de alunos e exclusão de nota) estão concluídos. A história completa está em
+[historico-do-projeto.md](historico-do-projeto.md).
 
-Tudo que foi listado na ideia inicial e não aparece no produto atual continua sem
-backend: professores, alunos, notas, etapas, critérios, planilhas, login e IA. As telas
-existem, mas não funcionam. Não estamos apresentando isso como entregue.
+## O que ainda falta
 
-Como o login não tem backend, colocamos na tela inicial um atalho chamado
-"Entrar no painel da coordenação" só para conseguir chegar nas telas que funcionam.
+Planejado em [roadmap.md](roadmap.md) para antes da apresentação:
+
+- **Ano letivo completo**, como entidade própria, para não misturar dados de anos diferentes;
+- **Transferência de aluno com histórico**;
+- **Gestão completa de professores** (editar, reenviar convite, desativar);
+- **IA**, com insights acadêmicos explicáveis para o Professor. A IA vai trabalhar sobre os dados
+  que o motor de cálculo já produz; ela não calcula nem altera notas.
+
+Decisões ainda em aberto: verificação em duas etapas (obrigatória, opcional ou só para a
+Coordenação) e se professores da mesma turma podem alterar atividades e notas criadas por outro
+professor.

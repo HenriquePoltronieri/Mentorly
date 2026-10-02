@@ -3,83 +3,185 @@
 A disciplina pediu que o projeto seguisse esta sequência de camadas:
 
 ```
-Tela Flutter
-  → Service Dart
+FLUTTER
+Tela
+  → Controller / Service (Dart)
   → ApiService
-  → API Flask
+
+FLASK
+  → Route
   → Controller
   → Service
   → Model ou Repository
-  → Banco de Dados
+  → Banco de Dados (MySQL)
 ```
 
-A regra principal é que cada camada faz uma coisa só e conversa apenas com a camada
-seguinte.
+A regra principal é que cada camada faz uma coisa só e conversa com a camada seguinte. O projeto
+segue esse fluxo **na maior parte do código**, mas não de forma absolutamente rígida: a seção
+[Exceções conhecidas](#exceções-conhecidas) lista, com nome de arquivo, os poucos pontos em que
+uma camada é pulada.
+
+## Visão geral do sistema
+
+- **Dois papéis.** A **Coordenação** configura a escola (ano letivo, turmas, alunos, professores).
+  O **Professor** cria atividades, lança notas e acompanha o desempenho. Os papéis são
+  verificados no backend, não só escondidos na interface.
+- **Multi-escola.** Cada cadastro de Coordenação é uma escola. Todo dado pedagógico pendura em
+  uma `coordenacao_id`, e o isolamento é reforçado no banco por chaves estrangeiras compostas
+  (ver [banco-e-procedures.md](banco-e-procedures.md)).
+- **Autenticação por JWT.** O login devolve um token HS256 com `{sub, tipo, coordenacao_id, exp}`.
+  Os decorators de `backend/auth/decorators.py` (`@auth_required`, `@coordenacao_required`,
+  `@professor_required`) validam o token e o papel. A escola e o professor da requisição vêm
+  **sempre do token**, nunca do corpo ou da URL.
+- **Motor acadêmico único.** Nenhuma tela e nenhum outro service calcula nota. Dashboard,
+  desempenho do aluno, boletim e fechamento de etapa passam por
+  `backend/services/academico/calculo.py`.
 
 ## No Flutter
 
-- **Tela** — é o que o usuário vê e usa. Ela cuida dos botões, campos e listas, mas não
-  sabe qual é o endereço da API nem como montar uma requisição.
-- **Service Dart** — é quem chama a API. No projeto temos dois: `TurmasService` e
-  `AtividadesService`. Eles recebem os dados da tela e devolvem o resultado já pronto.
-- **ApiService** — fica em `lib/core/services/apiService.dart` e concentra as requisições
-  (`get`, `post`, `put`, `delete`) e o endereço da API. Assim, se o endereço mudar,
-  a gente altera em um lugar só.
+- **Tela** — o que o usuário vê e usa. Cuida de botões, campos e listas e exibe o que o backend
+  devolve. Não calcula média nem aplica regra acadêmica.
+- **Service Dart / Controller Dart** — quem chama a API. Existe um por área, por exemplo
+  `TurmasService`, `AtividadesService`, `EtapasService`, `BoletimService` (Coordenação),
+  `BoletimTurmaService` (Professor), `AlunosService` e `AtividadesController` (notas). Recebem os
+  dados da tela e devolvem o resultado pronto.
+- **ApiService** — `lib/core/services/apiService.dart`. Concentra as requisições (`get`, `post`,
+  `put`, `delete`, envio de arquivo), o endereço da API e o token de sessão. Se o endereço mudar,
+  altera-se em um lugar só. Nenhum arquivo fora de `core/services/` importa `package:http`.
+- **AuthService** — `lib/core/services/authService.dart`. Login, cadastro, primeiro acesso do
+  professor e sessão persistida. As telas de login chamam o `AuthService` diretamente.
 
 ## No Flask
 
-- **Route** — define o endereço do endpoint. Ficam em `backend/routes/`, usando Blueprint.
-- **Controller** — é uma classe. Ele lê os dados que vieram na requisição, chama o Service
-  e devolve a resposta com o código HTTP certo. Não acessa banco e não tem regra de negócio.
-- **Service** — cada caso de uso tem a sua classe, com um método `execute()`. É onde ficam
-  as validações e as regras.
-- **Model** — representa a entidade e faz o CRUD simples: criar, listar, buscar por ID,
-  atualizar e excluir. As Models herdam de `db.Model`.
-- **Repository** — usamos só para as consultas que não são CRUD, como o relatório e a
-  busca, que chamam Stored Procedures.
-- **Banco** — MySQL, onde os dados ficam guardados.
+- **Route** — `backend/routes/`. Declara o endereço (Blueprint) e o decorator de papel. Não
+  importa Models nem Services.
+- **Controller** — `backend/controllers/`. É uma classe por área. Lê a requisição, chama o Service
+  e devolve o código HTTP certo. Traduz exceções do Service em status (`LookupError` → 404,
+  `ValueError` → 400/409). Não escreve SQL e não tem regra acadêmica.
+- **Service** — `backend/services/`. Concentra as validações e as regras de negócio, inclusive a
+  autorização por escola e por turma (por exemplo `aluno_acessivel` em
+  `services/aluno/acesso_turma.py`). Na maior parte do código, cada caso de uso tem a sua classe
+  com um método `execute()`. Services não importam Flask e não acessam o banco diretamente.
+- **Model** — `backend/models/`. Uma classe por entidade, com métodos estáticos e SQL escrito à
+  mão (PyMySQL). **Não há ORM.** Os Models também serializam a linha para o JSON da API.
+- **Repository** — `backend/repositories/consultas.py`. Usado só para as consultas que não são
+  CRUD e chamam Stored Procedures (busca de atividades, relatório de turmas, resumo da escola,
+  professores por escola e turmas do professor). O `CALL` fica em um único arquivo,
+  `backend/database/procedure.py`, que valida o nome contra uma lista de procedures permitidas.
+- **Banco** — MySQL 8. O schema fica em `backend/database/schema.sql`, as migrações para bancos
+  já criados em `backend/database/migrations.py` e as procedures em `procedures.sql`.
+
+### O motor acadêmico e o boletim
+
+```
+backend/services/academico/
+├── calculo.py   # desempenho por criterio e por etapa, consolidado, etapa atual
+└── boletim.py   # monta o boletim de uma turma chamando o motor uma vez por aluno
+```
+
+`calculo.py` implementa a regra: desempenho do critério = pontos obtidos ÷ pontos possíveis, com o
+peso de cada critério, sem arredondamento intermediário. Nota ausente não é zero. O consolidado
+considera apenas etapas **fechadas** e completas. O boletim apenas agrega o resultado do motor.
 
 ---
 
-## Exemplo 1 — Cadastrar Turma
-
-Este é o caminho completo quando alguém cadastra uma turma pelo aplicativo:
+## Exemplo 1 — Lançar notas (Professor)
 
 ```
-adicionarTurmaModal.dart          (tela: formulário com nome e descrição)
-  → TurmasService.cadastrarTurma  (lib/features/coordenacao/services/turmasService.dart)
-  → ApiService.post('/classes')   (lib/core/services/apiService.dart)
-  → POST /api/classes             (backend/routes/class_routes.py)
-  → ClassController.create_class  (backend/controllers/class_controller.py)
-  → CreateClassService.execute    (backend/services/class_/create_class.py)
-  → Class.create                  (backend/models/class_model.py)
-  → tabela classes no MySQL
+atividadeNotasScreen.dart                  (tela: tabela de alunos e notas)
+  → AtividadesController.salvarNotas       (features/professor/controllers/atividadesController.dart)
+  → ApiService.post('/atividades/<id>/notas')
+  → POST /api/atividades/<id>/notas        (backend/routes/professor_routes.py, @professor_required)
+  → ProfessorController.lancar_notas       (backend/controllers/professor_controller.py)
+  → LancarNotasService.execute             (backend/services/professor/notas.py)
+  → Nota.lancar_em_lote                    (backend/models/nota_model.py)
+  → tabela nota no MySQL
 ```
 
-Repare na divisão:
+- o Controller só lê o corpo da requisição, passa o `id` do professor (vindo do token) e traduz o
+  resultado em HTTP;
+- o `LancarNotasService` é quem valida: o professor leciona na turma da atividade, o aluno é da
+  turma, o valor está entre 0 e a nota máxima da atividade e **a etapa não está fechada**;
+- quem grava é o Model, em uma transação só (todas as notas ou nenhuma).
 
-- o `ClassController` só pega `name` e `description` do corpo da requisição e repassa;
-- o `CreateClassService` é quem valida: confere se o nome não está vazio e usa o
-  `TurmaRepository.find_by_name` para ver se já não existe outra turma com aquele nome;
-- quem realmente salva é a Model, no método `Class.create`.
-
-## Exemplo 2 — Buscar Atividades
-
-A busca não é um CRUD, então ela passa pelo Repository e usa uma Stored Procedure:
+## Exemplo 2 — Fechar etapa (Coordenação)
 
 ```
-buscarAtividadesScreen.dart               (tela: campo de busca e ordenação)
-  → AtividadesService.buscarAtividades    (lib/features/professor/services/atividadesService.dart)
-  → ApiService.get('/activities/buscar')  (lib/core/services/apiService.dart)
-  → GET /api/activities/buscar            (backend/routes/activity_routes.py)
-  → ActivityController.buscar_atividades  (backend/controllers/activity_controller.py)
-  → SearchActivitiesService.execute       (backend/services/activity/search_activities.py)
-  → ActivityRepository.buscar_atividades  (backend/repositories/activity_repository.py)
-  → call_procedure("sp_buscar_atividades")
+boletimTurmaScreen.dart                    (features/coordenacao/screens/academico/)
+  → EtapasService.fecharEtapa              (features/coordenacao/services/etapasService.dart)
+  → ApiService.post('/config/etapas/<id>/fechar')
+  → POST /api/config/etapas/<id>/fechar    (backend/routes/config_routes.py, @coordenacao_required)
+  → ConfigController.fechar_etapa          (backend/controllers/config_controller.py)
+  → FecharEtapaService.execute             (backend/services/config/etapas.py)
+  → Etapa.fechar                           (backend/models/etapa_model.py)
+  → coluna etapa.fechada no MySQL
+```
+
+Antes de fechar, o service usa o motor (`calcular_desempenho_etapa`) para contar quantos alunos
+ainda têm atividade sem nota e devolve esse número como aviso. O fechamento não é bloqueado por
+isso. Depois de fechada, criar/editar/excluir atividade, lançar, importar e excluir nota na etapa
+passam a ser recusados pelos Services de atividade e de nota, até a Coordenação reabrir.
+
+## Exemplo 3 — Buscar atividades (consulta com procedure)
+
+A busca não é CRUD, então passa pelo Repository:
+
+```
+buscarAtividadesScreen.dart
+  → AtividadesService.buscarAtividades     (features/professor/services/atividadesService.dart)
+  → ApiService.get('/activities/buscar')
+  → GET /api/activities/buscar             (backend/routes/activity_routes.py, @auth_required)
+  → ActivityController.buscar_atividades   (backend/controllers/activity_controller.py)
+  → consultas.buscar_atividades            (backend/repositories/consultas.py)
+  → call_procedure("sp_buscar_atividades") (backend/database/procedure.py)
   → MySQL
 ```
 
-A diferença para o exemplo 1 é o final: em vez de chamar a Model, o Service chama o
-Repository, que executa a procedure. O `CALL` fica só no arquivo
-`backend/database/procedure.py`, que tem a função `call_procedure`. Nenhum Controller
-ou Service escreve SQL.
+Aqui **não há Service intermediário**: o Controller chama a função do Repository diretamente. É uma
+das exceções abaixo. O isolamento continua garantido, porque o Controller passa o `coordenacao_id`
+do token e, se quem busca for professor, o `professor_id`.
+
+## Exemplo 4 — Boletim da turma (Professor)
+
+```
+boletimTurmaScreen.dart                    (features/professor/screens/turmas/)
+  → BoletimTurmaService.buscarBoletim      (features/professor/services/boletimTurmaService.dart)
+  → GET /api/professor/turmas/<id>/boletim (@professor_required)
+  → ProfessorController.boletim_turma      (confere a turma com Turma.find_by_id_para_professor)
+  → montar_boletim_turma                   (backend/services/academico/boletim.py)
+  → calcular_todas_etapas / calcular_consolidado_geral (backend/services/academico/calculo.py)
+  → Aluno, Etapa, Criterio, Atividade, Nota (Models)
+```
+
+---
+
+## Exceções conhecidas
+
+A auditoria do código encontrou os pontos abaixo. Nenhum coloca regra acadêmica pesada na
+interface ou no Controller; são atalhos pequenos e conscientes.
+
+| Onde | O que acontece | Observação |
+|---|---|---|
+| `class_controller.py` (`list_classes`, `get_class`) | O ramo do Professor chama `ProfessorTurma` e `Turma` direto (Controller → Model) | Consulta de leitura com o `professor_id` do token |
+| `coordenacao_controller.py` e `professor_controller.py` (`boletim_turma`) | Chamam `Turma.find_by_id*` direto para validar acesso (Controller → Model) | `boletim.py` documenta que quem valida a turma é o Controller |
+| `activity_controller.py`, `class_controller.py`, `dashboard_controller.py` | Chamam `repositories/consultas.py` sem Service (Controller → Repository) | Simplificação intencional ([simplificacao-tecnica.md](simplificacao-tecnica.md)): o Service apenas repassava a chamada |
+| `services/turmas.py` | CRUD de turma como módulo de funções, e não uma classe por caso de uso | Os demais Services seguem o padrão classe + `execute()` |
+| `adicionarAlunosModal`, `editarAlunoModal`, `lancarNotasModal` (Flutter) | Usam `ApiService` direto, sem um Service Dart | Servem para envio de arquivo, cadastro e edição de aluno; só exibem e enviam dados |
+
+Essas exceções podem ser reavaliadas, se forem importantes para o checkpoint.
+
+## Princípios aplicados
+
+- **Responsabilidade única.** Um Service por caso de uso, o SQL concentrado nos Models, o cálculo
+  acadêmico concentrado em um único módulo e a autorização concentrada nos decorators e em
+  helpers como `aluno_acessivel`.
+- **Aberto para extensão.** Um caso de uso novo costuma virar um Service, um método de Controller e
+  uma rota, sem reescrever o que já existe. Foi assim com exclusão de aluno, boletim e exclusão de
+  nota.
+- **Interfaces enxutas.** Cada Service expõe apenas `execute()`; os módulos `turmas.py` e
+  `consultas.py` expõem cinco funções cada.
+- **Dependências.** Os Services dependem diretamente dos Models concretos (métodos estáticos). O
+  acoplamento é intencional e simples, adequado ao tamanho do projeto: não há camada de abstração
+  adicional entre Service e Model.
+- **Sem herança relevante.** Por isso o princípio de substituição de Liskov não é exercitado de
+  forma significativa neste projeto.

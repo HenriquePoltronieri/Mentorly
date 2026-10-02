@@ -1,18 +1,20 @@
 # Mentorly
 
+> Estado atual: **Marcos 1 a 5 concluídos**. O plano até a apresentação e o histórico das
+> decisões estão em [docs/roadmap.md](docs/roadmap.md).
+
 ## Sobre o Projeto
 
-O Mentorly começou como uma ideia para ajudar a coordenação e os professores no
-acompanhamento de turmas e atividades escolares.
+O Mentorly é um sistema de acompanhamento acadêmico para escolas. A **Coordenação** configura
+o ano letivo (etapas e critérios de avaliação), cadastra turmas, alunos e professores. Cada
+**Professor** vê apenas as turmas que a Coordenação vinculou a ele, cria atividades, lança
+notas e acompanha o desempenho dos alunos, com média por etapa, boletim e alunos em risco.
 
-No começo a gente pensou num sistema bem maior, que também trataria de professores,
-alunos, notas, etapas do ano letivo e critérios de avaliação. Várias telas desse plano
-inicial chegaram a ser feitas no Flutter antes de o backend correspondente existir, e
-por isso elas ainda não conversam com a API.
+Cada cadastro de Coordenação é uma **escola independente**: nenhuma escola enxerga os dados de
+outra, e essa regra é garantida também pelo próprio banco de dados (chaves estrangeiras
+compostas).
 
-Para esta entrega o grupo decidiu concentrar o trabalho em turmas e atividades, que são
-as partes que já funcionam do início ao fim: da tela em Flutter, passando pela API em
-Flask, até o banco de dados MySQL.
+O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o MySQL.
 
 ---
 
@@ -31,186 +33,212 @@ Flask, até o banco de dados MySQL.
 ### Backend
 - Python 3
 - Flask 3.0.3
-- Flask-SQLAlchemy 3.1.1 (ORM)
-- PyMySQL 1.1.1
-- MySQL (com Stored Procedures)
+- SQL direto via PyMySQL 1.1.1 (sem ORM)
+- MySQL 8 (com Stored Procedures)
+- PyJWT 2.9.0 (autenticação) e Werkzeug 3.0.4 (hash de senha)
+- openpyxl 3.1.5 (importação de planilhas XLSX)
 
 ### Frontend
-- Flutter (SDK ^3.11.5)
-- Dart
+- Flutter 3 (Dart SDK `>=3.0.0 <4.0.0`)
+- `http`, `shared_preferences`, `file_picker` e `url_launcher`
 
 ---
 
-## Models Implementadas
+## Funcionalidades
 
-### User (`/backend/models/user_model.py`)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | Integer (PK) | Identificador único |
-| name | String(120) | Nome do usuário |
-| email | String(120) | Email (único) |
-| password_hash | String(255) | Hash da senha |
-| role | String(20) | Função (mentee, mentor, coordinator) |
-| created_at | DateTime | Data de criação |
-| updated_at | DateTime | Data de atualização |
+São 20 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
-### Class (`/backend/models/class_model.py`)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | Integer (PK) | Identificador único |
-| name | String(120) | Nome da turma |
-| description | Text | Descrição (opcional) |
-| created_at | DateTime | Data de criação |
-| updated_at | DateTime | Data de atualização |
+**Coordenação**
+1. Cadastro e login da Coordenação (cada cadastro é uma escola)
+2. Configurar o ano letivo: etapas com nota mínima e máxima
+3. Critérios de avaliação com pesos
+4. Gerenciar turmas (cadastrar, listar, editar e excluir)
+5. Cadastrar alunos manualmente
+6. Importar alunos por planilha
+7. Editar e excluir aluno
+8. Cadastrar professor com convite
+9. Vincular professores a turmas
+10. Relatório de turmas e atividades
+11. Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa
 
-### Activity (`/backend/models/activity_model.py`)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | Integer (PK) | Identificador único |
-| title | String(200) | Título da atividade |
-| description | Text | Descrição (opcional) |
-| class_id | Integer (FK) | Referência à turma |
-| due_date | DateTime | Data de entrega (opcional) |
-| created_at | DateTime | Data de criação |
-| updated_at | DateTime | Data de atualização |
+**Professor**
+12. Primeiro acesso por convite e login
+13. Criar, editar e excluir atividade (etapa, critério e valor máximo)
+14. Listar e buscar atividades
+15. Lançar notas
+16. Importar notas por planilha
+17. Excluir nota lançada
+18. Dashboard com alunos em risco
+19. Desempenho do aluno por etapa e consolidado
+20. Boletim da turma
 
----
-
-## Repositories Utilizados
-
-### UserRepository (`/backend/repositories/user_repository.py`)
-- `find_by_email(email)` — busca usuário por email
-- `usuarios_por_role(role)` — usuários filtrados por papel (procedure)
-
-### TurmaRepository (`/backend/repositories/turma_repository.py`)
-- `find_by_name(name)` — busca turma por nome
-- `relatorio_turmas_atividades()` — relatório de turmas com contagem de atividades (procedure)
-
-### ActivityRepository (`/backend/repositories/activity_repository.py`)
-- `find_by_class_id(class_id)` — atividades de uma turma
-- `buscar_atividades(termo, ordenar_por, direcao)` — busca de atividades com filtro e ordenação (procedure)
-
-### ReportRepository (`/backend/repositories/report_repository.py`)
-- `resumo_sistema()` — resumo geral do sistema (procedure)
-
----
-
-## Procedures Criadas
-
-As procedures estão definidas em `/backend/database/procedures.sql` e são instaladas automaticamente na inicialização do backend.
-
-| Procedure | Descrição | Consultas Utilizadas |
-|-----------|-----------|----------------------|
-| `sp_relatorio_turmas_atividades` | Relatório de turmas com contagem de atividades | LEFT JOIN, GROUP BY, ORDER BY |
-| `sp_buscar_atividades` | Busca de atividades por termo com ordenação | WHERE (LIKE), ORDER BY, LEFT JOIN |
-| `sp_usuarios_por_role` | Usuários filtrados por papel | WHERE, ORDER BY |
-| `sp_resumo_sistema` | Resumo geral do sistema (dashboard) | Subconsultas agregadas (COUNT) |
-
----
-
-## Rotas Disponíveis
-
-### Users (`/api/users`)
-
-| Método | Rota | Descrição | Códigos HTTP |
-|--------|------|-----------|-------------|
-| POST | `/api/users` | Criar usuário | 201, 400, 409 |
-| GET | `/api/users` | Listar todos | 200 |
-| GET | `/api/users/role/:role` | Listar por papel (procedure) | 200 |
-| GET | `/api/users/:id` | Buscar por ID | 200, 404 |
-| PUT | `/api/users/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/api/users/:id` | Excluir | 204, 404 |
-
-### Classes (`/api/classes`)
-
-| Método | Rota | Descrição | Códigos HTTP |
-|--------|------|-----------|-------------|
-| POST | `/api/classes` | Criar turma | 201, 400, 409 |
-| GET | `/api/classes` | Listar todas | 200 |
-| GET | `/api/classes/relatorio/atividades` | Relatório de turmas (procedure) | 200 |
-| GET | `/api/classes/:id` | Buscar por ID | 200, 404 |
-| PUT | `/api/classes/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/api/classes/:id` | Excluir | 204, 404 |
-
-### Activities (`/api/activities`)
-
-| Método | Rota | Descrição | Códigos HTTP |
-|--------|------|-----------|-------------|
-| POST | `/api/activities` | Criar atividade | 201, 400, 409 |
-| GET | `/api/activities` | Listar todas (filtro: `?class_id=`) | 200 |
-| GET | `/api/activities/buscar` | Buscar atividades (procedure) | 200 |
-| GET | `/api/activities/:id` | Buscar por ID | 200, 404 |
-| PUT | `/api/activities/:id` | Atualizar | 200, 400, 404 |
-| DELETE | `/api/activities/:id` | Excluir | 204, 404 |
-
-### Dashboard (`/api/dashboard`)
-
-| Método | Rota | Descrição | Códigos HTTP |
-|--------|------|-----------|-------------|
-| GET | `/api/dashboard/resumo` | Resumo geral do sistema (procedure) | 200 |
-
----
-
-## Funcionalidades Implementadas
-
-Estas são as 10 funcionalidades que entram nesta entrega. Todas funcionam do início ao
-fim, ou seja, dá para usar pela tela do aplicativo e o dado realmente vai parar no banco.
-
-| # | Funcionalidade | Tela | Endpoint |
-|---|----------------|------|----------|
-| 1 | Cadastrar Turma | Turmas → Adicionar turma | `POST /api/classes` |
-| 2 | Listar Turmas | Turmas | `GET /api/classes` |
-| 3 | Atualizar Turma | Turmas → ícone de editar | `PUT /api/classes/<id>` |
-| 4 | Excluir Turma | Turmas → ícone de excluir | `DELETE /api/classes/<id>` |
-| 5 | Cadastrar Atividade | Atividades da Turma → Adicionar atividade | `POST /api/activities` |
-| 6 | Listar Atividades por Turma | Turmas → toque na turma | `GET /api/activities?class_id=<id>` |
-| 7 | Atualizar Atividade | Atividades da Turma → ícone de editar | `PUT /api/activities/<id>` |
-| 8 | Excluir Atividade | Atividades da Turma → ícone de excluir | `DELETE /api/activities/<id>` |
-| 9 | Buscar Atividades | Buscar Atividades | `GET /api/activities/buscar` |
-| 10 | Relatório de Turmas/Atividades | Relatório de Turmas | `GET /api/classes/relatorio/atividades` |
-
-As funcionalidades 9 e 10 não são CRUD. Elas usam procedures do MySQL
-(`sp_buscar_atividades` e `sp_relatorio_turmas_atividades`), então o filtro, a ordenação
-e a contagem são feitos direto no banco.
-
-**O que ficou de fora desta entrega:** as telas de professores, alunos, notas, etapas,
-critérios de avaliação, login e importação por planilha. Elas existem no aplicativo
-porque foram feitas na primeira parte do projeto, mas o backend delas não foi
-desenvolvido, então ainda não funcionam. Como o login também não tem backend, na tela
-inicial existe um atalho "Entrar no painel da coordenação" para conseguir chegar nas
-telas de turmas e atividades.
+**Ainda não implementado:** ano letivo como entidade própria, transferência de aluno, gestão
+completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
 ## Arquitetura
 
 ```
-Tela Flutter
-  → Service Dart          (TurmasService, AtividadesService)
-  → ApiService            (centraliza a URL da API)
-  → API Flask             (Blueprints em routes/)
-  → Controller            (classe, só HTTP)
-  → Service               (1 caso de uso = 1 classe)
-  → Model ou Repository
+FLUTTER
+Tela
+  → Controller / Service (Dart)
+  → ApiService            (centraliza a URL da API e o token)
+
+FLASK
+Route                      (Blueprint + decorator de papel)
+  → Controller             (classe, só HTTP)
+  → Service                (regra de negócio e autorização)
+  → Model / Repository     (SQL escrito à mão)
   → MySQL
 ```
 
-A ideia é que cada camada tenha uma responsabilidade só:
+- **Route** — declara o endereço e quem pode acessar (`@auth_required`,
+  `@coordenacao_required`, `@professor_required`).
+- **Controller** — lê a requisição, chama o Service e devolve o código HTTP. Não tem regra
+  acadêmica.
+- **Service** — validações, autorização por escola/turma e regras de negócio. Cada caso de
+  uso tem a sua classe com um método `execute()`. O cálculo acadêmico fica em
+  `services/academico/calculo.py` e o boletim em `services/academico/boletim.py`.
+- **Model** — SQL de uma entidade (CRUD e consultas simples), com PyMySQL.
+- **Repository** — apenas `repositories/consultas.py`, para as consultas que chamam
+  Stored Procedures.
+- **Autenticação** — JWT com `{sub, tipo, coordenacao_id, exp}`. A escola sempre é lida do
+  token, nunca de um parâmetro da requisição.
 
-- **Controller** — recebe a requisição, pega os dados que vieram, chama o Service e
-  devolve a resposta. Ele não mexe no banco nem tem regra de negócio. Por exemplo,
-  o `ClassController` lê o `name` e a `description` do corpo da requisição e repassa.
-- **Service** — cada caso de uso tem a sua própria classe, com um método `execute()`.
-  É onde ficam as validações. Por exemplo, o `CreateClassService` confere se o nome não
-  está vazio e se já não existe outra turma com o mesmo nome antes de mandar salvar.
-- **Model** — é onde fica o CRUD simples: criar, listar, buscar por ID, atualizar e
-  excluir. As Models `User`, `Class` e `Activity` herdam de `db.Model`.
-- **Repository** — usamos só para as consultas que não são CRUD, como o relatório e a
-  busca, que chamam procedures. O `TurmaRepository`, por exemplo, tem só a busca por
-  nome e a chamada da procedure do relatório.
-- **No Flutter** as telas não chamam a API direto. Elas usam um Service em Dart
-  (`TurmasService` e `AtividadesService`), que por sua vez usa o `ApiService`, onde fica
-  o endereço da API.
+A separação não é absolutamente rígida: existem poucos acessos diretos Controller → Model e
+Controller → Repository, e alguns modais Flutter usam o `ApiService` diretamente. Eles estão
+descritos em [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Models
+
+Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
+
+| Model | Tabela | O que representa |
+|---|---|---|
+| `Coordenacao` | `coordenacao` | A escola e o login da Coordenação |
+| `Professor` | `professor` | Professor da escola, com convite para criar a senha |
+| `Turma` | `turma` | Turma da escola |
+| `ProfessorTurma` | `professor_turma` | Vínculo criado pela Coordenação |
+| `Aluno` | `aluno` | Aluno de uma turma |
+| `Etapa` | `etapa` | Etapa do ano letivo, com nota mínima/máxima e `fechada` |
+| `Criterio` | `criterio` | Critério de avaliação de uma etapa, com peso |
+| `Atividade` | `atividade` | Atividade ligada a turma, etapa e critério |
+| `Nota` | `nota` | Nota de um aluno em uma atividade |
+| `CodigoVerificacao` | `codigo_verificacao` | Códigos da verificação em duas etapas |
+
+---
+
+## Repository e Procedures
+
+`backend/repositories/consultas.py` reúne as consultas que chamam procedures. As procedures
+estão em `backend/database/procedures.sql` e são instaladas automaticamente na inicialização.
+Todas recebem o id da escola (ou do professor), nunca o sistema inteiro.
+
+| Procedure | Descrição | Consultas utilizadas |
+|---|---|---|
+| `sp_relatorio_turmas_atividades` | Turmas da escola com contagem de atividades | LEFT JOIN, GROUP BY, ORDER BY |
+| `sp_buscar_atividades` | Busca de atividades por termo, com ordenação | WHERE (LIKE), ORDER BY, LEFT JOIN |
+| `sp_professores_por_coordenacao` | Professores da escola com contagem de turmas | LEFT JOIN, GROUP BY |
+| `sp_resumo_sistema` | Totais da escola | Subconsultas agregadas (COUNT) |
+| `sp_turmas_do_professor` | Turmas vinculadas a um professor, com contagem de alunos | JOIN, subconsulta |
+
+---
+
+## Rotas Disponíveis
+
+`Auth` indica quem pode chamar: **Qualquer** (`@auth_required`), **Coord.**
+(`@coordenacao_required`) ou **Prof.** (`@professor_required`). Rotas de Coordenação e de
+Professor sem token ou com o papel errado respondem 401/403.
+
+### Autenticação (`/api/auth`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/auth/cadastro-coordenacao` | Cadastrar escola/Coordenação |
+| POST | `/api/auth/login-coordenacao` | Login da Coordenação |
+| POST | `/api/auth/login-professor` | Login do Professor |
+| POST | `/api/auth/criar-senha-professor` | Primeiro acesso, com o token do convite |
+| POST | `/api/auth/enviar-codigo` | Código de verificação em duas etapas |
+| POST | `/api/auth/confirmar-codigo` | Confirmar o código |
+
+### Turmas (`/api/classes`)
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/classes` | Qualquer | Listar (Professor vê só as dele) |
+| GET | `/api/classes/<id>` | Qualquer | Buscar por ID |
+| GET | `/api/classes/relatorio/atividades` | Coord. | Relatório de turmas (procedure) |
+| POST | `/api/classes` | Coord. | Criar turma |
+| PUT | `/api/classes/<id>` | Coord. | Atualizar |
+| DELETE | `/api/classes/<id>` | Coord. | Excluir |
+
+### Atividades (`/api/activities`)
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/activities` | Qualquer | Listar (filtro `?class_id=`) |
+| GET | `/api/activities/buscar` | Qualquer | Buscar por termo (procedure) |
+| GET | `/api/activities/<id>` | Qualquer | Buscar por ID |
+| POST | `/api/activities` | Prof. | Criar |
+| PUT | `/api/activities/<id>` | Prof. | Atualizar |
+| DELETE | `/api/activities/<id>` | Prof. | Excluir |
+
+### Configuração do ano letivo (`/api/config`)
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/config/etapas` | Qualquer | Listar etapas |
+| GET | `/api/config/etapas/<id>` | Qualquer | Buscar etapa |
+| POST | `/api/config/etapas` | Coord. | Criar/atualizar etapa |
+| PUT | `/api/config/etapas/<id>` | Coord. | Atualizar etapa |
+| POST | `/api/config/etapas/<id>/notas` | Coord. | Definir nota mínima e máxima |
+| POST | `/api/config/etapas/<id>/fechar` | Coord. | Fechar etapa |
+| POST | `/api/config/etapas/<id>/reabrir` | Coord. | Reabrir etapa |
+| DELETE | `/api/config/etapas/<id>` | Coord. | Excluir etapa |
+| GET | `/api/config/criterios/etapa/<etapa_id>` | Qualquer | Listar critérios |
+| GET | `/api/config/criterios/<id>` | Qualquer | Buscar critério |
+| POST | `/api/config/criterios/etapa/<etapa_id>` | Coord. | Criar critério |
+| PUT | `/api/config/criterios/<id>` | Coord. | Atualizar critério |
+| DELETE | `/api/config/criterios/<id>` | Coord. | Excluir critério |
+
+### Coordenação (`/api/coordenacao`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET / POST | `/api/coordenacao/professores` | Listar / cadastrar professor (com convite) |
+| GET / POST | `/api/coordenacao/professores/<id>/turmas` | Ver / vincular turmas do professor |
+| GET / POST | `/api/coordenacao/turmas/<id>/alunos` | Listar / cadastrar alunos da turma |
+| PUT / DELETE | `/api/coordenacao/alunos/<id>` | Editar / excluir aluno |
+| GET | `/api/coordenacao/turmas/<id>/alunos/modelo-planilha` | Baixar modelo de planilha |
+| POST | `/api/coordenacao/turmas/<id>/alunos/importar` | Importar alunos por planilha |
+| GET | `/api/coordenacao/turmas/<id>/boletim` | Boletim da turma |
+
+### Professor (`/api/professor` e `/api/atividades`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/professor/turmas` | Turmas vinculadas ao professor |
+| GET / POST | `/api/professor/turmas/<id>/alunos` | Listar / cadastrar alunos |
+| GET | `/api/professor/turmas/<id>/alunos/modelo-planilha` | Modelo de planilha de alunos |
+| POST | `/api/professor/turmas/<id>/alunos/importar` | Importar alunos por planilha |
+| GET | `/api/professor/turmas/<id>/boletim` | Boletim da turma |
+| GET | `/api/professor/dashboard` | Dashboard (alunos em risco) |
+| GET | `/api/professor/alunos/<id>/estatisticas` | Desempenho do aluno por etapa |
+| PUT / DELETE | `/api/professor/alunos/<id>` | Editar / excluir aluno |
+| DELETE | `/api/professor/notas/<id>` | Excluir nota lançada |
+| GET / POST | `/api/atividades/<id>/notas` | Listar / lançar notas |
+| GET | `/api/atividades/<id>/notas/modelo-planilha` | Modelo de planilha de notas |
+| POST | `/api/atividades/<id>/notas/importar` | Importar notas por planilha |
+
+### Dashboard da escola (`/api/dashboard`)
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/dashboard/resumo` | Coord. | Totais da escola (procedure) |
 
 ---
 
@@ -218,201 +246,87 @@ A ideia é que cada camada tenha uma responsabilidade só:
 
 ```
 backend/
-├── controllers/
-│   ├── __init__.py
-│   ├── activity_controller.py
-│   ├── class_controller.py
-│   ├── dashboard_controller.py
-│   └── user_controller.py
-├── database/
-│   ├── __init__.py
-│   ├── connection.py
-│   ├── procedure.py
-│   └── procedures.sql
-├── models/
-│   ├── __init__.py
-│   ├── activity_model.py
-│   ├── class_model.py
-│   └── user_model.py
-├── repositories/
-│   ├── __init__.py
-│   ├── activity_repository.py
-│   ├── report_repository.py
-│   ├── turma_repository.py
-│   └── user_repository.py
-├── routes/
-│   ├── __init__.py
-│   ├── activity_routes.py
-│   ├── class_routes.py
-│   ├── dashboard_routes.py
-│   └── user_routes.py
+├── app.py                      # cria o Flask, registra as rotas e instala schema/procedures
+├── config.py                   # variáveis de ambiente e backend/.env
+├── requirements.txt
+├── auth/                       # JWT e decorators de papel
+├── routes/                     # Blueprints (activity, auth, class, config, coordenacao,
+│                               #             dashboard, professor)
+├── controllers/                # uma classe por área, só HTTP
 ├── services/
-│   ├── __init__.py
-│   ├── activity/
-│   │   ├── __init__.py
-│   │   ├── create_activity.py
-│   │   ├── delete_activity.py
-│   │   ├── get_activities.py
-│   │   ├── get_activity.py
-│   │   ├── search_activities.py
-│   │   └── update_activity.py
-│   ├── class_/
-│   │   ├── __init__.py
-│   │   ├── create_class.py
-│   │   ├── delete_class.py
-│   │   ├── get_class.py
-│   │   ├── get_class_report.py
-│   │   ├── get_classes.py
-│   │   └── update_class.py
-│   ├── dashboard/
-│   │   ├── __init__.py
-│   │   └── get_system_summary.py
-│   └── user/
-│       ├── __init__.py
-│       ├── create_user.py
-│       ├── delete_user.py
-│       ├── get_user.py
-│       ├── get_users.py
-│       ├── get_users_by_role.py
-│       └── update_user.py
-├── app.py
-├── config.py
-└── requirements.txt
+│   ├── academico/              # calculo.py (motor) e boletim.py
+│   ├── activity/               # criar, listar, buscar, atualizar e excluir atividade
+│   ├── aluno/                  # cadastrar, listar, editar e excluir aluno
+│   ├── auth/                   # cadastro, logins, convite e verificação em duas etapas
+│   ├── config/                 # etapas e critérios
+│   ├── coordenacao/            # professores e vínculos
+│   ├── planilha/               # leitura, validação e importação de XLSX
+│   ├── professor/              # turmas, dashboard, estatísticas e notas
+│   ├── turmas.py               # CRUD de turma (funções)
+│   └── email_service.py
+├── models/                     # SQL de cada entidade
+├── repositories/consultas.py   # consultas que chamam procedures
+├── database/
+│   ├── connection.py           # conexão, transações e instalador
+│   ├── migrations.py           # colunas novas em bancos já criados
+│   ├── procedure.py            # único ponto que executa CALL
+│   ├── procedures.sql
+│   └── schema.sql
+└── scripts/                    # init_db, smoke_db, smoke_api, test_calculo
 
 docs/
-├── arquitetura.md
+├── architecture.md
 ├── banco-e-procedures.md
 ├── como-executar.md
 ├── funcionalidades.md
 ├── historico-do-projeto.md
+├── roadmap.md
 ├── roteiro-video.md
+├── simplificacao-tecnica.md
 └── visao-geral.md
 
 frontend/app_mentorly/
-├── android/
-├── ios/
 ├── lib/
-│   ├── app/
-│   │   ├── routes.dart
-│   │   └── theme.dart
+│   ├── main.dart
+│   ├── app/                    # routes.dart e theme.dart
 │   ├── core/
-│   │   ├── services/
-│   │   │   ├── apiService.dart
-│   │   │   ├── authService.dart
-│   │   │   └── planilhaService.dart
-│   │   ├── utils/
-│   │   │   ├── gradeCalculator.dart
-│   │   │   └── validators.dart
-│   │   └── widgets/
-│   │       ├── customButton.dart
-│   │       ├── customTextfield.dart
-│   │       ├── loadingIndicator.dart
-│   │       └── successModal.dart
-│   ├── features/
-│   │   ├── auth/
-│   │   │   ├── controllers/
-│   │   │   │   └── authController.dart
-│   │   │   ├── models/
-│   │   │   │   └── userModel.dart
-│   │   │   └── screens/
-│   │   │       ├── cadastroScreen.dart
-│   │   │       ├── loginScreen.dart
-│   │   │       ├── perfilSelectionScreen.dart
-│   │   │       ├── professorLoginScreen.dart
-│   │   │       └── twoFactorScreen.dart
-│   │   ├── coordenacao/
-│   │   │   ├── controllers/
-│   │   │   │   ├── alunosController.dart
-│   │   │   │   ├── configAnoLetivoController.dart
-│   │   │   │   ├── professoresController.dart
-│   │   │   │   └── turmasController.dart
-│   │   │   ├── models/
-│   │   │   │   ├── alunoModel.dart
-│   │   │   │   ├── criterioAvaliacaoModel.dart
-│   │   │   │   ├── escolaModel.dart
-│   │   │   │   ├── etapaModel.dart
-│   │   │   │   ├── professorModel.dart
-│   │   │   │   └── turmaModel.dart
-│   │   │   ├── screens/
-│   │   │   │   ├── alunos/
-│   │   │   │   │   ├── adicionarAlunosModal.dart
-│   │   │   │   │   └── listaAlunosTurmaScreen.dart
-│   │   │   │   ├── config/
-│   │   │   │   │   ├── configCriteriosScreen.dart
-│   │   │   │   │   ├── configEtapasScreen.dart
-│   │   │   │   │   └── configNotasEtapaScreen.dart
-│   │   │   │   ├── professores/
-│   │   │   │   │   ├── cadastroProfessorScreen.dart
-│   │   │   │   │   └── listaProfessoresScreen.dart
-│   │   │   │   ├── relatorios/
-│   │   │   │   │   └── relatorioTurmasScreen.dart
-│   │   │   │   ├── turmas/
-│   │   │   │   │   ├── adicionarTurmaModal.dart
-│   │   │   │   │   ├── gerenciarTurmasScreen.dart
-│   │   │   │   │   └── listaTurmasProfessorScreen.dart
-│   │   │   │   └── coordenacaoHomeScreen.dart
-│   │   │   ├── services/
-│   │   │   │   ├── professoresService.dart
-│   │   │   │   └── turmasService.dart
-│   │   │   └── widgets/
-│   │   │       ├── professorCard.dart
-│   │   │       └── turmaCard.dart
-│   │   └── professor/
-│   │       ├── controllers/
-│   │       │   ├── alunoDetailController.dart
-│   │       │   ├── atividadesController.dart
-│   │       │   ├── dashboardController.dart
-│   │       │   └── turmasController.dart
-│   │       ├── models/
-│   │       │   ├── atividadeModel.dart
-│   │       │   ├── estatisticaAlunoModel.dart
-│   │       │   └── notaModel.dart
-│   │       ├── screens/
-│   │       │   ├── atividades/
-│   │       │   │   ├── adicionarAtividadeModal.dart
-│   │       │   │   ├── atividadeNotasScreen.dart
-│   │       │   │   ├── buscarAtividadesScreen.dart
-│   │       │   │   ├── lancarNotasModal.dart
-│   │       │   │   ├── listaAtividadesScreen.dart
-│   │       │   │   └── turmaAtividadesScreen.dart
-│   │       │   ├── turmas/
-│   │       │   │   ├── alunoDetailScreen.dart
-│   │       │   │   ├── listaTurmasScreen.dart
-│   │       │   │   └── turmaAlunosScreen.dart
-│   │       │   └── dashboardScreen.dart
-│   │       ├── services/
-│   │       │   ├── atividadesService.dart
-│   │       │   └── iaInsightsService.dart
-│   │       └── widgets/
-│   │           ├── alunoGraficoWidget.dart
-│   │           └── professorTopBar.dart
-│   └── main.dart
-└── pubspec.yaml
+│   │   ├── services/           # apiService.dart e authService.dart
+│   │   ├── utils/              # validators.dart
+│   │   └── widgets/            # botões, campos e modais de aluno (adicionar/editar)
+│   └── features/
+│       ├── auth/               # login, cadastro, convite e verificação em duas etapas
+│       ├── coordenacao/        # turmas, alunos, professores, configuração e boletim
+│       └── professor/          # dashboard, turmas, atividades, notas e boletim
+└── test/                       # auth_flow_test.dart e widget_test.dart
 ```
 
 ---
 
-## Como Executar Backend
+## Como Executar
+
+O passo a passo completo, com variáveis de ambiente e solução de problemas, está em
+[docs/como-executar.md](docs/como-executar.md). Resumo:
+
+### Backend
 
 ```bash
-# 1. Configurar o MySQL com o database mentorly
-
-# 2. Instalar dependências
+# 1. MySQL 8 em execução
+# 2. Dependências
 cd backend
 pip install -r requirements.txt
 
-# 3. Configurar variáveis de ambiente (opcional)
-# DB_HOST=localhost DB_USER=root DB_PASSWORD= DB_NAME=mentorly
+# 3. (Opcional) backend/.env, ignorado pelo Git, com uma variável por linha:
+#    DB_PASSWORD=...   SECRET_KEY=...
 
-# 4. Executar (as procedures são instaladas automaticamente)
+# 4. Executar: cria o banco, aplica schema e migrações e instala as procedures
 python app.py
 ```
 
-O servidor será iniciado em `http://localhost:5000`.
+O servidor sobe em `http://localhost:5000`. Sem `SECRET_KEY` definida, o backend gera uma
+chave aleatória a cada execução e avisa no console; nesse caso as sessões deixam de valer
+quando o servidor reinicia.
 
----
-
-## Como Executar Frontend
+### Frontend
 
 ```bash
 cd frontend/app_mentorly
@@ -420,15 +334,29 @@ flutter pub get
 flutter run
 ```
 
-Certifique-se de que o backend está rodando antes de iniciar o frontend.
-
-O endereço da API fica em um único lugar: `lib/core/services/apiService.dart`.
-Ajuste conforme onde o app for rodar:
+O backend precisa estar rodando. O endereço da API fica em um único lugar,
+`lib/core/services/apiService.dart`:
 
 | Onde roda | `baseUrl` |
 |-----------|-----------|
 | Chrome / Web / Windows | `http://localhost:5000/api` |
 | Emulador Android | `http://10.0.2.2:5000/api` |
+
+### Testes
+
+```bash
+cd backend
+python scripts/smoke_db.py       # conexão, isolamento entre escolas e procedures
+python scripts/smoke_api.py      # API de ponta a ponta (185 verificações)
+python scripts/test_calculo.py   # motor de cálculo, sem banco
+
+cd ../frontend/app_mentorly
+flutter analyze
+flutter test
+```
+
+Os scripts de smoke usam o banco configurado em `DB_NAME` e limpam os dados que criam. Para
+não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ---
 
@@ -441,9 +369,9 @@ Ajuste conforme onde o app for rodar:
 
 ## Status do Projeto
 
-Em desenvolvimento. Nesta entrega estão prontas as 10 funcionalidades de turmas e
-atividades listadas acima. As outras partes que o grupo tinha planejado no início ainda
-não foram implementadas no backend.
+Em desenvolvimento. Os Marcos 1 a 5 (avaliação, desempenho, ciclo escolar, gerenciamento de
+alunos e exclusão de nota) estão concluídos e validados. Os próximos marcos são ano letivo,
+transferência de aluno, gestão de professores e IA, conforme [docs/roadmap.md](docs/roadmap.md).
 
 ---
 

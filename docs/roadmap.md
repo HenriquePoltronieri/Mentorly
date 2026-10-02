@@ -1,10 +1,343 @@
 # Roadmap do Mentorly
 
-O roadmap a seguir organiza os próximos passos do Mentorly em ordem de dependência. A prioridade é fechar primeiro o ciclo acadêmico, depois completar administração, segurança e, por último, avançar para IA.
+Este roadmap organiza o estado atual, os próximos passos e as decisões estruturais do Mentorly.
+
+O desenvolvimento planejado deve estar concluído até **20/10/2026**. As duas semanas seguintes ficam reservadas para estudo do código, preparação da apresentação e ensaios.
+
+A seção 6 preserva o plano original em 13 fases. Itens adiados não foram removidos do projeto: continuam documentados e só mudaram de prioridade.
+
+---
+
+# 1. Estado atual
+
+## Marco 1 — Avaliação funcionando
+**Status: ✅ Concluído**
+
+> Professor cria uma atividade com etapa + critério + valor e lança notas válidas.
+
+- criar atividade;
+- escolher etapa;
+- escolher critério;
+- definir nota máxima;
+- lançar notas;
+- importar notas por planilha.
+
+## Marco 2 — Desempenho funcionando
+**Status: ✅ Concluído**
+
+> Mentorly calcula corretamente a média por etapa e identifica alunos abaixo do mínimo.
+
+- motor acadêmico centralizado (`services/academico/calculo.py`);
+- normalização das notas e critérios ponderados;
+- média por etapa, com nota mínima e máxima de cada etapa;
+- distinção entre nota zero e nota ausente;
+- identificação de alunos abaixo do mínimo no dashboard do Professor.
+
+## Marco 3 — Ciclo escolar funcionando
+**Status: ✅ Concluído**
+
+> Coordenação configura → professor avalia → aluno recebe resultado → dashboard/boletim refletem tudo corretamente.
+
+- boletim do aluno e boletim da turma;
+- consolidado geral (só com etapas fechadas e completas);
+- fechamento e reabertura de etapa pela Coordenação;
+- bloqueio de alterações acadêmicas em etapa fechada.
+
+## Marco 4 — Gerenciamento de alunos e correções
+**Status: ✅ Concluído**
+
+- edição de aluno;
+- exclusão de aluno;
+- **A04** — importação de notas deixou de escolher aluno errado por nome ambíguo;
+- **A01** — `SECRET_KEY` sem valor padrão fixo;
+- **A02** — correção do arredondamento intermediário no cálculo da etapa;
+- aviso de alunos incompletos no fechamento de etapa.
+
+## Marco 5 — Exclusão de nota
+**Status: ✅ Concluído**
+
+- exclusão explícita de nota lançada;
+- confirmação antes da exclusão;
+- bloqueio em etapa fechada;
+- atualização automática da tela;
+- proteção contra duplo toque;
+- autorização por Professor, turma e escola.
+
+---
+
+# 2. Estado técnico validado
+
+Verificação mais recente (02/10/2026):
+
+| Verificação | Resultado |
+|---|---|
+| `py_compile` | 85 arquivos, OK |
+| `smoke_db` | OK |
+| `smoke_api` | 185 verificações, 0 falhas |
+| `test_calculo` | 10 testes, OK |
+| `flutter analyze` | 0 warnings, 0 errors (restam infos de estilo, como `file_names` e `withOpacity`) |
+| `flutter test` | 6 testes, todos passando |
+
+A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5.
+
+Por contagem conservadora, o Mentorly possui hoje **20 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
+
+A principal funcionalidade obrigatória ainda ausente é a integração real de Inteligência Artificial (Marco 9).
+
+---
+
+# 3. Checkpoint da disciplina
+
+A etapa atual da disciplina exige:
+
+- arquitetura proposta na disciplina;
+- separação adequada de responsabilidades entre camadas;
+- aplicação dos princípios de qualidade;
+- aplicação dos princípios SOLID estudados;
+- repositório atualizado;
+- commits e arquivos enviados corretamente;
+- professor com acesso ao repositório.
+
+## Checklist
+
+- [x] revisar arquitetura atual;
+- [x] revisar separação entre camadas;
+- [x] revisar responsabilidades dos services/controllers/models;
+- [x] revisar SOLID;
+- [x] atualizar `architecture.md`;
+- [x] atualizar `funcionalidades.md`;
+- [x] atualizar `visao-geral.md`;
+- [x] revisar `README.md`;
+- [x] revisar `git status` e `git diff`;
+- [x] verificar arquivos sensíveis;
+- [x] organizar commits;
+- [ ] realizar push;
+- [ ] conferir os arquivos no repositório remoto;
+- [ ] confirmar acesso do professor ao repositório.
+
+## Arquitetura atual
+
+```text
+FLUTTER
+Screen
+  ↓
+Controller / Service (Dart)
+  ↓
+ApiService
+  ↓
+FLASK
+Route
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Model / Repository
+  ↓
+MySQL
+```
+
+- **Route:** declara o endereço e o decorator de papel (`@auth_required`, `@coordenacao_required`, `@professor_required`).
+- **Controller:** lê a requisição, chama o Service e devolve o código HTTP.
+- **Service:** regras de negócio e autorização por escola/turma; um Service por caso de uso na maior parte do código.
+- **Model:** SQL escrito à mão (PyMySQL) de uma entidade.
+- **Repository:** apenas `repositories/consultas.py`, para as consultas que chamam procedures.
+
+### Exceções conhecidas
+
+A arquitetura segue esse fluxo na maior parte do projeto, mas **não é uma separação absolutamente rígida**. A auditoria encontrou pequenas exceções, que estão registradas aqui em vez de escondidas:
+
+- **Controller → Model (4 pontos):** `class_controller.py` (ramo do Professor em `list_classes` e `get_class`) e `boletim_turma` em `coordenacao_controller.py` e `professor_controller.py`, que consultam `Turma` diretamente para validar acesso.
+- **Controller → Repository (3 pontos):** `activity_controller.py`, `class_controller.py` e `dashboard_controller.py` chamam `repositories/consultas.py` sem um Service intermediário (simplificação intencional, descrita em [simplificacao-tecnica.md](simplificacao-tecnica.md)).
+- **Estilo dos Services:** `services/turmas.py` é um módulo de funções; os demais Services são classes com `execute()`.
+- **Flutter:** `adicionarAlunosModal`, `editarAlunoModal` e `lancarNotasModal` usam o `ApiService` diretamente, sem um Service Dart intermediário.
+
+Essas exceções são pequenas e **não colocam regra de negócio pesada na interface**: as telas só exibem o que o backend calcula. Elas podem ser reavaliadas depois do Git organizado, se forem importantes para o checkpoint.
+
+### SOLID, em termos proporcionais ao projeto
+
+- **SRP:** Services por caso de uso, SQL concentrado nos Models, cálculo acadêmico concentrado em `calculo.py`.
+- **OCP:** um caso de uso novo costuma virar Service + método de Controller + rota, sem reescrever o resto.
+- **LSP:** não se aplica de forma relevante, pois não há herança significativa.
+- **ISP:** cada Service expõe só `execute()`.
+- **DIP:** os Services dependem diretamente dos Models concretos. O acoplamento é intencional e simples, adequado ao porte do projeto.
+
+---
+
+# 4. Plano final até a apresentação
+
+| Etapa | Período |
+|---|---|
+| Etapa 0 — Git e checkpoint | 02/10 – 03/10 |
+| Marco 6 — Ano letivo completo | 03/10 – 06/10 |
+| Marco 7 — Transferência de aluno com histórico | 06/10 – 08/10 |
+| Marco 8 — Gestão completa de professores | 08/10 – 10/10 |
+| Marco 9 — IA | 10/10 – 12/10 |
+| Teste manual E2E | 13/10 |
+| Correção de UX/bugs | 14/10 – 16/10 |
+| Documentação final | 16/10 – 17/10 |
+| Git final | 17/10 |
+| Auditoria final | 18/10 |
+| Correções finais | 19/10 – 20/10 |
+| Congelamento | 20/10 |
+| Buffer | 21/10 – 22/10 |
+| MVP | 23/10 |
+| Revisão | 30/10 |
+| Apresentação | 07/11 |
+
+## Período de estudo
+
+De **21/10 a 06/11**, o desenvolvimento normal está encerrado. A prioridade passa a ser:
+
+- estudar o código;
+- estudar a arquitetura;
+- revisar SOLID;
+- preparar a demonstração;
+- ensaiar a apresentação.
+
+## Marco 6 — Ano letivo completo
+**03/10 – 06/10 · próximo marco · não implementado**
+
+Decisão estrutural herdada do plano original:
+
+```text
+AnoLetivo
+id
+coordenacao_id
+ano
+status
+```
+
+Estados possíveis: `planejamento`, `atual`, `encerrado`.
+
+O novo modelo deverá organizar, no futuro: turmas, etapas, dados acadêmicos e histórico.
+
+Pontos que hoje usam o ano corrente (`date.today().year`) e que precisarão ser considerados:
+
+- `backend/services/academico/boletim.py`
+- `backend/services/config/etapas.py`
+- `backend/services/professor/dashboard.py`
+- `backend/services/professor/estatisticas_aluno.py`
+- `backend/services/professor/listar_turmas.py`
+
+Além deles, `etapa_atual` em `backend/services/academico/calculo.py` usa a data de hoje para escolher a etapa corrente, e a chave única de `etapa` é `(coordenacao_id, ano_letivo, ordem)`.
+
+## Marco 7 — Transferência de aluno com histórico
+**06/10 – 08/10 · depende diretamente do Marco 6**
+
+**A transferência não deve ser implementada simplesmente trocando `aluno.turma_id`.** Isso apagaria o contexto acadêmico do aluno.
+
+A transferência precisa preservar:
+
+- ano letivo;
+- turma anterior;
+- turma nova;
+- histórico acadêmico;
+- escola;
+- data/contexto da transferência.
+
+## Marco 8 — Gestão completa de professores
+**08/10 – 10/10**
+
+- editar professor;
+- reenviar convite;
+- visualizar turmas vinculadas;
+- vincular e desvincular turmas;
+- desativar professor;
+- estado ativo/inativo.
+
+Decisão original mantida: **não excluir fisicamente professor que já tem histórico.** A preferência é desativar.
+
+Observação técnica: hoje o campo `ativo` devolvido pela API é *derivado* (`senha_hash IS NOT NULL`, isto é, "já criou a senha pelo convite") e não existe como coluna. A desativação precisará de um campo próprio, com outro nome, para não colidir com esse significado.
+
+## Marco 9 — IA
+**10/10 – 12/10 · obrigatória para o MVP**
+
+**Escopo:** insights acadêmicos explicáveis para o Professor.
+
+```text
+motor acadêmico
+      ↓
+dados confiáveis
+      ↓
+service de IA
+      ↓
+modelo
+      ↓
+insight textual
+```
+
+A IA **não** calcula nota, **não** altera nota, **não** decide aprovação, **não** fecha etapa e **não** substitui `calculo.py`.
+
+Dados que o service de IA poderá receber: etapas, critérios, notas, percentual, situação, atividades, atividades sem nota, evolução e alunos em risco.
+
+Seguindo o plano original, a prioridade são insights explicáveis sobre dados existentes, e não previsões opacas como "IA prevê reprovação".
+
+---
+
+# 5. Itens estruturais que não podem sumir
+
+### Ano letivo real
+Mesmo depois da apresentação, porque condiciona o histórico. O Marco 6 entrega o conceito; a migração completa dos dados antigos pode continuar depois.
+
+### Transferência com histórico
+Não permitir implementação ingênua (ver Marco 7).
+
+### `nota_historico`
+Continua como evolução futura:
+
+```text
+nota_historico
+
+id
+nota_id
+valor_anterior
+valor_novo
+professor_id
+alterado_em
+```
+
+Hoje a mitigação é parcial: o fechamento de etapa impede alterar ou excluir nota sem uma reabertura explícita, mas a alteração em si não deixa trilha.
+
+### A06 — autoria
+Pergunta ainda **sem resposta** (não resolver agora):
+
+> Professores da mesma turma podem alterar atividades/notas criadas por outro Professor?
+
+Hoje a regra é por vínculo com a turma, não por autoria.
+
+### Soft-delete de professor
+Manter a decisão: desativar em vez de excluir (ver Marco 8).
+
+### 2FA
+Decisão pendente:
+
+- obrigatório?
+- opcional?
+- apenas Coordenação?
+
+A infraestrutura (`/api/auth/enviar-codigo`, `/api/auth/confirmar-codigo` e `twoFactorScreen`) existe, mas está fora do fluxo de login. Para o MVP, a recomendação do plano original é opcional ou somente para a Coordenação.
+
+### Fórmula acadêmica
+Preservar a regra:
+
+```text
+desempenho = pontos_obtidos / pontos_possiveis
+```
+
+aplicada por critério, com o peso do critério, somando as contribuições e multiplicando pela nota máxima da etapa. **Sem arredondamento intermediário:** o arredondamento acontece uma única vez, no resultado final. Nota ausente é diferente de zero: a etapa só recebe resultado quando todos os critérios com peso positivo estão completos e os pesos somam 100.
+
+---
+
+# 6. Plano original (Fases 1 a 13)
+
+O texto abaixo é o roadmap original, mantido como histórico e com o status de cada fase atualizado em 02/10/2026.
 
 ---
 
 ## Fase 1 — Fechar o núcleo acadêmico
+
+**Status: ✅ concluída (Marco 1).** Atividade ligada a etapa e critério, com valor máximo validado no backend e FKs compostas que impedem cruzar escolas.
 **Prioridade: crítica**
 
 Objetivo: fazer uma atividade representar corretamente uma avaliação dentro de uma etapa.
@@ -89,6 +422,8 @@ A Coordenação define os critérios; o Professor utiliza, não redefine o padr�
 ---
 
 ## Fase 2 — Corrigir cálculo de notas
+
+**Status: ✅ concluída (Marco 2; arredondamento intermediário corrigido no Marco 4, A02).** Regra implementada em `backend/services/academico/calculo.py`; explicação em [banco-e-procedures.md](banco-e-procedures.md).
 **Prioridade: crítica**
 
 Hoje este é o ponto que impede o dashboard de representar corretamente o desempenho.
@@ -176,6 +511,8 @@ Cada etapa deve usar:
 ---
 
 ## Fase 3 — Tornar notas realmente completas
+
+**Status: 🟡 quase toda concluída.** 3.1 (lançamento em lote) ✅ e 3.2 (importação XLSX, com a ambiguidade por nome corrigida no Marco 4, A04) ✅. A exclusão explícita de nota entrou no Marco 5. **3.3 (`nota_historico`) segue pendente** — ver seção 5.
 **Prioridade: crítica**
 
 ### 3.1 Tela de lançamento de notas
@@ -251,6 +588,8 @@ Isso é especialmente importante em um sistema escolar.
 ---
 
 ## Fase 4 — Fechar o ciclo da etapa
+
+**Status: ✅ concluída (Marco 3).** Boletim da turma (Professor e Coordenação), consolidado geral, fechamento/reabertura de etapa pela Coordenação e detalhe do aluno por etapa.
 
 Aqui o Mentorly começa a virar produto acadêmico de verdade.
 
@@ -330,6 +669,8 @@ Além de:
 
 ## Fase 5 — Corrigir o Dashboard
 
+**Status: ✅ concluída (Marco 2).** O dashboard do Professor calcula "aluno em risco" com o motor central, na etapa atual da escola.
+
 **Só agora**, porque antes os dados não são academicamente confiáveis.
 
 ### Dashboard do Professor
@@ -368,6 +709,8 @@ Mais tarde pode ser sofisticada.
 
 ## Fase 6 — Completar gestão de alunos
 
+**Status: 🟡 parcial.** Editar e excluir aluno ✅ (Marco 4). **Transferência pendente** (Marco 7), com dependência direta do Marco 6.
+
 Implementar:
 
 - editar aluno;
@@ -394,6 +737,8 @@ Isso leva à necessidade futura de matrícula/ano letivo.
 ---
 
 ## Fase 7 — Melhorar o modelo de ano letivo
+
+**Status: ⏳ próximo marco (Marco 6).** Hoje o ano corrente vem de `date.today().year` em vários pontos — ver seção 4.
 
 Hoje o sistema aparentemente usa sempre o ano corrente.
 
@@ -431,6 +776,8 @@ Isso evita misturar dados de anos diferentes.
 
 ## Fase 8 — Completar gestão de professores
 
+**Status: 🟡 parcial.** Cadastro de professor com convite, listagem e vínculo com turmas existem. Editar, reenviar convite, desvincular, visualizar turmas e desativar ficam para o Marco 8.
+
 Adicionar:
 
 - editar professor;
@@ -452,6 +799,8 @@ ativo = false
 ---
 
 ## Fase 9 — Recuperação de senha e segurança
+
+**Status: ⏳ pendente.** Recuperação de senha não consta nos marcos planejados até 20/10 (será reavaliada depois do Marco 9). A infraestrutura de 2FA existe, mas está fora do fluxo de login; a decisão continua em aberto (seção 5).
 
 ### Recuperação de senha
 
@@ -494,6 +843,8 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
+**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (185 verificações), `test_calculo` (10 testes) e `flutter test` (6 testes). Uma suíte estruturada por módulo continua como evolução.
+
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
 ### Backend
@@ -535,6 +886,8 @@ Testes pelo menos de:
 
 ## Fase 11 — Limpeza técnica
 
+**Status: 🟡 parcial.** Já feito: ORM antigo removido, código morto removido (ver [simplificacao-tecnica.md](simplificacao-tecnica.md)), bypass de login removido, `SECRET_KEY` sem valor padrão fixo, `backend/.env` ignorado pelo Git. Pendente: URL da API por ambiente, padronização de nomes de arquivo Dart e tratamento de erros mais uniforme.
+
 Quando o domínio estiver estável:
 
 - remover SQLAlchemy antigo se realmente não for mais utilizado;
@@ -553,6 +906,8 @@ Isso deve ser feito depois de confirmar qual arquitetura venceu.
 ---
 
 ## Fase 12 — Preparar apresentação/TCC
+
+**Status: ⏳ pendente.** As etapas do fluxo abaixo existem no app e na API (a API é coberta por `smoke_api`). O teste manual de ponta a ponta está previsto para 13/10 e o roteiro do vídeo ainda precisa ser refeito.
 
 O fluxo demonstrável deveria ser:
 
@@ -612,6 +967,8 @@ Se isso estiver estável, o projeto terá uma demonstração muito forte.
 
 ## Fase 13 — IA
 
+**Status: ⏳ pendente — agora obrigatória para o MVP (Marco 9).** O escopo está definido na seção 4.
+
 Somente depois do ciclo acadêmico estar confiável.
 
 A IA então poderá utilizar:
@@ -640,57 +997,23 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 
 # Ordem resumida
 
-| Ordem | Bloco | Prioridade |
-|---:|---|---|
-| 1 | Atividade ↔ etapa | 🔴 |
-| 2 | Nota máxima da atividade | 🔴 |
-| 3 | Atividade ↔ critério | 🔴 |
-| 4 | Pesos e cálculo acadêmico | 🔴 |
-| 5 | Média correta por etapa | 🔴 |
-| 6 | Lançamento/importação de notas | 🔴 |
-| 7 | Boletim/fechamento | 🟠 |
-| 8 | Dashboard/aluno em risco correto | 🟠 |
-| 9 | Detalhe do aluno | 🟠 |
-| 10 | Editar/excluir/transferir aluno | 🟡 |
-| 11 | Ano letivo real | 🟡 |
-| 12 | Gestão completa de professores | 🟡 |
-| 13 | Recuperação de senha | 🟡 |
-| 14 | Auditoria de notas | 🟡 |
-| 15 | Testes completos | 🟠 |
-| 16 | Limpeza de legado | 🟡 |
-| 17 | Produção/deploy | 🔵 |
-| 18 | IA | 🔵 |
-
----
-
-# Próximos 3 grandes marcos
-
-## Marco 1 — Avaliação funcionando
-
-> Professor cria uma atividade com etapa + critério + valor e lança notas válidas.
-
-## Marco 2 — Desempenho funcionando
-
-> Mentorly calcula corretamente a média por etapa e identifica alunos abaixo do mínimo.
-
-## Marco 3 — Ciclo escolar funcionando
-
-> Coordenação configura → professor avalia → aluno recebe resultado → dashboard/boletim refletem tudo corretamente.
-
----
-
-# Foco imediato
-
-O desenvolvimento agora deve se concentrar no **Marco 1**.
-
-Esse é o bloco que destrava praticamente todo o restante do Mentorly:
-
-```text
-atividade
-→ etapa
-→ critério
-→ nota máxima
-→ lançamento de notas
-→ cálculo
-→ dashboard
-```
+| Ordem | Bloco | Prioridade | Situação |
+|---:|---|---|---|
+| 1 | Atividade ↔ etapa | 🔴 | ✅ Marco 1 |
+| 2 | Nota máxima da atividade | 🔴 | ✅ Marco 1 |
+| 3 | Atividade ↔ critério | 🔴 | ✅ Marco 1 |
+| 4 | Pesos e cálculo acadêmico | 🔴 | ✅ Marco 2 |
+| 5 | Média correta por etapa | 🔴 | ✅ Marco 2 |
+| 6 | Lançamento/importação de notas | 🔴 | ✅ Marcos 1, 4 e 5 |
+| 7 | Boletim/fechamento | 🟠 | ✅ Marco 3 |
+| 8 | Dashboard/aluno em risco correto | 🟠 | ✅ Marco 2 |
+| 9 | Detalhe do aluno | 🟠 | ✅ Marco 3 |
+| 10 | Editar/excluir/transferir aluno | 🟡 | 🟡 editar e excluir no Marco 4; transferir no Marco 7 |
+| 11 | Ano letivo real | 🟡 | ⏳ Marco 6 |
+| 12 | Gestão completa de professores | 🟡 | ⏳ Marco 8 |
+| 13 | Recuperação de senha | 🟡 | ⏳ pendente |
+| 14 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
+| 15 | Testes completos | 🟠 | 🟡 parcial |
+| 16 | Limpeza de legado | 🟡 | 🟡 parcial |
+| 17 | Produção/deploy | 🔵 | ⏳ pendente |
+| 18 | IA | 🔵 | ⏳ Marco 9 (obrigatória para o MVP) |

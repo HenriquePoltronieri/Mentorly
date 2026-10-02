@@ -1,6 +1,6 @@
 # Histórico do Projeto
 
-Um resumo de como o Mentorly evoluiu até esta entrega.
+Um resumo de como o Mentorly evoluiu, da primeira entrega ao estado atual.
 
 ## Etapa inicial
 
@@ -14,6 +14,10 @@ imaginava que seriam necessários, e em vários arquivos ficaram comentários do
 criado depois.
 
 ## Primeira implementação do backend
+
+> As seções desta fase (até "Correções realizadas") descrevem a primeira entrega, em turmas e
+> atividades. Os nomes de arquivos e a organização citados nelas mudaram depois; ver
+> "Do ORM ao SQL direto" e os Marcos mais abaixo.
 
 Depois veio o backend em Flask. Foram criadas as três Models (`User`, `Class` e
 `Activity`), os Controllers, os Services e os Repositories, e o projeto migrou do MySQL
@@ -69,13 +73,62 @@ O que o grupo mudou a partir desses pontos:
 - **CORS liberado no Flask.** Foi preciso para testar o aplicativo rodando no navegador,
   já que o Flutter Web e a API ficam em portas diferentes.
 
+## Do ORM ao SQL direto
+
+A migração para SQLAlchemy foi uma etapa transitória. No início de setembro de 2026 (commit de
+03/09, "Estrutura domínio escolar"), o projeto passou a ter um domínio escolar de verdade
+(Coordenação, Professor, Turma, Aluno, Etapa, Critério, Atividade e Nota) e o ORM foi
+abandonado: o acesso ao banco voltou a ser SQL puro, com PyMySQL, escrito à mão nos Models e
+organizado por `schema.sql`, `migrations.py` e `procedures.sql`. Os arquivos citados nas seções acima (`user_model.py`, `class_model.py`, `activity_model.py`,
+`services/class_/` e os repositories antigos) descrevem aquela fase e não existem mais.
+
+## Autenticação e isolamento entre escolas
+
+Na mesma virada, o sistema ganhou login de verdade:
+
+- cadastro e login da Coordenação, e convite por link para o Professor criar a própria senha;
+- token JWT com `{sub, tipo, coordenacao_id, exp}`, validado por decorators de papel
+  (`@coordenacao_required` e `@professor_required`);
+- **cada Coordenação é uma escola independente**: o `coordenacao_id` vem sempre do token, nunca
+  da requisição, e o banco reforça o isolamento com chaves estrangeiras compostas.
+
+O atalho "Entrar no painel da coordenação", que existia só para chegar nas telas enquanto o login
+não tinha backend, foi removido.
+
+## Marcos 1 a 5
+
+A partir daí o desenvolvimento passou a ser organizado por marcos, descritos em
+[roadmap.md](roadmap.md):
+
+| Marco | O que entregou |
+|---|---|
+| 1 — Avaliação | Atividade ligada a etapa e critério, com valor máximo; lançamento e importação de notas |
+| 2 — Desempenho | Motor de cálculo único (`calculo.py`), média ponderada por etapa, nota ausente diferente de zero, alunos abaixo do mínimo |
+| 3 — Ciclo escolar | Boletim da turma, consolidado, fechamento e reabertura de etapa, bloqueio de alterações em etapa fechada |
+| 4 — Alunos e correções | Editar e excluir aluno; importação de notas sem ambiguidade por nome; `SECRET_KEY` sem valor padrão; correção do arredondamento intermediário; aviso de alunos incompletos no fechamento |
+| 5 — Exclusão de nota | Excluir uma nota lançada, com confirmação e bloqueio em etapa fechada |
+
+## Simplificação técnica
+
+Antes do Marco 3, o grupo revisou o que havia de repasse sem regra e de código sem uso. O
+resultado, descrito em [simplificacao-tecnica.md](simplificacao-tecnica.md), foi: cinco
+consultas que apenas chamavam uma procedure passaram a viver em `repositories/consultas.py`; o
+CRUD de turma, que eram cinco classes de um método, virou o módulo `services/turmas.py`; e foram
+removidos arquivos Dart e Python sem nenhuma referência, entre eles o `GradeCalculator`, o
+`AuthController` do Flutter e um service de IA que era só um placeholder. A regra de negócio, as
+URLs e os status HTTP foram preservados.
+
 ## Estado atual
 
-A entrega são as 10 funcionalidades de turmas e atividades, descritas em
-[funcionalidades.md](funcionalidades.md).
+Os Marcos 1 a 5 estão concluídos e o projeto tem 20 funcionalidades demonstráveis, listadas em
+[funcionalidades.md](funcionalidades.md). A verificação mais recente (02/10/2026):
 
-As 10 funcionalidades foram testadas pela interface do aplicativo. As de número 9 e 10
-foram validadas com MySQL 8.4 e as Stored Procedures instaladas.
+- `py_compile`: 85 arquivos, OK;
+- `smoke_db`: OK;
+- `smoke_api`: 185 verificações, 0 falhas;
+- `test_calculo`: 10 testes, OK;
+- `flutter analyze`: 0 warnings e 0 errors;
+- `flutter test`: 6 testes, OK.
 
-As demais áreas que estavam na ideia inicial (professores, alunos, notas, etapas,
-critérios, planilha, login e IA) continuam sem backend e não fazem parte desta entrega.
+Faltam, para o MVP, o ano letivo como entidade própria, a transferência de aluno com histórico, a
+gestão completa de professores e a IA. O plano, com datas, está em [roadmap.md](roadmap.md).

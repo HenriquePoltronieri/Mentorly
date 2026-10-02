@@ -28,7 +28,9 @@ Não há ORM: o acesso ao banco é SQL puro com PyMySQL.
 
 ### Variáveis de ambiente
 
-São opcionais. Sem definir nada, valem os padrões de `backend/config.py`:
+As variáveis de banco são opcionais: sem definir nada, valem os padrões de
+`backend/config.py`. A `SECRET_KEY` também é opcional para testar localmente, mas tem um
+comportamento próprio, descrito logo abaixo da tabela:
 
 | Variável | Padrão | Para que serve |
 |---|---|---|
@@ -37,7 +39,7 @@ São opcionais. Sem definir nada, valem os padrões de `backend/config.py`:
 | `DB_USER` | `root` | |
 | `DB_PASSWORD` | vazio | |
 | `DB_NAME` | `mentorly_db` | |
-| `SECRET_KEY` | chave de desenvolvimento | assina o JWT do login |
+| `SECRET_KEY` | sem padrão: uma chave aleatória é gerada a cada execução | assina o JWT do login |
 | `SMTP_HOST` | vazio | servidor de e-mail |
 | `APP_BASE_URL` | `http://localhost:3000` | monta o link do convite do professor |
 
@@ -46,6 +48,7 @@ Se o seu MySQL tiver senha no root, o jeito mais prático é criar um arquivo
 
 ```
 DB_PASSWORD=sua_senha
+SECRET_KEY=uma_chave_longa_e_aleatoria
 ```
 
 O `config.py` lê esse arquivo ao subir. Uma variável já definida no ambiente sempre
@@ -59,8 +62,11 @@ $env:DB_PASSWORD = "outra_senha"
 export DB_PASSWORD="outra_senha"
 ```
 
-**Em produção, `SECRET_KEY` precisa vir do ambiente.** Com o valor padrão, qualquer
-pessoa consegue forjar um token de login.
+**`SECRET_KEY` não tem mais um valor padrão fixo no código.** Um valor conhecido permitiria
+forjar um token de login. Sem `SECRET_KEY` no ambiente nem em `backend/.env`, o backend gera uma
+chave aleatória para aquela execução e imprime um aviso no console. A chave é segura, mas muda a
+cada reinicialização, então **todas as sessões (tokens JWT) expiram quando o servidor reinicia**.
+Para uma sessão que sobreviva a reinicializações, e para qualquer uso real, defina `SECRET_KEY`.
 
 ### Criar o banco
 
@@ -72,7 +78,7 @@ python scripts/init_db.py
 ```
 
 Isso cria o banco `mentorly_db`, aplica o `database/schema.sql` (10 tabelas), roda as
-migrações de `database/migrations.py` e instala as 6 procedures. O `python app.py` faz o
+migrações de `database/migrations.py` e instala as 5 procedures. O `python app.py` faz o
 mesmo ao subir, então este passo é opcional — serve para recriar o banco sem subir o Flask.
 
 As migrações existem porque o `schema.sql` só cria o que ainda não existe
@@ -98,17 +104,43 @@ O servidor sobe em `http://localhost:5000`. Para conferir, abra no navegador:
 {"status": "ok", "service": "Mentorly API"}
 ```
 
-### Testar a API inteira
+### Testes
+
+Todos os comandos abaixo partem da pasta `backend`:
 
 ```bash
-cd backend
+python scripts/smoke_db.py       # conexão, isolamento entre escolas e procedures
+python scripts/smoke_api.py      # a API de ponta a ponta
+python scripts/test_calculo.py   # motor de cálculo acadêmico, sem banco
+```
+
+- `smoke_db.py` prova que o banco recusa cruzar escolas (chaves estrangeiras compostas) e que as
+  procedures rodam com o filtro de escola.
+- `smoke_api.py` percorre a API pelo cliente de teste do Flask (185 verificações). Cobre login e
+  cadastro, rota protegida sem token, isolamento entre duas escolas, permissões por papel
+  (a Coordenação não cria atividade nem lança nota), configuração do ano letivo, importação de
+  planilha, avaliação acadêmica (etapa, critério, valor máximo e teto da nota), cálculo por etapa,
+  boletim e fechamento de etapa, importação de nota sem ambiguidade, edição e exclusão de aluno e
+  exclusão de nota.
+- `test_calculo.py` usa `unittest` e não acessa o banco (10 testes): nota ausente diferente de
+  zero, pesos, normalização, ausência de arredondamento intermediário e consolidado.
+
+Os scripts de smoke usam o banco indicado em `DB_NAME` e **limpam os dados que criam** ao
+terminar. Para não tocar nos seus dados, aponte `DB_NAME` para um banco temporário:
+
+```bash
+# Windows (PowerShell)
+$env:DB_NAME = "mentorly_teste"
+python scripts/init_db.py
 python scripts/smoke_api.py
 ```
 
-Cobre login, isolamento entre duas escolas, permissões por papel, configuração do ano
-letivo, importação de planilha e a avaliação acadêmica — atividade ligada a etapa e
-critério, valor máximo, e o lançamento de nota respeitando aluno, turma e teto. Ele limpa
-os próprios dados ao terminar.
+No Flutter, a partir de `frontend/app_mentorly`:
+
+```bash
+flutter analyze   # 0 warnings e 0 errors; restam infos de estilo (file_names, withOpacity)
+flutter test      # 6 testes: fluxos de login e primeiro acesso, e abertura do app
+```
 
 ### E-mail em desenvolvimento
 
