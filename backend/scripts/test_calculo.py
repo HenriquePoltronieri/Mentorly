@@ -61,6 +61,46 @@ class CalculoTest(unittest.TestCase):
         self.assertEqual(resultado["nota_calculada"], 86.5)
         self.assertEqual(resultado["situacao"], "adequado")
 
+    def test_soma_sem_arredondamento_intermediario(self):
+        # Marco 4 / A02: dois criterios de 50%, cada um com desempenho
+        # 1/3 = 33,333...%. Arredondar CADA contribuicao antes de somar
+        # (33,33 + 33,33 = 66,66 -> /100 * 100 = 33,34 de nota) dava 33,34;
+        # a soma exata (33,333...% + 33,333...% = 66,666...%) arredonda
+        # corretamente para 33,33 no final. Com nota_minima 33,34, isso
+        # muda a situacao de "adequado" (bug) para "abaixo_do_minimo" (certo).
+        self.criterios = [
+            {"id": 1, "nome": "Provas", "peso": 50},
+            {"id": 2, "nome": "Trabalhos", "peso": 50},
+        ]
+        self.atividades = {
+            1: [{"id": 1, "nota_maxima": 3}],
+            2: [{"id": 2, "nota_maxima": 3}],
+        }
+        self.notas = {1: 1, 2: 1}
+        self.etapa["nota_minima"] = 33.34
+        resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
+        self.assertEqual(resultado["nota_calculada"], 33.33)
+        self.assertEqual(resultado["percentual"], 33.33)
+        self.assertEqual(resultado["situacao"], "abaixo_do_minimo")
+
+    def test_contribuicao_exibida_continua_arredondada_por_criterio(self):
+        # O campo "contribuicao" de cada criterio (usado na tela de detalhe
+        # do aluno) continua arredondado para exibicao; so a SOMA usada no
+        # resultado final deixou de arredondar cada parcela antes.
+        self.criterios = [
+            {"id": 1, "nome": "Provas", "peso": 50},
+            {"id": 2, "nome": "Trabalhos", "peso": 50},
+        ]
+        self.atividades = {
+            1: [{"id": 1, "nota_maxima": 3}],
+            2: [{"id": 2, "nota_maxima": 3}],
+        }
+        self.notas = {1: 1, 2: 1}
+        resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
+        contribuicoes = {c["criterio_id"]: c["contribuicao"] for c in resultado["criterios"]}
+        self.assertEqual(contribuicoes[1], 16.67)
+        self.assertEqual(contribuicoes[2], 16.67)
+
     def test_contagem_de_atividades_avaliadas(self):
         # Marco 3: o boletim precisa saber quantas atividades ja tem nota e
         # quantas ainda faltam, sem inventar - so contando o que o motor ja

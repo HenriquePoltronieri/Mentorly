@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/apiService.dart';
 import '../../models/turmaModel.dart';
 import '../../../../core/widgets/adicionarAlunosModal.dart';
+import '../../../../core/widgets/editarAlunoModal.dart';
 import '../../services/alunosService.dart';
 
 // Alunos de uma turma, na visao da Coordenacao.
@@ -93,6 +94,56 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
     if (adicionou == true) _buscarAlunos();
   }
 
+  Future<void> _editarAluno(Map<String, dynamic> aluno) async {
+    final salvou = await showDialog<bool>(
+      context: context,
+      builder: (_) => EditarAlunoModal(aluno: aluno, papel: PapelAluno.coordenacao),
+    );
+    if (salvou == true) _buscarAlunos();
+  }
+
+  Future<void> _excluirAluno(Map<String, dynamic> aluno) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (contexto) => AlertDialog(
+        title: const Text('Excluir aluno'),
+        content: Text(
+          'Tem certeza que deseja excluir "${aluno['nome']}"? '
+          'Essa ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    try {
+      await _alunosService.excluirAluno(aluno['id'] as int);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Aluno "${aluno['nome']}" excluído')),
+      );
+      _buscarAlunos();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível conectar ao servidor')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,6 +202,16 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
             (aluno['matricula'] ?? '').toString().isEmpty
                 ? 'Sem matrícula'
                 : 'Matrícula: ${aluno['matricula']}',
+          ),
+          trailing: PopupMenuButton<String>(
+            onSelected: (acao) {
+              if (acao == 'editar') _editarAluno(aluno);
+              if (acao == 'excluir') _excluirAluno(aluno);
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'editar', child: Text('Editar')),
+              PopupMenuItem(value: 'excluir', child: Text('Excluir')),
+            ],
           ),
         );
       },

@@ -27,6 +27,16 @@ def validar_nome_completo(nome):
     return nome, None
 
 
+def validar_email(email):
+    """Devolve (email_limpo_ou_None, erro). Usada no cadastro/importacao e
+    tambem na edicao de aluno (services/aluno/gerenciar_aluno.py), para as
+    duas nao aceitarem formatos diferentes de email."""
+    email = (email or "").strip().lower() or None
+    if email and not _EMAIL.match(email):
+        return None, "email invalido"
+    return email, None
+
+
 def validar_linha_aluno(linha):
     """Valida uma linha de aluno. Devolve (dados, erro)."""
     nome, erro = validar_nome_completo(linha.get("nome"))
@@ -35,9 +45,9 @@ def validar_linha_aluno(linha):
 
     matricula = (linha.get("matricula") or "").strip() or None
 
-    email = (linha.get("email") or "").strip().lower() or None
-    if email and not _EMAIL.match(email):
-        return None, "email invalido"
+    email, erro = validar_email(linha.get("email"))
+    if erro:
+        return None, erro
 
     return {"nome": nome, "matricula": matricula, "email": email}, None
 

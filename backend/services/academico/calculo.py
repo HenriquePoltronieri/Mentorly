@@ -6,6 +6,14 @@ contribuicoes, dividida por 100, multiplica a nota maxima da etapa.
 
 Nota ausente nao e zero. A etapa so recebe resultado quando todos os
 criterios com peso positivo estao completos e seus pesos somam 100.
+
+A soma das contribuicoes usa o valor EXATO de cada criterio (contribuicao_
+exata), nao o arredondado - arredondar cada criterio antes de somar podia
+mudar o resultado final em casos de fronteira (ex.: dois criterios de 50%
+cuja soma exata e 33,333...% virava 33,34% em vez de 33,33%, o suficiente
+para trocar "abaixo_do_minimo" por "adequado"). O arredondamento agora so
+acontece uma vez, no resultado final (nota_calculada/percentual). O campo
+"contribuicao" de cada criterio continua arredondado, para exibicao.
 """
 
 from models.atividade_model import Atividade
@@ -44,6 +52,7 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
         "pontos_possiveis": None,
         "desempenho_percentual": None,
         "contribuicao": None,
+        "contribuicao_exata": None,
         "completo": False,
     }
 
@@ -75,7 +84,9 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
 
     if resultado["completo"]:
         peso_fracao = float(criterio.get("peso") or 0) / 100
-        resultado["contribuicao"] = round(desempenho * peso_fracao * 100, 2)
+        contribuicao_exata = desempenho * peso_fracao * 100
+        resultado["contribuicao"] = round(contribuicao_exata, 2)
+        resultado["contribuicao_exata"] = contribuicao_exata
 
     return resultado
 
@@ -145,7 +156,7 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
         base["situacao"] = "em_andamento"
         return base
 
-    soma_contribuicao = sum((c["contribuicao"] or 0) for c in ativos) / 100
+    soma_contribuicao = sum((c["contribuicao_exata"] or 0) for c in ativos) / 100
     nota_maxima = float(etapa["nota_maxima"])
     nota_minima = float(etapa["nota_minima"])
     nota_calculada = soma_contribuicao * nota_maxima

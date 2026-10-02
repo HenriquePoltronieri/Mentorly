@@ -106,11 +106,23 @@ class _BoletimTurmaScreenState extends State<BoletimTurmaScreen> {
       if (estaFechada) {
         await _etapasService.reabrirEtapa(etapaId);
       } else {
-        await _etapasService.fecharEtapa(etapaId);
+        // A resposta do fechamento informa quantos alunos da escola ainda
+        // tem atividade sem nota nesta etapa - o fechamento acontece do
+        // mesmo jeito (nao e bloqueado), isso e so um aviso pra
+        // Coordenacao decidir com informacao (Marco 4).
+        final resultado = await _etapasService.fecharEtapa(etapaId);
+        final incompletos = (resultado['alunosIncompletos'] as num?)?.toInt() ?? 0;
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Etapa fechada.')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              incompletos > 0
+                  ? 'Etapa fechada. $incompletos aluno(s) da escola ainda '
+                      'têm atividade sem nota nesta etapa.'
+                  : 'Etapa fechada. Nenhum aluno ficou com atividade sem '
+                      'nota nesta etapa.',
+            ),
+            duration: const Duration(seconds: 5),
+          ));
         }
       }
       await _buscarBoletim();

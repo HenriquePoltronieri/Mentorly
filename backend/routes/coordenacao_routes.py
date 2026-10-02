@@ -47,6 +47,18 @@ def cadastrar_aluno(turma_id):
     return coordenacao_controller.cadastrar_aluno(turma_id)
 
 
+@coordenacao_blueprint.put("/alunos/<int:aluno_id>")
+@coordenacao_required
+def atualizar_aluno(aluno_id):
+    return coordenacao_controller.atualizar_aluno(aluno_id)
+
+
+@coordenacao_blueprint.delete("/alunos/<int:aluno_id>")
+@coordenacao_required
+def excluir_aluno(aluno_id):
+    return coordenacao_controller.excluir_aluno(aluno_id)
+
+
 @coordenacao_blueprint.get("/turmas/<int:turma_id>/alunos/modelo-planilha")
 @coordenacao_required
 def modelo_planilha_alunos(turma_id):

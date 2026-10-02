@@ -29,4 +29,9 @@ class AlunosService {
     });
     return resposta as Map<String, dynamic>;
   }
+
+  // DELETE {baseUrl}/coordenacao/alunos/{alunoId}
+  Future<void> excluirAluno(int alunoId) async {
+    await _api.delete('/coordenacao/alunos/$alunoId');
+  }
 }

@@ -9,4 +9,10 @@ class ProfessorAlunosService {
     final resposta = await _api.get('/professor/turmas/$turmaId/alunos');
     return resposta as List;
   }
+
+  // DELETE {baseUrl}/api/professor/alunos/{alunoId}
+  // So funciona em aluno de turma vinculada ao professor (o backend valida).
+  Future<void> excluirAluno(int alunoId) async {
+    await _api.delete('/professor/alunos/$alunoId');
+  }
 }

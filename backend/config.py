@@ -38,9 +38,24 @@ DB_CONFIG = {
     "database": os.environ.get("DB_NAME", "mentorly_db"),
 }
 
-# Chave usada para assinar o JWT. Em producao precisa vir do ambiente:
-# se o default abaixo for usado, qualquer um consegue forjar um token.
-SECRET_KEY = os.environ.get("SECRET_KEY", "mentorly-dev-secret-trocar-em-producao")
+# Chave usada para assinar o JWT. Nunca tem um valor padrao fixo: uma chave
+# conhecida no codigo permitiria forjar qualquer token. Sem SECRET_KEY no
+# ambiente (ou em backend/.env), geramos uma chave aleatoria para esta
+# execucao - segura, mas trocada a cada reinicio, entao todas as sessoes
+# expiram no restart. E um aviso impossivel de ignorar em vez de uma falha
+# silenciosa: quem depender de sessao persistente vai notar e configurar
+# SECRET_KEY antes de usar o sistema de verdade.
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    import secrets as _secrets
+
+    SECRET_KEY = _secrets.token_hex(32)
+    print(
+        "AVISO: SECRET_KEY nao definida (nem no ambiente, nem em backend/.env). "
+        "Uma chave temporaria foi gerada so para esta execucao - todas as "
+        "sessoes (tokens JWT) serao invalidadas ao reiniciar o servidor. "
+        "Defina SECRET_KEY antes de qualquer uso real."
+    )
 
 # Validade do token de login e do convite que o professor recebe por email.
 TOKEN_EXPIRACAO_HORAS = int(os.environ.get("TOKEN_EXPIRACAO_HORAS", 12))

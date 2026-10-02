@@ -2,7 +2,16 @@
 
 Exclusivo do Professor, e so em atividade de turma vinculada a ele.
 A planilha identifica o aluno por matricula ou, na falta dela, pelo nome.
+
+Regra de identificacao (Marco 4 / A04): matricula manda quando informada -
+se nao bater com ninguem da turma, a linha vira erro, nunca cai para o
+nome (uma matricula digitada errada podia, antes, acertar por acaso o
+nome de outro aluno). Nome so decide a linha quando NAO ha matricula
+informada, e so quando aquele nome pertence a exatamente um aluno da
+turma - nomes duplicados nunca sao resolvidos por adivinhacao.
 """
+
+from collections import Counter
 
 from models.aluno_model import Aluno
 from models.atividade_model import Atividade
@@ -46,7 +55,18 @@ class ImportarNotasService:
         por_matricula = {
             a["matricula"]: a["id"] for a in alunos if a.get("matricula")
         }
-        por_nome = {a["nome"].strip().lower(): a["id"] for a in alunos}
+
+        # Nomes duplicados ficam de fora do dict de proposito: um nome que
+        # aparece em mais de um aluno da turma nunca deve resolver sozinho
+        # para um dos dois - fica ausente, entao por_nome.get() sempre
+        # devolve None para ele, e a linha vira erro explicito la embaixo.
+        nomes = [a["nome"].strip().lower() for a in alunos]
+        contagem_nomes = Counter(nomes)
+        por_nome = {
+            nome: a["id"]
+            for a, nome in zip(alunos, nomes)
+            if contagem_nomes[nome] == 1
+        }
 
         lancamentos = []
         erros = []
@@ -56,14 +76,30 @@ class ImportarNotasService:
             matricula = (registro.get("matricula") or "").strip()
             nome = (registro.get("aluno") or "").strip().lower()
 
-            aluno_id = por_matricula.get(matricula) if matricula else None
-            if aluno_id is None and nome:
+            if matricula:
+                # Matricula informada manda: se nao bate com ninguem desta
+                # turma, e erro - nunca tenta adivinhar pelo nome.
+                aluno_id = por_matricula.get(matricula)
+                if aluno_id is None:
+                    erros.append({
+                        "linha": numero,
+                        "motivo": "matricula nao encontrada nesta turma",
+                    })
+                    continue
+            elif nome:
                 aluno_id = por_nome.get(nome)
-
-            if aluno_id is None:
+                if aluno_id is None:
+                    motivo = (
+                        "nome duplicado nesta turma - informe a matricula"
+                        if contagem_nomes.get(nome, 0) > 1
+                        else "aluno nao encontrado nesta turma"
+                    )
+                    erros.append({"linha": numero, "motivo": motivo})
+                    continue
+            else:
                 erros.append({
                     "linha": numero,
-                    "motivo": "aluno nao encontrado nesta turma",
+                    "motivo": "informe a matricula ou o nome do aluno",
                 })
                 continue
 

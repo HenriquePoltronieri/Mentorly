@@ -1054,6 +1054,232 @@ def main():
             "/api/config/etapas/%d/fechar" % etapa_b_risco["id"]
         ).status_code == 404, "fechar etapa de outra escola responde 404")
 
+        # ---------------------------------------------------------
+        print("\n[12] Marco 4 - A04: importacao de nota nao escolhe aluno errado")
+
+        etapa_import = criar_etapa(coord_a, "Etapa Importacao Notas", 60, 6, 10)
+        crit_import = criar_criterio(coord_a, etapa_import["id"], "Prova", 100)
+        ativ_import = criar_atividade(professor_a, turma_c["id"], etapa_import["id"],
+                                      crit_import["id"], 10, "Prova Importacao")
+
+        aluno_unico = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_c["id"],
+            {"nome": "Fulano Unico Nome", "matricula": "IMP-UNICO"},
+        ).get_json()
+        aluno_dup1 = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_c["id"],
+            {"nome": "Fulano Duplicado Nome", "matricula": "IMP-DUP1"},
+        ).get_json()
+        aluno_dup2 = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_c["id"],
+            {"nome": "Fulano Duplicado Nome", "matricula": "IMP-DUP2"},
+        ).get_json()
+
+        csv_import = (
+            "aluno;matricula;nota\n"
+            # a) nome unico, sem matricula -> resolve certo pelo nome
+            "Fulano Unico Nome;;8\n"
+            # b) nome duplicado, sem matricula -> nao pode adivinhar
+            "Fulano Duplicado Nome;;7\n"
+            # c) matricula correta identifica exatamente qual duplicado
+            "Fulano Duplicado Nome;IMP-DUP2;9\n"
+            # d) matricula errada NAO pode cair para o nome (que e valido)
+            "Fulano Unico Nome;MATRICULA-NAO-EXISTE;6\n"
+            # e) aluno que nao existe nesta turma, nem por nome nem matricula
+            "Pessoa Que Nao Existe;;5\n"
+        ).encode("utf-8")
+
+        resultado_import = professor_a.upload(
+            "/api/atividades/%d/notas/importar" % ativ_import["id"],
+            "notas.csv", csv_import,
+        )
+        dados_import = resultado_import.get_json()
+        checar(resultado_import.status_code == 201, "importacao de notas responde 201")
+        checar(dados_import["adicionados"] == 2,
+               "so as 2 linhas seguras (nome unico + matricula correta) entram: %s"
+               % dados_import)
+        checar(dados_import["comErro"] == 3,
+               "as outras 3 linhas viram erro, nenhuma nota arriscada: %s" % dados_import)
+
+        motivos_por_linha = {e["linha"]: e["motivo"] for e in dados_import["erros"]}
+        checar("duplicado" in motivos_por_linha.get(3, ""),
+               "nome duplicado sem matricula vira erro claro (linha 3): %s"
+               % motivos_por_linha.get(3))
+        checar("matricula" in motivos_por_linha.get(5, ""),
+               "matricula errada vira erro e NAO cai para o nome (linha 5): %s"
+               % motivos_por_linha.get(5))
+        checar("nao encontrado" in motivos_por_linha.get(6, ""),
+               "aluno inexistente vira erro (linha 6): %s" % motivos_por_linha.get(6))
+
+        notas_import = professor_a.get(
+            "/api/atividades/%d/notas" % ativ_import["id"]
+        ).get_json()["notas"]
+        por_aluno_import = {n["alunoId"]: n["valor"] for n in notas_import}
+        checar(por_aluno_import.get(aluno_unico["id"]) == 8.0,
+               "T-a: nome unico recebeu a nota certa (8)")
+        checar(por_aluno_import.get(aluno_dup2["id"]) == 9.0,
+               "T-c: matricula IMP-DUP2 recebeu a nota certa (9), nao o outro duplicado")
+        checar(por_aluno_import.get(aluno_dup1["id"]) is None,
+               "T-b: o OUTRO duplicado (IMP-DUP1) nao recebeu nota nenhuma por engano")
+
+        # ---------------------------------------------------------
+        print("\n[13] Marco 4 - aviso de alunos incompletos ao fechar etapa")
+
+        # Turma propria, so com os 2 alunos deste teste - turma_c ja
+        # acumulou muitos alunos nas secoes anteriores, e todos eles
+        # tambem "veem" qualquer atividade nova criada nela (mesma turma =
+        # mesma lista de atividades por criterio), o que contaria como
+        # incompleto para todo mundo e junte esse teste especifico.
+        turma_fechamento = coord_a.post(
+            "/api/classes", {"name": "Turma Fechamento Incompletos"}
+        ).get_json()
+        coord_a.post(
+            "/api/coordenacao/professores/%d/turmas" % prof_a["id"],
+            {"turma_ids": [turma_a["id"], turma_c["id"], turma_fechamento["id"]]},
+        )
+
+        aluno_completo = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_fechamento["id"],
+            {"nome": "Aluno Ficara Completo"},
+        ).get_json()
+        aluno_incompleto = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_fechamento["id"],
+            {"nome": "Aluno Ficara Incompleto"},
+        ).get_json()
+
+        # Etapa onde TODOS os alunos com atividade ficam completos.
+        etapa_zero_incompletos = criar_etapa(coord_a, "Etapa Zero Incompletos", 57, 6, 10)
+        crit_zero_incompletos = criar_criterio(
+            coord_a, etapa_zero_incompletos["id"], "Prova", 100
+        )
+        ativ_zero_incompletos = criar_atividade(
+            professor_a, turma_fechamento["id"], etapa_zero_incompletos["id"],
+            crit_zero_incompletos["id"], 10, "Prova Zero Incompletos",
+        )
+        # Os DOIS alunos da turma recebem nota aqui - ninguem fica pendente.
+        lancar(professor_a, ativ_zero_incompletos["id"], aluno_completo["id"], 7)
+        lancar(professor_a, ativ_zero_incompletos["id"], aluno_incompleto["id"], 9)
+
+        fechar_zero = coord_a.post(
+            "/api/config/etapas/%d/fechar" % etapa_zero_incompletos["id"]
+        )
+        checar(fechar_zero.status_code == 200, "fecha etapa sem alunos incompletos")
+        checar(fechar_zero.get_json()["alunosIncompletos"] == 0,
+               "resposta informa 0 alunos incompletos: %s" % fechar_zero.get_json())
+
+        # Etapa onde um aluno fica com atividade sem nota no momento do
+        # fechamento - o fechamento continua permitido mesmo assim.
+        etapa_com_incompletos = criar_etapa(coord_a, "Etapa Com Incompletos", 58, 6, 10)
+        crit_incompletos = criar_criterio(
+            coord_a, etapa_com_incompletos["id"], "Prova", 100
+        )
+        ativ_incompletos = criar_atividade(
+            professor_a, turma_fechamento["id"], etapa_com_incompletos["id"],
+            crit_incompletos["id"], 10, "Prova Com Incompletos",
+        )
+        lancar(professor_a, ativ_incompletos["id"], aluno_completo["id"], 8)
+        # aluno_incompleto NAO recebe nota nesta atividade de proposito.
+
+        fechar_com_incompletos = coord_a.post(
+            "/api/config/etapas/%d/fechar" % etapa_com_incompletos["id"]
+        )
+        checar(fechar_com_incompletos.status_code == 200,
+               "etapa com aluno incompleto AINDA ASSIM pode ser fechada (nao bloqueia)")
+        checar(fechar_com_incompletos.get_json()["alunosIncompletos"] == 1,
+               "resposta informa exatamente 1 aluno incompleto: %s"
+               % fechar_com_incompletos.get_json())
+        checar(fechar_com_incompletos.get_json()["fechada"] is True,
+               "etapa realmente fica fechada mesmo com aluno incompleto")
+
+        # ---------------------------------------------------------
+        print("\n[14] Marco 4 - edicao e exclusao de aluno")
+
+        aluno_editar = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+            {"nome": "Nome Original Editavel", "matricula": "EDIT-001"},
+        ).get_json()
+        aluno_turma_nao_vinculada = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a2["id"],
+            {"nome": "Aluno Turma Nao Vinculada"},
+        ).get_json()
+        aluno_escola_b = coord_b.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_b["id"],
+            {"nome": "Aluno Da Escola B Edicao"},
+        ).get_json()
+
+        # 1. Coordenacao edita aluno da propria escola.
+        editado = coord_a.put("/api/coordenacao/alunos/%d" % aluno_editar["id"], {
+            "nome": "Nome Editado Pela Coordenacao",
+        })
+        checar(editado.status_code == 200
+               and editado.get_json()["nome"] == "Nome Editado Pela Coordenacao",
+               "1: Coordenacao edita aluno da propria escola")
+        checar(editado.get_json()["matricula"] == "EDIT-001",
+               "1b: campo nao enviado (matricula) preserva o valor atual")
+
+        # 2. Coordenacao tenta editar aluno de outra escola.
+        checar(coord_a.put(
+            "/api/coordenacao/alunos/%d" % aluno_escola_b["id"],
+            {"nome": "Tentativa De Invasao Aqui"},
+        ).status_code == 404, "2: Coordenacao nao edita aluno de outra escola")
+
+        # 3. Professor edita aluno de turma vinculada a ele.
+        editado_prof = professor_a.put(
+            "/api/professor/alunos/%d" % aluno_editar["id"],
+            {"matricula": "EDIT-002"},
+        )
+        checar(editado_prof.status_code == 200
+               and editado_prof.get_json()["matricula"] == "EDIT-002",
+               "3: Professor edita aluno de turma vinculada a ele")
+
+        # 4. Professor tenta editar aluno de turma NAO vinculada a ele
+        #    (mesma escola - turma_a2 nunca foi vinculada a professor_a).
+        checar(professor_a.put(
+            "/api/professor/alunos/%d" % aluno_turma_nao_vinculada["id"],
+            {"nome": "Tentativa Sem Vinculo Aqui"},
+        ).status_code == 404,
+               "4: Professor nao edita aluno de turma nao vinculada a ele")
+
+        # Validacoes continuam as mesmas do cadastro (nao inventa regra nova).
+        checar(coord_a.put(
+            "/api/coordenacao/alunos/%d" % aluno_editar["id"], {"nome": "Sonome"}
+        ).status_code == 400, "nome incompleto na edicao responde 400")
+
+        outro_aluno = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+            {"nome": "Outro Aluno Matricula", "matricula": "EDIT-002"},
+        )
+        checar(outro_aluno.status_code == 400,
+               "matricula duplicada ja e recusada no cadastro (contexto do teste de edicao)")
+
+        # 5. Coordenacao exclui aluno permitido.
+        excluido = coord_a.delete("/api/coordenacao/alunos/%d" % aluno_editar["id"])
+        checar(excluido.status_code == 204, "5: Coordenacao exclui aluno da propria escola")
+
+        alunos_turma_a_depois = coord_a.get(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"]
+        ).get_json()
+        checar(all(a["id"] != aluno_editar["id"] for a in alunos_turma_a_depois),
+               "5b: aluno excluido realmente some da listagem da turma")
+
+        # 6. Usuario tenta excluir aluno de outra escola.
+        checar(coord_a.delete(
+            "/api/coordenacao/alunos/%d" % aluno_escola_b["id"]
+        ).status_code == 404, "6: Coordenacao nao exclui aluno de outra escola")
+        checar(coord_b.get(
+            "/api/coordenacao/turmas/%d/alunos" % turma_b["id"]
+        ).get_json() != [], "6b: aluno da escola B continua existindo depois da tentativa")
+
+        # 7. Professor tenta excluir aluno de turma nao vinculada.
+        checar(professor_a.delete(
+            "/api/professor/alunos/%d" % aluno_turma_nao_vinculada["id"]
+        ).status_code == 404,
+               "7: Professor nao exclui aluno de turma nao vinculada a ele")
+        checar(coord_a.get(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a2["id"]
+        ).get_json() != [],
+               "7b: aluno de turma nao vinculada continua existindo depois da tentativa")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

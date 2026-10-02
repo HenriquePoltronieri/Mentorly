@@ -11,6 +11,7 @@ from auth.decorators import coordenacao_atual
 from models.turma_model import Turma
 from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
+from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.aluno.listar_alunos import ListarAlunosService
 from services.coordenacao.cadastrar_professor import CadastrarProfessorService
 from services.coordenacao.listar_professores import ListarProfessoresService
@@ -92,6 +93,29 @@ class CoordenacaoController:
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(aluno), 201
+
+    def atualizar_aluno(self, aluno_id):
+        dados = request.get_json(silent=True) or {}
+        try:
+            aluno = AtualizarAlunoService().execute(
+                aluno_id,
+                coordenacao_atual(),
+                dados.get("nome"),
+                dados.get("matricula"),
+                dados.get("email"),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(aluno)
+
+    def excluir_aluno(self, aluno_id):
+        try:
+            ExcluirAlunoService().execute(aluno_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return "", 204
 
     def modelo_planilha_alunos(self, turma_id):
         return Response(

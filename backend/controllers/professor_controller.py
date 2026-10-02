@@ -11,6 +11,7 @@ from auth.decorators import coordenacao_atual, usuario_atual_id
 from models.turma_model import Turma
 from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
+from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.planilha.importar_alunos import ImportarAlunosService
 from services.planilha.importar_notas import ImportarNotasService
 from services.planilha.leitor import PlanilhaInvalida
@@ -72,6 +73,32 @@ class ProfessorController:
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(aluno), 201
+
+    def atualizar_aluno(self, aluno_id):
+        dados = request.get_json(silent=True) or {}
+        try:
+            aluno = AtualizarAlunoService().execute(
+                aluno_id,
+                coordenacao_atual(),
+                dados.get("nome"),
+                dados.get("matricula"),
+                dados.get("email"),
+                professor_id=usuario_atual_id(),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(aluno)
+
+    def excluir_aluno(self, aluno_id):
+        try:
+            ExcluirAlunoService().execute(
+                aluno_id, coordenacao_atual(), professor_id=usuario_atual_id()
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return "", 204
 
     def modelo_planilha_alunos(self, turma_id):
         return _xlsx(modelo_alunos(), "modelo-alunos-turma-%d.xlsx" % turma_id)

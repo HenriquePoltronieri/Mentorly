@@ -61,6 +61,18 @@ def estatisticas_aluno(aluno_id):
     return professor_controller.estatisticas_aluno(aluno_id)
 
 
+@professor_blueprint.put("/alunos/<int:aluno_id>")
+@professor_required
+def atualizar_aluno(aluno_id):
+    return professor_controller.atualizar_aluno(aluno_id)
+
+
+@professor_blueprint.delete("/alunos/<int:aluno_id>")
+@professor_required
+def excluir_aluno(aluno_id):
+    return professor_controller.excluir_aluno(aluno_id)
+
+
 @professor_blueprint.get("/turmas/<int:turma_id>/boletim")
 @professor_required
 def boletim_turma(turma_id):

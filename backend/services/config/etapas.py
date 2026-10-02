@@ -1,8 +1,10 @@
 from datetime import date
 
+from models.aluno_model import Aluno
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
-from services.academico.calculo import resumo_pesos
+from models.turma_model import Turma
+from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
 
 
 class ListarEtapasService:
@@ -118,6 +120,25 @@ class ExcluirEtapaService:
         Etapa.delete(etapa_id, coordenacao_id)
 
 
+def _contar_alunos_incompletos(etapa):
+    """Quantos alunos da escola ainda tem atividade sem nota nesta etapa.
+
+    Etapa e configuracao da escola inteira (nao de uma turma so), entao
+    percorre todas as turmas. Nao inventa nenhuma regra nova: usa o mesmo
+    calcular_desempenho_etapa que o boletim e o dashboard ja chamam, e so
+    conta quem tem "atividades_sem_nota" > 0. O fechamento continua sendo
+    permitido de qualquer forma - isto e so para a Coordenacao decidir com
+    informacao, nao para bloquear nada (Marco 4).
+    """
+    incompletos = 0
+    for turma in Turma.find_all_by_coordenacao(etapa["coordenacao_id"]):
+        for aluno in Aluno.find_all_by_turma(turma["id"]):
+            resultado = calcular_desempenho_etapa(aluno["id"], turma["id"], etapa)
+            if resultado["atividades_sem_nota"] > 0:
+                incompletos += 1
+    return incompletos
+
+
 class FecharEtapaService:
     """Fecha a etapa: o resultado calculado fica congelado ate a reabertura.
 
@@ -125,6 +146,12 @@ class FecharEtapaService:
     fechamento, criar/editar atividade e lancar/importar nota nesta etapa
     passam a ser recusados - ver services/activity/validacao.py e
     services/professor/notas.py.
+
+    O fechamento NAO e bloqueado por aluno incompleto (decisao do Marco 4):
+    a Coordenacao pode ter motivo legitimo para fechar mesmo assim (aluno
+    evadido, por exemplo). O que muda e que a resposta agora informa
+    quantos alunos ficam com atividade sem nota nesta etapa, para a
+    Coordenacao decidir com informacao em vez de descobrir depois.
     """
 
     def execute(self, etapa_id, coordenacao_id):
@@ -134,8 +161,12 @@ class FecharEtapaService:
         if etapa.get("fechada"):
             raise ValueError("Etapa ja esta fechada")
 
+        alunos_incompletos = _contar_alunos_incompletos(etapa)
+
         Etapa.fechar(etapa_id, coordenacao_id)
-        return Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
+        resultado = Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
+        resultado["alunosIncompletos"] = alunos_incompletos
+        return resultado
 
 
 class ReabrirEtapaService:
