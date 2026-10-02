@@ -1,5 +1,5 @@
 from models.turma_model import Turma
-from repositories.turma_repository import TurmaRepository
+from repositories.consultas import turmas_do_professor
 
 
 class ListarTurmasDoProfessorService:
@@ -10,11 +10,8 @@ class ListarTurmasDoProfessorService:
     que nao foi vinculada a ele.
     """
 
-    def __init__(self):
-        self._repositorio = TurmaRepository()
-
     def execute(self, professor_id):
-        linhas = self._repositorio.turmas_do_professor(professor_id)
+        linhas = turmas_do_professor(professor_id)
 
         # A procedure devolve as chaves em portugues, mas parte das telas do
         # app usa TurmaModel.fromJson, que le "name"/"description". Sem os

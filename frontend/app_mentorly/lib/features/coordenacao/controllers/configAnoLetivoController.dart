@@ -7,21 +7,6 @@ import '../models/criterioAvaliacaoModel.dart';
 //
 // Singleton porque as tres telas do fluxo (configEtapas, configNotasEtapa,
 // configCriterios) compartilham a mesma lista de etapas.
-//
-// DUAS CORRECOES IMPORTANTES EM RELACAO A VERSAO ANTERIOR:
-//
-// 1. As etapas eram criadas so no fim do fluxo (finalizarConfiguracao), com
-//    id nulo ate la. Como salvarNotasEtapa e adicionarCriterio eram
-//    guardados por "if (etapa.id != null)", a nota minima/maxima e os
-//    criterios NUNCA chegavam ao backend: o usuario preenchia, avancava, e
-//    o dado sumia sem nenhum erro na tela. Agora a etapa e criada no
-//    backend assim que a quantidade e escolhida, entao ja tem id quando as
-//    telas seguintes gravam.
-//
-// 2. A configuracao e PADRAO DA ESCOLA. carregarConfiguracaoExistente traz
-//    o que ja foi configurado, e o POST /config/etapas faz upsert por
-//    (ano_letivo, ordem) - passar pelo fluxo de novo edita em vez de
-//    duplicar.
 class ConfigAnoLetivoController {
   static final ConfigAnoLetivoController _instancia =
       ConfigAnoLetivoController._interno();
@@ -148,19 +133,6 @@ class ConfigAnoLetivoController {
     }
   }
 
-  // Soma dos pesos dos criterios selecionados, pelo nome (um por nome,
-  // ja que o mesmo peso vale em todas as etapas). Usada pela tela para
-  // mostrar "Soma: X%" antes mesmo de salvar.
-  double somaPesos(Iterable<String> nomesSelecionados) {
-    double soma = 0;
-    for (final nome in nomesSelecionados) {
-      final criterio =
-          criterios.where((c) => c.nome == nome).firstOrNull;
-      if (criterio != null) soma += criterio.peso;
-    }
-    return soma;
-  }
-
   Future<void> removerCriterio(String nome) async {
     final alvos = criterios.where((c) => c.nome == nome).toList();
     for (final criterio in alvos) {
@@ -176,12 +148,6 @@ class ConfigAnoLetivoController {
   List<String> get nomesDosCriterios =>
       criterios.map((c) => c.nome).toSet().toList();
 
-  // Reseta o estado em memoria. Nao apaga nada no backend: a configuracao
-  // continua sendo o padrao da escola.
-  void resetar() {
-    etapas = [];
-    criterios = [];
-  }
 }
 
 extension _PrimeiroOuNulo<T> on Iterable<T> {

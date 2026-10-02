@@ -94,33 +94,9 @@ class Nota:
         )
         return numero(linha["maior"]) if linha else None
 
-    @staticmethod
-    def media_por_atividade(turma_id):
-        """Media da turma em cada atividade, da pior para a melhor."""
-        return query_all(
-            "SELECT a.id AS atividade_id, a.titulo AS atividade, "
-            "       ROUND(AVG(n.valor), 2) AS media, COUNT(n.id) AS total_notas "
-            "FROM atividade a LEFT JOIN nota n ON n.atividade_id = a.id "
-            "WHERE a.turma_id = %s "
-            "GROUP BY a.id, a.titulo "
-            "HAVING COUNT(n.id) > 0 "
-            "ORDER BY media ASC",
-            (turma_id,),
-        )
-
     # -----------------------------------------------------------------
     # Escrita
     # -----------------------------------------------------------------
-    @staticmethod
-    def lancar(atividade_id, aluno_id, valor, observacao=None):
-        return execute(
-            "INSERT INTO nota (atividade_id, aluno_id, valor, observacao) "
-            "VALUES (%s, %s, %s, %s) "
-            "ON DUPLICATE KEY UPDATE valor = VALUES(valor), "
-            "observacao = VALUES(observacao)",
-            (atividade_id, aluno_id, valor, observacao),
-        )
-
     @staticmethod
     def lancar_em_lote(atividade_id, notas):
         """Lanca varias notas em uma transacao so.

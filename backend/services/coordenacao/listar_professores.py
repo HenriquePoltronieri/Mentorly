@@ -1,6 +1,6 @@
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
-from repositories.professor_repository import ProfessorRepository
+from repositories.consultas import professores_por_coordenacao
 
 
 class ListarProfessoresService:
@@ -14,11 +14,8 @@ class ListarProfessoresService:
     professor ja tem e para deixar os checkboxes pre-marcados.
     """
 
-    def __init__(self):
-        self._repositorio = ProfessorRepository()
-
     def execute(self, coordenacao_id):
-        linhas = self._repositorio.professores_por_coordenacao(coordenacao_id)
+        linhas = professores_por_coordenacao(coordenacao_id)
 
         professores = []
         for linha in linhas:

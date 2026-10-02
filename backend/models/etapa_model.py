@@ -48,17 +48,6 @@ class Etapa:
             (coordenacao_id, ano_letivo, ordem),
         )
 
-    @staticmethod
-    def nota_minima_da_escola(coordenacao_id, ano_letivo):
-        """Menor nota minima configurada no ano. Usada para 'alunos em risco'."""
-        linha = query_one(
-            "SELECT MIN(nota_minima) AS minima FROM etapa "
-            "WHERE coordenacao_id = %s AND ano_letivo = %s "
-            "AND nota_minima IS NOT NULL",
-            (coordenacao_id, ano_letivo),
-        )
-        return numero(linha["minima"]) if linha else None
-
     # -----------------------------------------------------------------
     # Escrita
     # -----------------------------------------------------------------

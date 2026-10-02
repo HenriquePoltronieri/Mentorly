@@ -13,12 +13,10 @@ from flask import jsonify, request
 from auth.decorators import coordenacao_atual, eh_professor, usuario_atual_id
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
-from services.class_.create_class import CreateClassService
-from services.class_.delete_class import DeleteClassService
-from services.class_.get_class import GetClassService
-from services.class_.get_class_report import GetClassReportService
-from services.class_.get_classes import GetClassesService
-from services.class_.update_class import UpdateClassService
+from repositories.consultas import relatorio_turmas_atividades
+from services.turmas import (
+    atualizar_turma, buscar_turma, criar_turma, excluir_turma, listar_turmas,
+)
 
 
 class ClassController:
@@ -28,10 +26,10 @@ class ClassController:
             linhas = ProfessorTurma.turmas_do_professor(usuario_atual_id())
             return jsonify([Turma.to_dict(linha) for linha in linhas])
 
-        return jsonify(GetClassesService().execute(coordenacao_atual()))
+        return jsonify(listar_turmas(coordenacao_atual()))
 
     def relatorio_turmas_atividades(self):
-        return jsonify(GetClassReportService().execute(coordenacao_atual()))
+        return jsonify(relatorio_turmas_atividades(coordenacao_atual()))
 
     def get_class(self, class_id):
         if eh_professor():
@@ -40,7 +38,7 @@ class ClassController:
                 return jsonify({"error": "Turma nao encontrada"}), 404
             return jsonify(Turma.to_dict(linha))
 
-        turma = GetClassService().execute(class_id, coordenacao_atual())
+        turma = buscar_turma(class_id, coordenacao_atual())
         if turma is None:
             return jsonify({"error": "Turma nao encontrada"}), 404
         return jsonify(turma)
@@ -57,7 +55,7 @@ class ClassController:
             return jsonify({"error": "O nome da turma e obrigatorio"}), 400
 
         try:
-            turma = CreateClassService().execute(
+            turma = criar_turma(
                 coordenacao_atual(),
                 nome,
                 descricao,
@@ -78,7 +76,7 @@ class ClassController:
             descricao = dados.get("descricao")
 
         try:
-            turma = UpdateClassService().execute(
+            turma = atualizar_turma(
                 class_id,
                 coordenacao_atual(),
                 nome,
@@ -96,7 +94,7 @@ class ClassController:
 
     def delete_class(self, class_id):
         try:
-            DeleteClassService().execute(class_id, coordenacao_atual())
+            excluir_turma(class_id, coordenacao_atual())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
         return "", 204

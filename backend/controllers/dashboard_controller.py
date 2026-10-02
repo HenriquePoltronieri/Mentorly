@@ -1,9 +1,9 @@
 from flask import jsonify
 
 from auth.decorators import coordenacao_atual
-from services.dashboard.get_system_summary import GetSystemSummaryService
+from repositories.consultas import resumo_da_escola
 
 
 class DashboardController:
     def resumo_sistema(self):
-        return jsonify(GetSystemSummaryService().execute(coordenacao_atual()))
+        return jsonify(resumo_da_escola(coordenacao_atual()))

@@ -12,8 +12,7 @@ import '../../services/professorAlunosService.dart';
 // endpoint esperado -> GET {baseUrl}/api/professor/turmas/{turmaId}/alunos
 // resposta esperada (200) ->
 // [ { "id": 1, "nome": "...", "matricula": "...", "media": 7.2 }, ... ]
-// "media" e a media geral do aluno na etapa atual (usa o GradeCalculator
-// do lado do backend, ou o professor calcula e o backend so retorna pronto)
+// "media" vem do motor academico central do backend, na etapa atual.
 class TurmaAlunosScreen extends StatefulWidget {
   const TurmaAlunosScreen({super.key});
 

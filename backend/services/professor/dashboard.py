@@ -7,20 +7,7 @@ from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
 
 
 class DashboardProfessorService:
-    """Resumo do professor logado.
-
-    Devolve o formato que dashboardScreen.dart documenta no cabecalho:
-    nome, email, totalTurmas, totalAlunos e alunosEmRisco.
-
-    'Aluno em risco' usa a regra central de calculo (services/academico/
-    calculo.py) na ETAPA ATUAL da escola - antes usava uma procedure SQL
-    que fazia AVG() de TODAS as notas do aluno (misturando etapas) contra
-    a nota minima fixa da etapa de ordem 1, sempre, mesmo quando o aluno
-    ja estava em outra etapa. Isso foi removido.
-    """
-
-    def __init__(self):
-        pass
+    """Resumo do professor com risco calculado na etapa atual da escola."""
 
     def execute(self, professor_id, ano_letivo=None):
         ano_letivo = ano_letivo or date.today().year

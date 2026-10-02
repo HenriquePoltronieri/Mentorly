@@ -3,7 +3,7 @@ import '../../../core/widgets/customTextfield.dart';
 import '../../../core/widgets/customButton.dart';
 import '../../../core/utils/validators.dart';
 import '../../../app/routes.dart';
-import '../controllers/authController.dart';
+import '../../../core/services/authService.dart';
 
 // Tela de login do professor (para logins subsequentes, após já ter definido a senha)
 class ProfessorLoginScreen extends StatefulWidget {
@@ -17,25 +17,29 @@ class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
-  final _authController = AuthController();
+  final _authService = AuthService();
   bool _carregando = false;
 
   Future<void> _entrar() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _carregando = true);
-    final sucesso = await _authController.loginProfessor(
-      email: _emailController.text,
-      senha: _senhaController.text,
-    );
-    setState(() => _carregando = false);
-
-    if (sucesso && mounted) {
-      Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_authController.erro ?? 'Erro ao entrar')),
+    try {
+      await _authService.loginProfessor(
+        email: _emailController.text,
+        senha: _senhaController.text,
       );
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _carregando = false);
     }
   }
 

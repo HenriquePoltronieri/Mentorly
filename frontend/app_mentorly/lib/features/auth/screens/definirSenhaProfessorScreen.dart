@@ -3,7 +3,7 @@ import '../../../core/widgets/customTextfield.dart';
 import '../../../core/widgets/customButton.dart';
 import '../../../core/utils/validators.dart';
 import '../../../app/routes.dart';
-import '../controllers/authController.dart';
+import '../../../core/services/authService.dart';
 
 // Professor recebe o email por convite da coordenacao e cria a senha aqui
 // pela primeira vez (Confirmar senha garante que ele digitou certo)
@@ -20,7 +20,7 @@ class _DefinirSenhaProfessorScreenState extends State<DefinirSenhaProfessorScree
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
   final _confirmarSenhaController = TextEditingController();
-  final _authController = AuthController();
+  final _authService = AuthService();
   bool _carregando = false;
   String? _token;
 
@@ -58,20 +58,24 @@ class _DefinirSenhaProfessorScreenState extends State<DefinirSenhaProfessorScree
     }
 
     setState(() => _carregando = true);
-    final sucesso = await _authController.criarSenhaProfessor(
-      email: _emailController.text,
-      senha: _senhaController.text,
-      confirmarSenha: _confirmarSenhaController.text,
-      token: _token!,
-    );
-    setState(() => _carregando = false);
-
-    if (sucesso && mounted) {
-      Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_authController.erro ?? 'Erro ao definir senha')),
+    try {
+      await _authService.criarSenhaProfessor(
+        email: _emailController.text,
+        senha: _senhaController.text,
+        confirmarSenha: _confirmarSenhaController.text,
+        token: _token!,
       );
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _carregando = false);
     }
   }
 
