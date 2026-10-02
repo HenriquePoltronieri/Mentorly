@@ -4,6 +4,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app_mentorly/features/coordenacao/models/anoLetivoModel.dart';
+import 'package:app_mentorly/features/coordenacao/models/historicoTurmaAlunoModel.dart';
 import 'package:app_mentorly/features/coordenacao/models/turmaModel.dart';
 
 void main() {
@@ -87,6 +88,37 @@ void main() {
 
       expect(turma.anoLetivo, isNull);
       expect(turma.rotuloAno, isEmpty);
+    });
+  });
+
+  group('HistoricoTurmaAlunoModel', () {
+    test('le o vinculo aberto devolvido pela API', () {
+      final item = HistoricoTurmaAlunoModel.fromJson({
+        'id': 4,
+        'turmaId': 9,
+        'turma': '1 Ano B',
+        'anoLetivo': 2026,
+        'dataInicio': '2026-08-10',
+        'dataFim': null,
+      });
+
+      expect(item.turma, '1 Ano B');
+      expect(item.anoLetivo, 2026);
+      expect(item.atual, isTrue);
+    });
+
+    test('vinculo fechado preserva a data final', () {
+      final item = HistoricoTurmaAlunoModel.fromJson({
+        'id': 3,
+        'turmaId': 8,
+        'turma': '1 Ano A',
+        'anoLetivo': 2026,
+        'dataInicio': '2026-02-01',
+        'dataFim': '2026-08-10',
+      });
+
+      expect(item.atual, isFalse);
+      expect(item.dataFim, '2026-08-10');
     });
   });
 }

@@ -173,6 +173,37 @@ def _indice_existe(tabela, indice):
     ) is not None
 
 
+# ---------------------------------------------------------------------
+# Marco 7: historico de turma do aluno
+# ---------------------------------------------------------------------
+
+def _historico_de_turma_dos_alunos():
+    """Preenche o primeiro vinculo dos alunos que existiam antes do Marco 7.
+
+    O schema cria a tabela em banco legado antes desta funcao rodar. O
+    LEFT JOIN torna o backfill idempotente: alunos que ja receberam um
+    vinculo (inclusive numa execucao interrompida) nao ganham duplicata.
+    A data de criacao do aluno e o melhor inicio conhecido para registros
+    antigos; nenhuma nota, atividade, turma ou aluno e movido ou apagado.
+    """
+    if not _coluna_existe("aluno_turma_historico", "aluno_id"):
+        return False
+
+    afetadas = execute(
+        "INSERT INTO aluno_turma_historico "
+        "(aluno_id, coordenacao_id, turma_id, ano_letivo, data_inicio) "
+        "SELECT al.id, t.coordenacao_id, al.turma_id, t.ano_letivo, "
+        "       COALESCE(DATE(al.created_at), CURDATE()) "
+        "FROM aluno al INNER JOIN turma t ON t.id = al.turma_id "
+        "LEFT JOIN aluno_turma_historico h "
+        "  ON h.aluno_id = al.id AND h.data_fim IS NULL "
+        "WHERE h.id IS NULL"
+    )
+    if afetadas:
+        print("  [migracao] %d vinculo(s) iniciais de aluno criados" % afetadas)
+    return bool(afetadas)
+
+
 def _anos_letivos_cadastrados():
     """Transforma o ano solto de turma/etapa em FK para o cadastro de anos.
 
@@ -289,6 +320,7 @@ _MIGRACOES = (
     _atividade_ganha_coordenacao_id,
     _etapa_ganha_fechada,
     _anos_letivos_cadastrados,
+    _historico_de_turma_dos_alunos,
 )
 
 

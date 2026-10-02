@@ -1722,6 +1722,150 @@ def main():
                and painel_e["alunosEmRisco"] == [],
                "M6-63: encerrado o ano e sem outro atual, o dashboard vem zerado, sem adivinhar ano")
 
+        # ---------------------------------------------------------
+        print("\n[16] Marco 7 - transferencia de aluno com historico")
+        destino_transferencia = coord_a.post("/api/classes", {
+            "name": "Turma Transferencia 2026", "ano_letivo": ANO,
+        }).get_json()
+        prof_origem = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Origem", "email": "prof.origem.%s" % SUFIXO,
+        }).get_json()
+        prof_destino = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Destino", "email": "prof.destino.%s" % SUFIXO,
+        }).get_json()
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_origem["id"],
+                     {"turma_ids": [turma_a["id"]]})
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_destino["id"],
+                     {"turma_ids": [destino_transferencia["id"]]})
+        professor_origem = ativar_professor(prof_origem)
+        professor_destino = ativar_professor(prof_destino)
+        atividade_origem = professor_origem.post("/api/activities", {
+            "title": "Prova antes da transferencia", "class_id": turma_a["id"],
+            "etapa_id": config_a["etapa"]["id"],
+            "criterio_id": config_a["criterio"]["id"], "nota_maxima": 10,
+        }).get_json()
+        aluno_transferencia = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+            {"nome": "Aluno Transferido Silva", "matricula": "M7-001"},
+        ).get_json()
+        historico_inicial = coord_a.get(
+            "/api/coordenacao/alunos/%d/historico" % aluno_transferencia["id"]
+        )
+        checar(historico_inicial.status_code == 200
+               and len(historico_inicial.get_json()) == 1
+               and historico_inicial.get_json()[0]["atual"] is True
+               and historico_inicial.get_json()[0]["turmaId"] == turma_a["id"],
+               "M7-1: cadastro manual cria vinculo historico inicial aberto")
+        checar(query_one(
+            "SELECT COUNT(*) AS n FROM aluno_turma_historico h "
+            "INNER JOIN aluno al ON al.id = h.aluno_id WHERE al.matricula = %s",
+            ("2026003",),
+        )["n"] == 1, "M7-2: importacao de aluno tambem cria historico inicial")
+        lancamento_antigo = professor_origem.post(
+            "/api/atividades/%d/notas" % atividade_origem["id"],
+            {"aluno_id": aluno_transferencia["id"], "valor": 7},
+        )
+        checar(lancamento_antigo.status_code == 201,
+               "M7-3: professor da origem lanca nota antes da transferencia")
+        transferencia = coord_a.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+            {"turma_id": destino_transferencia["id"], "motivo": "Mudanca de turma"},
+        )
+        checar(transferencia.status_code == 200
+               and transferencia.get_json()["turmaId"] == destino_transferencia["id"],
+               "M7-4: transferencia atualiza a turma atual do aluno")
+        historico = coord_a.get(
+            "/api/coordenacao/alunos/%d/historico" % aluno_transferencia["id"]
+        ).get_json()
+        checar(len(historico) == 2 and historico[0]["turmaId"] == destino_transferencia["id"]
+               and historico[0]["atual"] is True and historico[1]["turmaId"] == turma_a["id"]
+               and historico[1]["dataFim"] is not None,
+               "M7-5: historico ordena novo vinculo aberto e origem fechada")
+        origem_atual = professor_origem.get(
+            "/api/professor/turmas/%d/alunos" % turma_a["id"]
+        ).get_json()
+        destino_atual = professor_destino.get(
+            "/api/professor/turmas/%d/alunos" % destino_transferencia["id"]
+        ).get_json()
+        checar(all(a["id"] != aluno_transferencia["id"] for a in origem_atual)
+               and any(a["id"] == aluno_transferencia["id"] for a in destino_atual),
+               "M7-6: aluno sai da turma e do professor antigos e entra nos novos")
+        checar(query_one(
+            "SELECT COUNT(*) AS n FROM nota WHERE atividade_id = %s AND aluno_id = %s",
+            (atividade_origem["id"], aluno_transferencia["id"]),
+        )["n"] == 1,
+               "M7-7: nota antiga continua associada a atividade da turma original")
+        checar(professor_origem.post(
+            "/api/atividades/%d/notas" % atividade_origem["id"],
+            {"aluno_id": aluno_transferencia["id"], "valor": 8},
+        ).status_code == 404,
+               "M7-8: professor antigo nao altera aluno transferido")
+        atividade_destino = professor_destino.post("/api/activities", {
+            "title": "Prova depois da transferencia", "class_id": destino_transferencia["id"],
+            "etapa_id": config_a["etapa"]["id"],
+            "criterio_id": config_a["criterio"]["id"], "nota_maxima": 10,
+        }).get_json()
+        checar(professor_destino.post(
+            "/api/atividades/%d/notas" % atividade_destino["id"],
+            {"aluno_id": aluno_transferencia["id"], "valor": 9},
+        ).status_code == 201,
+               "M7-9: professor novo pode lancar nota na turma nova")
+        estatistica_nova = professor_destino.get(
+            "/api/professor/alunos/%d/estatisticas" % aluno_transferencia["id"]
+        ).get_json()
+        checar(estatistica_nova["totalNotas"] == 1 and estatistica_nova["media"] == 9.0,
+               "M7-10: desempenho atual nao mistura nota da turma antiga")
+        checar(coord_a.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+            {"turma_id": destino_transferencia["id"]},
+        ).status_code == 400,
+               "M7-11: transferencia para a mesma turma e recusada")
+        checar(coord_a.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+            {"turma_id": turma_b["id"]},
+        ).status_code == 404
+               and coord_b.post(
+                   "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+                   {"turma_id": turma_b["id"]},
+               ).status_code == 404,
+               "M7-12: turma destino e coordenacao de outra escola sao bloqueadas")
+        checar(professor_destino.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+            {"turma_id": turma_a["id"]},
+        ).status_code == 403,
+               "M7-13: Professor nao usa endpoint administrativo de transferencia")
+        checar(coord_a.post("/api/coordenacao/alunos/999999/transferir", {
+            "turma_id": turma_a["id"],
+        }).status_code == 404 and coord_a.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_transferencia["id"],
+            {"turma_id": 999999},
+        ).status_code == 404,
+               "M7-14: aluno ou turma inexistente responde 404")
+        aluno_futuro = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+            {"nome": "Aluno Proximo Ano", "matricula": "M7-002"},
+        ).get_json()
+        coord_a.post("/api/config/anos-letivos", {"ano": 2028})
+        turma_2028 = coord_a.post("/api/classes", {
+            "name": "Turma Transferencia 2028", "ano_letivo": 2028,
+        }).get_json()
+        checar(coord_a.post(
+            "/api/coordenacao/alunos/%d/transferir" % aluno_futuro["id"],
+            {"turma_id": turma_2028["id"]},
+        ).status_code == 200,
+               "M7-15: progressao para turma da mesma escola em ano planejamento e permitida")
+        aluno_excluir = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+            {"nome": "Aluno Excluir Historico", "matricula": "M7-003"},
+        ).get_json()
+        coord_a.post("/api/coordenacao/alunos/%d/transferir" % aluno_excluir["id"],
+                     {"turma_id": destino_transferencia["id"]})
+        coord_a.delete("/api/coordenacao/alunos/%d" % aluno_excluir["id"])
+        checar(query_one(
+            "SELECT COUNT(*) AS n FROM aluno_turma_historico WHERE aluno_id = %s",
+            (aluno_excluir["id"],),
+        )["n"] == 0, "M7-16: excluir aluno remove historico por cascade")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

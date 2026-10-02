@@ -45,7 +45,7 @@ class Nota:
         )
 
     @staticmethod
-    def find_by_aluno(aluno_id):
+    def find_by_aluno(aluno_id, turma_id=None):
         """Historico do aluno, por atividade e etapa. Base das estatisticas."""
         return query_all(
             "SELECT n.id, n.valor, n.observacao, n.updated_at, "
@@ -57,16 +57,19 @@ class Nota:
             "INNER JOIN atividade a ON a.id = n.atividade_id "
             "LEFT JOIN etapa e ON e.id = a.etapa_id "
             "WHERE n.aluno_id = %s "
-            "ORDER BY e.ordem ASC, a.data_entrega ASC, a.id ASC",
-            (aluno_id,),
+            + ("AND a.turma_id = %s " if turma_id is not None else "")
+            + "ORDER BY e.ordem ASC, a.data_entrega ASC, a.id ASC",
+            (aluno_id, turma_id) if turma_id is not None else (aluno_id,),
         )
 
     @staticmethod
-    def media_do_aluno(aluno_id):
+    def media_do_aluno(aluno_id, turma_id=None):
         linha = query_one(
-            "SELECT ROUND(AVG(valor), 2) AS media, COUNT(*) AS total "
-            "FROM nota WHERE aluno_id = %s",
-            (aluno_id,),
+            "SELECT ROUND(AVG(n.valor), 2) AS media, COUNT(*) AS total "
+            "FROM nota n INNER JOIN atividade a ON a.id = n.atividade_id "
+            "WHERE n.aluno_id = %s "
+            + ("AND a.turma_id = %s" if turma_id is not None else ""),
+            (aluno_id, turma_id) if turma_id is not None else (aluno_id,),
         )
         if not linha:
             return {"media": None, "total": 0}

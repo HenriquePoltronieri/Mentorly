@@ -1,6 +1,6 @@
 # Funcionalidades
 
-O Mentorly tem hoje **20 funcionalidades demonstráveis**, contadas de forma conservadora: cada
+O Mentorly tem hoje **21 funcionalidades demonstráveis**, contadas de forma conservadora: cada
 linha abaixo tem tela no aplicativo, endpoint na API e regra no backend. Todas passam pelas
 camadas explicadas em [architecture.md](architecture.md).
 
@@ -18,24 +18,25 @@ um Service (exceção documentada na arquitetura).
 | 5 | Cadastrar alunos manualmente | `listaAlunosTurmaScreen`, `adicionarAlunosModal` | `AlunosService.listarAlunos` (o cadastro usa o `ApiService` no modal) | `POST /api/coordenacao/turmas/<id>/alunos` | `CadastrarAlunoService` | `Aluno` |
 | 6 | Importar alunos por planilha XLSX (modelo para baixar e relatório de erros por linha) | `adicionarAlunosModal` | `ApiService` (envio de arquivo) | `POST /api/coordenacao/turmas/<id>/alunos/importar` | `ImportarAlunosService` | `Aluno` |
 | 7 | Editar e excluir aluno | `listaAlunosTurmaScreen`, `editarAlunoModal` | `AlunosService.excluirAluno` | `PUT` e `DELETE /api/coordenacao/alunos/<id>` | `AtualizarAlunoService`, `ExcluirAlunoService` | `Aluno` |
-| 8 | Cadastrar professor, com convite para criar a senha | `cadastroProfessorScreen`, `listaProfessoresScreen` | `ProfessoresService` | `GET`/`POST /api/coordenacao/professores` | `CadastrarProfessorService`, `ListarProfessoresService` | `Professor`, `sp_professores_por_coordenacao` |
-| 9 | Vincular professores a turmas | `listaTurmasProfessorScreen` | `ProfessorTurmasService` | `GET`/`POST /api/coordenacao/professores/<id>/turmas` | `VincularTurmasService` | `ProfessorTurma` |
-| 10 | Relatório de turmas com a contagem de atividades | `relatorioTurmasScreen` | `TurmasService.relatorioTurmasAtividades` | `GET /api/classes/relatorio/atividades` | Repository | `sp_relatorio_turmas_atividades` |
-| 11 | Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa, com aviso de alunos incompletos | `boletimTurmasScreen`, `boletimTurmaScreen` (Coordenação) | `BoletimService`, `EtapasService.fecharEtapa`/`reabrirEtapa` | `GET /api/coordenacao/turmas/<id>/boletim`, `POST /api/config/etapas/<id>/fechar` e `/reabrir` | `montar_boletim_turma`, `FecharEtapaService`, `ReabrirEtapaService` | `calculo.py`, `Etapa` |
+| 8 | Transferir aluno com histórico de turmas | `listaAlunosTurmaScreen`, `transferirAlunoModal`, `historicoAlunoModal` | `AlunosService.transferirAluno`, `historicoAluno` | `POST /api/coordenacao/alunos/<id>/transferir`, `GET /historico` | `TransferirAlunoService`, `HistoricoAlunoService` | `Aluno`, `AlunoTurmaHistorico` |
+| 9 | Cadastrar professor, com convite para criar a senha | `cadastroProfessorScreen`, `listaProfessoresScreen` | `ProfessoresService` | `GET`/`POST /api/coordenacao/professores` | `CadastrarProfessorService`, `ListarProfessoresService` | `Professor`, `sp_professores_por_coordenacao` |
+| 10 | Vincular professores a turmas | `listaTurmasProfessorScreen` | `ProfessorTurmasService` | `GET`/`POST /api/coordenacao/professores/<id>/turmas` | `VincularTurmasService` | `ProfessorTurma` |
+| 11 | Relatório de turmas com a contagem de atividades | `relatorioTurmasScreen` | `TurmasService.relatorioTurmasAtividades` | `GET /api/classes/relatorio/atividades` | Repository | `sp_relatorio_turmas_atividades` |
+| 12 | Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa, com aviso de alunos incompletos | `boletimTurmasScreen`, `boletimTurmaScreen` (Coordenação) | `BoletimService`, `EtapasService.fecharEtapa`/`reabrirEtapa` | `GET /api/coordenacao/turmas/<id>/boletim`, `POST /api/config/etapas/<id>/fechar` e `/reabrir` | `montar_boletim_turma`, `FecharEtapaService`, `ReabrirEtapaService` | `calculo.py`, `Etapa` |
 
 ## Professor
 
 | # | Funcionalidade | Tela Flutter | Service/Controller Dart | Endpoint | Service backend | Model / Repository |
 |---|---|---|---|---|---|---|
-| 12 | Primeiro acesso por convite e login | `definirSenhaProfessorScreen`, `professorLoginScreen` | `AuthService.criarSenhaProfessor`, `loginProfessor` | `POST /api/auth/criar-senha-professor`, `/login-professor` | `CriarSenhaProfessorService`, `LoginProfessorService` | `Professor` |
-| 13 | Criar, editar e excluir atividade, com etapa, critério e valor máximo | `turmaAtividadesScreen`, `adicionarAtividadeModal` | `AtividadesService` | `POST`, `PUT`, `DELETE /api/activities` | `CreateActivityService`, `UpdateActivityService`, `DeleteActivityService` | `Atividade` |
-| 14 | Listar e buscar atividades (por termo, com ordenação) | `listaAtividadesScreen`, `buscarAtividadesScreen` | `AtividadesService.listarAtividades`, `buscarAtividades` | `GET /api/activities`, `GET /api/activities/buscar` | `GetActivitiesService`; a busca usa Repository | `Atividade`, `sp_buscar_atividades` |
-| 15 | Lançar notas em lote, com validação do valor máximo | `atividadeNotasScreen` | `AtividadesController.salvarNotas` | `POST /api/atividades/<id>/notas` | `LancarNotasService` | `Nota` |
-| 16 | Importar notas por planilha (modelo já preenchido com os alunos) | `lancarNotasModal` | `ApiService` (envio de arquivo) | `POST /api/atividades/<id>/notas/importar` | `ImportarNotasService` | `Nota` |
-| 17 | Excluir nota lançada, com confirmação | `atividadeNotasScreen` | `AtividadesController.excluirNota` | `DELETE /api/professor/notas/<id>` | `ExcluirNotaService` | `Nota` |
-| 18 | Dashboard com alunos em risco na etapa atual | `dashboardScreen` | `ProfessorDashboardService` | `GET /api/professor/dashboard` | `DashboardProfessorService` | `calculo.py`, `Turma`, `Aluno` |
-| 19 | Desempenho do aluno: por etapa, por critério e consolidado | `alunoDetailScreen` | `ProfessorAlunoDetailService` | `GET /api/professor/alunos/<id>/estatisticas` | `EstatisticasAlunoService` | `calculo.py`, `Nota` |
-| 20 | Boletim da turma | `boletimTurmaScreen` (Professor) | `BoletimTurmaService` | `GET /api/professor/turmas/<id>/boletim` | `montar_boletim_turma` | `calculo.py`, `Aluno` |
+| 13 | Primeiro acesso por convite e login | `definirSenhaProfessorScreen`, `professorLoginScreen` | `AuthService.criarSenhaProfessor`, `loginProfessor` | `POST /api/auth/criar-senha-professor`, `/login-professor` | `CriarSenhaProfessorService`, `LoginProfessorService` | `Professor` |
+| 14 | Criar, editar e excluir atividade, com etapa, critério e valor máximo | `turmaAtividadesScreen`, `adicionarAtividadeModal` | `AtividadesService` | `POST`, `PUT`, `DELETE /api/activities` | `CreateActivityService`, `UpdateActivityService`, `DeleteActivityService` | `Atividade` |
+| 15 | Listar e buscar atividades (por termo, com ordenação) | `listaAtividadesScreen`, `buscarAtividadesScreen` | `AtividadesService.listarAtividades`, `buscarAtividades` | `GET /api/activities`, `GET /api/activities/buscar` | `GetActivitiesService`; a busca usa Repository | `Atividade`, `sp_buscar_atividades` |
+| 16 | Lançar notas em lote, com validação do valor máximo | `atividadeNotasScreen` | `AtividadesController.salvarNotas` | `POST /api/atividades/<id>/notas` | `LancarNotasService` | `Nota` |
+| 17 | Importar notas por planilha (modelo já preenchido com os alunos) | `lancarNotasModal` | `ApiService` (envio de arquivo) | `POST /api/atividades/<id>/notas/importar` | `ImportarNotasService` | `Nota` |
+| 18 | Excluir nota lançada, com confirmação | `atividadeNotasScreen` | `AtividadesController.excluirNota` | `DELETE /api/professor/notas/<id>` | `ExcluirNotaService` | `Nota` |
+| 19 | Dashboard com alunos em risco na etapa atual | `dashboardScreen` | `ProfessorDashboardService` | `GET /api/professor/dashboard` | `DashboardProfessorService` | `calculo.py`, `Turma`, `Aluno` |
+| 20 | Desempenho do aluno: por etapa, por critério e consolidado | `alunoDetailScreen` | `ProfessorAlunoDetailService` | `GET /api/professor/alunos/<id>/estatisticas` | `EstatisticasAlunoService` | `calculo.py`, `Nota` |
+| 21 | Boletim da turma | `boletimTurmaScreen` (Professor) | `BoletimTurmaService` | `GET /api/professor/turmas/<id>/boletim` | `montar_boletim_turma` | `calculo.py`, `Aluno` |
 
 O Professor também edita e exclui aluno nas turmas dele (`PUT`/`DELETE /api/professor/alunos/<id>`,
 os mesmos Services da funcionalidade 7), e importa alunos por planilha.
@@ -86,9 +87,10 @@ Os testes automáticos abaixo passam no estado atual do repositório (02/10/2026
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
-| `python scripts/smoke_api.py` | A API de ponta a ponta: login, isolamento entre escolas, permissões por papel, configuração do ano letivo, importação de planilha, avaliação, cálculo, boletim e fechamento de etapa, edição/exclusão de aluno, exclusão de nota e o contexto de ano letivo (anos, turmas, etapas, atividades, dashboard, boletim) | 251 verificações, 0 falhas |
+| `python scripts/smoke_api.py` | A API de ponta a ponta: login, isolamento entre escolas, permissões por papel, configuração do ano letivo, importação, avaliação, cálculo, boletim, transferência e histórico de aluno | 267 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
+| `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado: preserva alunos/turmas, cria os vínculos iniciais e é idempotente | 8 verificações, 0 falhas |
 | `flutter test` | Fluxos de login e primeiro acesso, abertura do app e modelo de ano letivo | 13 testes, OK |
 | `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors (restam infos de estilo) |
 

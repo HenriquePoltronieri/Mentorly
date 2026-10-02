@@ -85,17 +85,18 @@ Verificação mais recente (02/10/2026, depois do Marco 6):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 88 arquivos, OK |
+| `py_compile` | 91 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 251 verificações, 0 falhas |
+| `smoke_api` | 267 verificações, 0 falhas |
 | `test_calculo` | 13 testes, OK |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
+| `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
 | `flutter analyze` | 0 warnings, 0 errors (restam infos de estilo, como `file_names` e `withOpacity`) |
-| `flutter test` | 13 testes, todos passando |
+| `flutter test` | 15 testes, todos passando |
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o Mentorly possui hoje **20 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
+Por contagem conservadora, o Mentorly possui hoje **21 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
 
 A principal funcionalidade obrigatória ainda ausente é a integração real de Inteligência Artificial (Marco 9).
 
@@ -244,18 +245,21 @@ Encerrar o ano é só trocar o status: **não** há promoção automática de al
 Detalhes técnicos e a migração estão em [banco-e-procedures.md](banco-e-procedures.md).
 
 ## Marco 7 — Transferência de aluno com histórico
-**06/10 – 08/10 · depende diretamente do Marco 6**
+**06/10 – 08/10 · ✅ concluído**
 
-**A transferência não deve ser implementada simplesmente trocando `aluno.turma_id`.** Isso apagaria o contexto acadêmico do aluno.
+`aluno.turma_id` continua sendo a referência rápida da turma atual, para manter as listas,
+dashboard, boletim e autorização do Professor compatíveis. A trilha é `aluno_turma_historico`:
+cada aluno tem um vínculo aberto, que a transferência fecha antes de criar o vínculo da nova turma.
+As três escritas acontecem na mesma transação.
 
-A transferência precisa preservar:
+- a transferência é exclusiva da Coordenação e usa a escola do JWT;
+- origem e destino precisam pertencer à mesma escola;
+- destino do mesmo ano ou de ano `planejamento`/`atual` é permitido; ano encerrado é bloqueado;
+- notas e atividades antigas não são reatribuídas; o desempenho atual considera apenas a turma atual;
+- cadastro manual e importação criam o primeiro vínculo; excluir aluno remove o histórico por cascade.
 
-- ano letivo;
-- turma anterior;
-- turma nova;
-- histórico acadêmico;
-- escola;
-- data/contexto da transferência.
+O histórico pode ser consultado pela Coordenação na lista de alunos. A migration cria, sem
+duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo e data de criação.
 
 ## Marco 8 — Gestão completa de professores
 **08/10 – 10/10**
@@ -730,7 +734,8 @@ Mais tarde pode ser sofisticada.
 
 ## Fase 6 — Completar gestão de alunos
 
-**Status: 🟡 parcial.** Editar e excluir aluno ✅ (Marco 4). **Transferência pendente** (Marco 7); a dependência do Marco 6 já está resolvida.
+**Status: ✅ concluída.** Editar e excluir aluno foram concluídos no Marco 4; transferência
+com histórico foi concluída no Marco 7.
 
 Implementar:
 
@@ -864,7 +869,7 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
-**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (251 verificações), `test_calculo` (13 testes), `test_migracao_ano_letivo` (24 verificações) e `flutter test` (13 testes). Uma suíte estruturada por módulo continua como evolução.
+**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (267 verificações), `test_calculo` (13 testes), `test_migracao_ano_letivo` (24 verificações), `test_migracao_transferencia_aluno` (8 verificações) e `flutter test` (15 testes). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
@@ -1029,7 +1034,7 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 | 7 | Boletim/fechamento | 🟠 | ✅ Marco 3 |
 | 8 | Dashboard/aluno em risco correto | 🟠 | ✅ Marco 2 |
 | 9 | Detalhe do aluno | 🟠 | ✅ Marco 3 |
-| 10 | Editar/excluir/transferir aluno | 🟡 | 🟡 editar e excluir no Marco 4; transferir no Marco 7 |
+| 10 | Editar/excluir/transferir aluno | 🟡 | ✅ Marcos 4 e 7 |
 | 11 | Ano letivo real | 🟡 | ✅ Marco 6 |
 | 12 | Gestão completa de professores | 🟡 | ⏳ Marco 8 |
 | 13 | Recuperação de senha | 🟡 | ⏳ pendente |

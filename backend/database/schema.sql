@@ -157,6 +157,50 @@ CREATE TABLE IF NOT EXISTS aluno (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
+-- aluno_turma_historico: trilha de matriculas do aluno.
+--
+-- aluno.turma_id continua sendo a referencia rapida e a fonte das listas
+-- atuais. Esta tabela preserva cada periodo: ha exatamente um vinculo aberto
+-- por aluno (data_fim NULL), e a transferencia fecha o anterior e abre o
+-- proximo na mesma transacao que atualiza aluno.turma_id.
+--
+-- coordenacao_id e redundante de proposito: a FK composta com turma impede
+-- que um historico aponte uma turma de outra escola. ano_letivo tambem e FK
+-- para o cadastro de anos da mesma escola, portanto nao fica como numero
+-- solto. ON DELETE CASCADE em aluno acompanha a politica ja existente de
+-- exclusao fisica do aluno e evita orfaos.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS aluno_turma_historico (
+    id                       INT AUTO_INCREMENT PRIMARY KEY,
+    aluno_id                 INT NOT NULL,
+    coordenacao_id           INT NOT NULL,
+    turma_id                 INT NOT NULL,
+    ano_letivo               INT NOT NULL,
+    data_inicio              DATE NOT NULL,
+    data_fim                 DATE NULL,
+    motivo                   VARCHAR(255) NULL,
+    vinculo_aberto_aluno_id  INT GENERATED ALWAYS AS
+        (IF(data_fim IS NULL, aluno_id, NULL)) VIRTUAL,
+    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_ath_vinculo_aberto (vinculo_aberto_aluno_id),
+    KEY idx_ath_aluno_inicio (aluno_id, data_inicio, id),
+    KEY idx_ath_turma (coordenacao_id, turma_id),
+    KEY idx_ath_ano (coordenacao_id, ano_letivo),
+    CONSTRAINT fk_ath_aluno
+        FOREIGN KEY (aluno_id) REFERENCES aluno (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_ath_turma
+        FOREIGN KEY (coordenacao_id, turma_id)
+        REFERENCES turma (coordenacao_id, id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ath_ano_letivo
+        FOREIGN KEY (coordenacao_id, ano_letivo)
+        REFERENCES ano_letivo (coordenacao_id, ano)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
 -- etapa: configuracao PADRAO DA ESCOLA para um ano letivo.
 -- Nao e recriada a cada acesso: a chave (coordenacao_id, ano_letivo, ordem)
 -- garante que reconfigurar atualiza em vez de duplicar. ano_letivo e FK

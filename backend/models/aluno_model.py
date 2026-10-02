@@ -61,11 +61,15 @@ class Aluno:
     # -----------------------------------------------------------------
     @staticmethod
     def create(turma_id, nome, matricula=None, email=None):
-        return insert(
-            "INSERT INTO aluno (turma_id, nome, matricula, email) "
-            "VALUES (%s, %s, %s, %s)",
-            (turma_id, nome, matricula, email),
-        )
+        with transacao() as cursor:
+            cursor.execute(
+                "INSERT INTO aluno (turma_id, nome, matricula, email) "
+                "VALUES (%s, %s, %s, %s)",
+                (turma_id, nome, matricula, email),
+            )
+            aluno_id = cursor.lastrowid
+            Aluno._criar_historico_inicial(cursor, aluno_id, turma_id)
+        return aluno_id
 
     @staticmethod
     def create_em_lote(turma_id, alunos):
@@ -84,7 +88,25 @@ class Aluno:
                      aluno.get("email")),
                 )
                 ids.append(cursor.lastrowid)
+                Aluno._criar_historico_inicial(cursor, cursor.lastrowid, turma_id)
         return ids
+
+    @staticmethod
+    def _criar_historico_inicial(cursor, aluno_id, turma_id):
+        """Cria o primeiro vinculo no mesmo commit do cadastro do aluno."""
+        cursor.execute(
+            "SELECT coordenacao_id, ano_letivo FROM turma WHERE id = %s FOR UPDATE",
+            (turma_id,),
+        )
+        turma = cursor.fetchone()
+        if not turma:
+            raise LookupError("Turma nao encontrada")
+        cursor.execute(
+            "INSERT INTO aluno_turma_historico "
+            "(aluno_id, coordenacao_id, turma_id, ano_letivo, data_inicio) "
+            "VALUES (%s, %s, %s, %s, CURDATE())",
+            (aluno_id, turma["coordenacao_id"], turma_id, turma["ano_letivo"]),
+        )
 
     @staticmethod
     def update(aluno_id, nome=None, matricula=None, email=None):

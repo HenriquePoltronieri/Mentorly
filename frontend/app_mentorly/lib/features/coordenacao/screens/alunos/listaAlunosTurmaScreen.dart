@@ -4,6 +4,8 @@ import '../../models/turmaModel.dart';
 import '../../../../core/widgets/adicionarAlunosModal.dart';
 import '../../../../core/widgets/editarAlunoModal.dart';
 import '../../services/alunosService.dart';
+import 'historicoAlunoModal.dart';
+import 'transferirAlunoModal.dart';
 
 // Alunos de uma turma, na visao da Coordenacao.
 // Chegou aqui pelo toque na turma em gerenciarTurmasScreen, que passa um
@@ -28,6 +30,7 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   List<dynamic> _alunos = [];
   int? _turmaId;
   String _turmaNome = '';
+  int? _turmaAno;
   bool _jaBuscou = false;
 
   @override
@@ -42,11 +45,16 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
     if (argumentos is TurmaModel) {
       _turmaId = int.tryParse(argumentos.id);
       _turmaNome = argumentos.nome;
+      _turmaAno = argumentos.anoLetivo;
     } else if (argumentos is Map) {
       _turmaId = argumentos['id'] is int
           ? argumentos['id'] as int
           : int.tryParse('${argumentos['id']}');
       _turmaNome = (argumentos['nome'] ?? argumentos['name'] ?? '').toString();
+      _turmaAno = argumentos['anoLetivo'] is int
+          ? argumentos['anoLetivo'] as int
+          : int.tryParse(
+              '${argumentos['anoLetivo'] ?? argumentos['ano_letivo'] ?? ''}');
     }
 
     _buscarAlunos();
@@ -97,7 +105,8 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   Future<void> _editarAluno(Map<String, dynamic> aluno) async {
     final salvou = await showDialog<bool>(
       context: context,
-      builder: (_) => EditarAlunoModal(aluno: aluno, papel: PapelAluno.coordenacao),
+      builder: (_) =>
+          EditarAlunoModal(aluno: aluno, papel: PapelAluno.coordenacao),
     );
     if (salvou == true) _buscarAlunos();
   }
@@ -134,14 +143,44 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
       _buscarAlunos();
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível conectar ao servidor')),
       );
     }
+  }
+
+  Future<void> _transferirAluno(Map<String, dynamic> aluno) async {
+    if (_turmaId == null) return;
+    final transferiu = await showDialog<bool>(
+      context: context,
+      builder: (_) => TransferirAlunoModal(
+        aluno: aluno,
+        turmaAtualId: _turmaId!,
+        turmaAtual: _turmaNome,
+        anoAtual: _turmaAno,
+      ),
+    );
+    if (transferiu == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Aluno transferido com histórico preservado')),
+      );
+      _buscarAlunos();
+    }
+  }
+
+  Future<void> _verHistorico(Map<String, dynamic> aluno) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => HistoricoAlunoModal(
+        alunoId: aluno['id'] as int,
+        alunoNome: (aluno['nome'] ?? '').toString(),
+      ),
+    );
   }
 
   @override
@@ -174,7 +213,8 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
           Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
           Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
+            child:
+                Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
           ),
         ],
       );
@@ -186,7 +226,8 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
           const SizedBox(height: 80),
           Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
-          const Center(child: Text('Nenhum aluno cadastrado nessa turma ainda')),
+          const Center(
+              child: Text('Nenhum aluno cadastrado nessa turma ainda')),
         ],
       );
     }
@@ -207,9 +248,15 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
             onSelected: (acao) {
               if (acao == 'editar') _editarAluno(aluno);
               if (acao == 'excluir') _excluirAluno(aluno);
+              if (acao == 'transferir') _transferirAluno(aluno);
+              if (acao == 'historico') _verHistorico(aluno);
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'editar', child: Text('Editar')),
+              PopupMenuItem(
+                  value: 'transferir', child: Text('Transferir aluno')),
+              PopupMenuItem(
+                  value: 'historico', child: Text('Histórico de turmas')),
               PopupMenuItem(value: 'excluir', child: Text('Excluir')),
             ],
           ),

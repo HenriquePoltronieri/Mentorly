@@ -1,4 +1,5 @@
 import '../../../core/services/apiService.dart';
+import '../models/historicoTurmaAlunoModel.dart';
 
 // Alunos de uma turma, na visao da Coordenacao.
 //
@@ -33,5 +34,25 @@ class AlunosService {
   // DELETE {baseUrl}/coordenacao/alunos/{alunoId}
   Future<void> excluirAluno(int alunoId) async {
     await _api.delete('/coordenacao/alunos/$alunoId');
+  }
+
+  Future<Map<String, dynamic>> transferirAluno({
+    required int alunoId,
+    required int turmaDestinoId,
+    String? motivo,
+  }) async {
+    final resposta =
+        await _api.post('/coordenacao/alunos/$alunoId/transferir', {
+      'turma_id': turmaDestinoId,
+      if (motivo != null && motivo.trim().isNotEmpty) 'motivo': motivo.trim(),
+    });
+    return resposta as Map<String, dynamic>;
+  }
+
+  Future<List<HistoricoTurmaAlunoModel>> historicoAluno(int alunoId) async {
+    final resposta = await _api.get('/coordenacao/alunos/$alunoId/historico');
+    return (resposta as List)
+        .map((item) => HistoricoTurmaAlunoModel.fromJson(item))
+        .toList();
   }
 }

@@ -30,8 +30,10 @@ class EstatisticasAlunoService:
         # mantida por compatibilidade com quem so quer um numero rapido.
         # O dado que importa de verdade agora e "etapas", calculado pela
         # regra ponderada.
-        notas = Nota.find_by_aluno(aluno_id)
-        resumo = Nota.media_do_aluno(aluno_id)
+        # A turma atual delimita o contexto: notas de turma anterior ficam
+        # preservadas, mas nao entram no desempenho da turma nova.
+        notas = Nota.find_by_aluno(aluno_id, aluno["turma_id"])
+        resumo = Nota.media_do_aluno(aluno_id, aluno["turma_id"])
 
         return {
             "id": aluno["id"],

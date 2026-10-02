@@ -59,6 +59,18 @@ def excluir_aluno(aluno_id):
     return coordenacao_controller.excluir_aluno(aluno_id)
 
 
+@coordenacao_blueprint.post("/alunos/<int:aluno_id>/transferir")
+@coordenacao_required
+def transferir_aluno(aluno_id):
+    return coordenacao_controller.transferir_aluno(aluno_id)
+
+
+@coordenacao_blueprint.get("/alunos/<int:aluno_id>/historico")
+@coordenacao_required
+def historico_aluno(aluno_id):
+    return coordenacao_controller.historico_aluno(aluno_id)
+
+
 @coordenacao_blueprint.get("/turmas/<int:turma_id>/alunos/modelo-planilha")
 @coordenacao_required
 def modelo_planilha_alunos(turma_id):

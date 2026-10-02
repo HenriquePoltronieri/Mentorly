@@ -13,6 +13,7 @@ from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
 from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.aluno.listar_alunos import ListarAlunosService
+from services.aluno.transferir_aluno import HistoricoAlunoService, TransferirAlunoService
 from services.coordenacao.cadastrar_professor import CadastrarProfessorService
 from services.coordenacao.listar_professores import ListarProfessoresService
 from services.coordenacao.vincular_turmas import (
@@ -116,6 +117,25 @@ class CoordenacaoController:
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
         return "", 204
+
+    def transferir_aluno(self, aluno_id):
+        dados = request.get_json(silent=True) or {}
+        try:
+            aluno = TransferirAlunoService().execute(
+                aluno_id, coordenacao_atual(),
+                dados.get("turma_id", dados.get("turmaId")), dados.get("motivo"))
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(aluno)
+
+    def historico_aluno(self, aluno_id):
+        try:
+            historico = HistoricoAlunoService().execute(aluno_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return jsonify(historico)
 
     def modelo_planilha_alunos(self, turma_id):
         return Response(

@@ -1,6 +1,6 @@
 # Mentorly
 
-> Estado atual: **Marcos 1 a 6 concluídos**. O plano até a apresentação e o histórico das
+> Estado atual: **Marcos 1 a 7 concluídos**. O plano até a apresentação e o histórico das
 > decisões estão em [docs/roadmap.md](docs/roadmap.md).
 
 ## Sobre o Projeto
@@ -46,7 +46,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 20 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 21 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -57,23 +57,24 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 5. Cadastrar alunos manualmente
 6. Importar alunos por planilha
 7. Editar e excluir aluno
-8. Cadastrar professor com convite
-9. Vincular professores a turmas
-10. Relatório de turmas e atividades
-11. Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa
+8. Transferir aluno entre turmas com histórico preservado
+9. Cadastrar professor com convite
+10. Vincular professores a turmas
+11. Relatório de turmas e atividades
+12. Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa
 
 **Professor**
-12. Primeiro acesso por convite e login
-13. Criar, editar e excluir atividade (etapa, critério e valor máximo)
-14. Listar e buscar atividades
-15. Lançar notas
-16. Importar notas por planilha
-17. Excluir nota lançada
-18. Dashboard com alunos em risco
-19. Desempenho do aluno por etapa e consolidado
-20. Boletim da turma
+13. Primeiro acesso por convite e login
+14. Criar, editar e excluir atividade (etapa, critério e valor máximo)
+15. Listar e buscar atividades
+16. Lançar notas
+17. Importar notas por planilha
+18. Excluir nota lançada
+19. Dashboard com alunos em risco
+20. Desempenho do aluno por etapa e consolidado
+21. Boletim da turma
 
-**Ainda não implementado:** transferência de aluno, gestão completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
+**Ainda não implementado:** gestão completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
@@ -124,6 +125,7 @@ Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
 | `Turma` | `turma` | Turma da escola, em um ano letivo da própria escola |
 | `ProfessorTurma` | `professor_turma` | Vínculo criado pela Coordenação |
 | `Aluno` | `aluno` | Aluno de uma turma |
+| `AlunoTurmaHistorico` | `aluno_turma_historico` | Vínculos atuais e anteriores do aluno com turma e ano letivo |
 | `Etapa` | `etapa` | Etapa de um ano letivo, com nota mínima/máxima e `fechada` |
 | `Criterio` | `criterio` | Critério de avaliação de uma etapa, com peso |
 | `Atividade` | `atividade` | Atividade ligada a turma, etapa e critério |
@@ -351,9 +353,10 @@ O backend precisa estar rodando. O endereço da API fica em um único lugar,
 ```bash
 cd backend
 python scripts/smoke_db.py       # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py      # API de ponta a ponta (251 verificações)
+python scripts/smoke_api.py      # API de ponta a ponta (267 verificações)
 python scripts/test_calculo.py   # motor de cálculo, sem banco
 python scripts/test_migracao_ano_letivo.py   # migração do ano letivo sobre um banco no formato antigo
+python scripts/test_migracao_transferencia_aluno.py  # migration de histórico de turma
 
 cd ../frontend/app_mentorly
 flutter analyze
@@ -374,9 +377,9 @@ não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ## Status do Projeto
 
-Em desenvolvimento. Os Marcos 1 a 6 (avaliação, desempenho, ciclo escolar, gerenciamento de
-alunos, exclusão de nota e ano letivo) estão concluídos e validados. Os próximos marcos são
-transferência de aluno, gestão de professores e IA, conforme [docs/roadmap.md](docs/roadmap.md).
+Em desenvolvimento. Os Marcos 1 a 7 (avaliação, desempenho, ciclo escolar, gerenciamento de
+alunos, exclusão de nota, ano letivo e transferência com histórico) estão concluídos e validados.
+Os próximos marcos são gestão de professores e IA, conforme [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
