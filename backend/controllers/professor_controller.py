@@ -22,7 +22,11 @@ from services.professor.listar_turmas import (
     ListarAlunosDaTurmaService,
     ListarTurmasDoProfessorService,
 )
-from services.professor.notas import LancarNotasService, ListarNotasService
+from services.professor.notas import (
+    ExcluirNotaService,
+    LancarNotasService,
+    ListarNotasService,
+)
 
 XLSX_MIME = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -166,6 +170,15 @@ class ProfessorController:
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(resultado), 201
+
+    def excluir_nota(self, nota_id):
+        try:
+            ExcluirNotaService().execute(nota_id, usuario_atual_id())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return "", 204
 
     def modelo_planilha_notas(self, atividade_id):
         """Modelo ja preenchido com os alunos da turma da atividade."""

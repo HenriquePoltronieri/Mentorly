@@ -119,6 +119,39 @@ class LancarNotasService:
         return {"lancadas": len(lancamentos)}
 
 
+class ExcluirNotaService:
+    """Exclusao de uma nota ja lancada, so pelo Professor (Marco 5).
+
+    Reaproveita as mesmas guardas de LancarNotasService: o professor
+    precisa lecionar na turma da atividade, e a etapa nao pode estar
+    fechada - excluir tambem muda o resultado, entao segue a mesma regra
+    que ja bloqueia lancar/editar nota em etapa fechada.
+    """
+
+    def execute(self, nota_id, professor_id):
+        nota = Nota.find_by_id(nota_id)
+        if not nota:
+            raise LookupError("Nota nao encontrada")
+
+        atividade = _atividade_do_professor(nota["atividade_id"], professor_id)
+
+        # Defesa extra, mesmo que hoje o aluno de uma nota nunca mude de
+        # turma (nao existe transferencia de aluno): confirma que o aluno
+        # da nota ainda e da turma da atividade antes de excluir.
+        aluno = Aluno.find_by_id(nota["aluno_id"])
+        if not aluno or aluno["turma_id"] != atividade["turma_id"]:
+            raise LookupError("Nota nao encontrada")
+
+        if atividade.get("etapa_id") and Etapa.esta_fechada(
+            atividade["etapa_id"], atividade["coordenacao_id"]
+        ):
+            raise ValueError(
+                "Nao e possivel excluir a nota: a etapa ja esta fechada."
+            )
+
+        Nota.delete(nota_id)
+
+
 def _limpo(valor):
     """20.0 vira "20"; 13.5 continua "13.5". So para a mensagem de erro."""
     numero = float(valor)

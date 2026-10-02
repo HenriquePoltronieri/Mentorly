@@ -79,6 +79,12 @@ def boletim_turma(turma_id):
     return professor_controller.boletim_turma(turma_id)
 
 
+@professor_blueprint.delete("/notas/<int:nota_id>")
+@professor_required
+def excluir_nota(nota_id):
+    return professor_controller.excluir_nota(nota_id)
+
+
 # ---------------------------------------------------------------------
 # /api/atividades/<id>/notas - lancamento de notas
 # Conteudo pedagogico: a Coordenacao recebe 403 aqui.

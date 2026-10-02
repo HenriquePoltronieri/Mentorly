@@ -1280,6 +1280,82 @@ def main():
         ).get_json() != [],
                "7b: aluno de turma nao vinculada continua existindo depois da tentativa")
 
+        # ---------------------------------------------------------
+        print("\n[15] Marco 5 - exclusao de nota")
+
+        etapa_del_nota = criar_etapa(coord_a, "Etapa Exclusao Nota", 61, 6, 10)
+        crit_del_nota = criar_criterio(coord_a, etapa_del_nota["id"], "Prova", 100)
+        ativ_del_nota = criar_atividade(
+            professor_a, turma_c["id"], etapa_del_nota["id"],
+            crit_del_nota["id"], 10, "Prova Exclusao Nota",
+        )
+        lancar(professor_a, ativ_del_nota["id"], aluno_joao["id"], 7)
+
+        def _nota_do_joao(atividade_id):
+            notas = professor_a.get(
+                "/api/atividades/%d/notas" % atividade_id
+            ).get_json()["notas"]
+            return next(
+                (n for n in notas if n["alunoId"] == aluno_joao["id"]), None
+            )
+
+        nota_joao = _nota_do_joao(ativ_del_nota["id"])
+        checar(nota_joao is not None and nota_joao["valor"] == 7.0,
+               "nota lancada aparece na listagem antes de excluir")
+
+        # --- Seguranca ---
+        sem_token = Cliente(cliente_flask)
+        checar(sem_token.delete(
+            "/api/professor/notas/%d" % nota_joao["id"]
+        ).status_code == 401, "excluir nota sem autenticacao responde 401")
+
+        checar(coord_a.delete(
+            "/api/professor/notas/%d" % nota_joao["id"]
+        ).status_code == 403,
+               "COORDENACAO recebe 403 na rota de excluir nota do Professor")
+
+        checar(professor_b.delete(
+            "/api/professor/notas/%d" % nota_joao["id"]
+        ).status_code == 404, "professor de outra escola nao exclui a nota")
+
+        checar(professor_a2.delete(
+            "/api/professor/notas/%d" % nota_joao["id"]
+        ).status_code == 404,
+               "professor da mesma escola sem vinculo com a turma nao exclui a nota")
+
+        checar(professor_a.delete(
+            "/api/professor/notas/999999999"
+        ).status_code == 404, "excluir nota inexistente responde 404")
+
+        # A nota nao pode ter sido afetada por nenhuma das tentativas acima.
+        checar(_nota_do_joao(ativ_del_nota["id"])["valor"] == 7.0,
+               "nota continua intacta depois das tentativas recusadas")
+
+        # --- Etapa fechada bloqueia a exclusao ---
+        coord_a.post("/api/config/etapas/%d/fechar" % etapa_del_nota["id"])
+        bloqueado = professor_a.delete("/api/professor/notas/%d" % nota_joao["id"])
+        checar(bloqueado.status_code == 400,
+               "excluir nota de etapa fechada responde 400")
+        checar(_nota_do_joao(ativ_del_nota["id"])["valor"] == 7.0,
+               "nota continua existindo depois da tentativa bloqueada por etapa fechada")
+        coord_a.post("/api/config/etapas/%d/reabrir" % etapa_del_nota["id"])
+
+        # --- Funcionamento: professor exclui a propria nota, etapa aberta ---
+        excluida = professor_a.delete("/api/professor/notas/%d" % nota_joao["id"])
+        checar(excluida.status_code == 204,
+               "professor exclui nota propria com a etapa aberta")
+
+        checar(_nota_do_joao(ativ_del_nota["id"]) is None
+               or _nota_do_joao(ativ_del_nota["id"])["valor"] is None,
+               "nota realmente desaparece depois de excluida")
+
+        est_joao_sem_nota = estatisticas_de(professor_a, aluno_joao["id"])
+        etapa_sem_nota = etapa_por_id(est_joao_sem_nota, etapa_del_nota["id"])
+        checar(etapa_sem_nota["situacao"] == "em_andamento"
+               and etapa_sem_nota["atividades_sem_nota"] == 1,
+               "o calculo existente trata a nota excluida como ausente, "
+               "nao como zero (etapa volta a em_andamento)")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

@@ -3,6 +3,7 @@ import '../../../../core/services/apiService.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../controllers/atividadesController.dart';
 import '../../models/atividadeModel.dart';
+import '../../models/notaModel.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../services/professorAlunosService.dart';
 import 'lancarNotasModal.dart';
@@ -33,6 +34,12 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
   TurmaModel? _turma;
   List<dynamic> _alunos = [];
   bool _jaBuscou = false;
+
+  // Nota (com id) de cada aluno, pra saber qual excluir - ver
+  // _prepararControladores. Enquanto um alunoId estiver neste set, o
+  // botao de excluir dele fica desabilitado (evita duplo toque).
+  final Map<String, NotaModel> _notaPorAluno = {};
+  final Set<String> _excluindoNotaDe = {};
 
   @override
   void didChangeDependencies() {
@@ -80,15 +87,70 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
   }
 
   void _prepararControladores() {
+    _notaPorAluno.clear();
     for (final aluno in _alunos) {
       final alunoId = aluno['id'].toString();
-      final nota = _controller.notas.where((n) => n.alunoId.toString() == alunoId);
-      final valorExistente =
-          nota.isNotEmpty ? nota.first.valor : null;
+      final notasDoAluno =
+          _controller.notas.where((n) => n.alunoId.toString() == alunoId);
+      final nota = notasDoAluno.isNotEmpty ? notasDoAluno.first : null;
+
+      if (nota != null) _notaPorAluno[alunoId] = nota;
 
       _controladoresNota[alunoId] = TextEditingController(
-        text: valorExistente != null ? valorExistente.toString() : '',
+        text: nota?.valor != null ? nota!.valor.toString() : '',
       );
+    }
+  }
+
+  // Exclusao de uma nota ja lancada (Marco 5). So aparece na tela quando
+  // o aluno ja tem nota (nota.id != null); confirma antes de excluir,
+  // igual ao padrao ja usado para excluir aluno.
+  Future<void> _excluirNota(Map<String, dynamic> aluno) async {
+    final alunoId = aluno['id'].toString();
+    final nota = _notaPorAluno[alunoId];
+    if (nota?.id == null) return;
+
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (contexto) => AlertDialog(
+        title: const Text('Excluir nota'),
+        content: Text(
+          'Tem certeza que deseja excluir a nota de "${aluno['nome']}" '
+          'nesta atividade? Essa ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(contexto, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    setState(() => _excluindoNotaDe.add(alunoId));
+    try {
+      await _controller.excluirNota(nota!.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nota de "${aluno['nome']}" excluída')),
+      );
+      await _buscarDados();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.mensagem)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível conectar ao servidor')),
+      );
+    } finally {
+      if (mounted) setState(() => _excluindoNotaDe.remove(alunoId));
     }
   }
 
@@ -256,6 +318,8 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
       itemBuilder: (context, index) {
         final aluno = _alunos[index];
         final alunoId = aluno['id'].toString();
+        final temNotaLancada = _notaPorAluno[alunoId] != null;
+        final excluindo = _excluindoNotaDe.contains(alunoId);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -263,21 +327,45 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Text(aluno['nome'] ?? ''),
             subtitle: Text('Matrícula: ${aluno['matricula'] ?? ''}'),
-            trailing: SizedBox(
-              width: 80,
-              child: TextField(
-                controller: _controladoresNota[alunoId],
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  hintText: _atividade?.notaMaxima == null
-                      ? 'nota'
-                      : '0-${_formatarValor(_atividade!.notaMaxima!)}',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 70,
+                  child: TextField(
+                    controller: _controladoresNota[alunoId],
+                    enabled: !excluindo,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: _atividade?.notaMaxima == null
+                          ? 'nota'
+                          : '0-${_formatarValor(_atividade!.notaMaxima!)}',
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
                 ),
-              ),
+                // So aparece quando o aluno ja tem uma nota lancada -
+                // campo em branco continua sendo so "ainda nao lancada".
+                if (temNotaLancada) ...[
+                  const SizedBox(width: 4),
+                  excluindo
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          tooltip: 'Excluir nota',
+                          icon: const Icon(Icons.delete_outline,
+                              size: 20, color: Colors.red),
+                          onPressed: () => _excluirNota(aluno),
+                        ),
+                ],
+              ],
             ),
           ),
         );

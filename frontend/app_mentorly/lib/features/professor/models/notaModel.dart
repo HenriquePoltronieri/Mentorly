@@ -4,6 +4,10 @@
 // turma - quem ainda nao tem nota vem com valor nulo, pra tela conseguir
 // listar a turma inteira.
 class NotaModel {
+  // Nulo quando o aluno ainda nao tem nota lancada nesta atividade (a
+  // listagem traz a turma inteira, com ou sem nota - ver comentario
+  // acima). So da pra excluir uma nota que ja tem id.
+  final int? id;
   final int alunoId;
   final String alunoNome;
   final String matricula;
@@ -12,6 +16,7 @@ class NotaModel {
   final String? observacao;
 
   NotaModel({
+    this.id,
     required this.alunoId,
     this.alunoNome = '',
     this.matricula = '',
@@ -27,6 +32,7 @@ class NotaModel {
         bruto == null ? null : (bruto as num).toDouble();
 
     return NotaModel(
+      id: json['id'] as int?,
       alunoId: json['alunoId'] is int
           ? json['alunoId'] as int
           : int.parse('${json['alunoId']}'),

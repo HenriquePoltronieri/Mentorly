@@ -34,6 +34,17 @@ class Nota:
         )
 
     @staticmethod
+    def find_by_id(nota_id):
+        """Nota individual, com atividade_id e aluno_id para o service
+        (Marco 5) descobrir turma/professor/etapa antes de autorizar."""
+        return query_one(
+            "SELECT id, atividade_id, aluno_id, valor, observacao, "
+            "       created_at, updated_at "
+            "FROM nota WHERE id = %s",
+            (nota_id,),
+        )
+
+    @staticmethod
     def find_by_aluno(aluno_id):
         """Historico do aluno, por atividade e etapa. Base das estatisticas."""
         return query_all(
