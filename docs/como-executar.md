@@ -77,7 +77,7 @@ cd backend
 python scripts/init_db.py
 ```
 
-Isso cria o banco `mentorly_db`, aplica o `database/schema.sql` (10 tabelas), roda as
+Isso cria o banco `mentorly_db`, aplica o `database/schema.sql` (11 tabelas), roda as
 migrações de `database/migrations.py` e instala as 5 procedures. O `python app.py` faz o
 mesmo ao subir, então este passo é opcional — serve para recriar o banco sem subir o Flask.
 
@@ -112,18 +112,26 @@ Todos os comandos abaixo partem da pasta `backend`:
 python scripts/smoke_db.py       # conexão, isolamento entre escolas e procedures
 python scripts/smoke_api.py      # a API de ponta a ponta
 python scripts/test_calculo.py   # motor de cálculo acadêmico, sem banco
+python scripts/test_migracao_ano_letivo.py   # migração do ano letivo, em banco temporário
 ```
 
-- `smoke_db.py` prova que o banco recusa cruzar escolas (chaves estrangeiras compostas) e que as
+- `smoke_db.py` prova que o banco recusa cruzar escolas (chaves estrangeiras compostas), recusa
+  turma e etapa em ano que a escola não cadastrou, dois anos atuais e ano repetido, e que as
   procedures rodam com o filtro de escola.
-- `smoke_api.py` percorre a API pelo cliente de teste do Flask (185 verificações). Cobre login e
+- `smoke_api.py` percorre a API pelo cliente de teste do Flask (251 verificações). Cobre login e
   cadastro, rota protegida sem token, isolamento entre duas escolas, permissões por papel
   (a Coordenação não cria atividade nem lança nota), configuração do ano letivo, importação de
   planilha, avaliação acadêmica (etapa, critério, valor máximo e teto da nota), cálculo por etapa,
-  boletim e fechamento de etapa, importação de nota sem ambiguidade, edição e exclusão de aluno e
-  exclusão de nota.
-- `test_calculo.py` usa `unittest` e não acessa o banco (10 testes): nota ausente diferente de
-  zero, pesos, normalização, ausência de arredondamento intermediário e consolidado.
+  boletim e fechamento de etapa, importação de nota sem ambiguidade, edição e exclusão de aluno,
+  exclusão de nota e o ano letivo (cadastro, ano atual único, turma e etapa por ano, atividade só
+  com etapa do mesmo ano, dashboard e boletim sem misturar anos). O ano dos testes é fixo (2026):
+  nenhum teste depende do relógio da máquina.
+- `test_calculo.py` usa `unittest` e não acessa o banco (13 testes): nota ausente diferente de
+  zero, pesos, normalização, ausência de arredondamento intermediário, consolidado e a exigência
+  de ano no motor.
+- `test_migracao_ano_letivo.py` cria um banco temporário `<DB_NAME>_mig` no formato antigo (turma
+  sem ano, anos soltos), roda a migração duas vezes e interrompida no meio, e confere que nada
+  se perde (24 verificações). Apaga o banco no final.
 
 Os scripts de smoke usam o banco indicado em `DB_NAME` e **limpam os dados que criam** ao
 terminar. Para não tocar nos seus dados, aponte `DB_NAME` para um banco temporário:
@@ -139,7 +147,7 @@ No Flutter, a partir de `frontend/app_mentorly`:
 
 ```bash
 flutter analyze   # 0 warnings e 0 errors; restam infos de estilo (file_names, withOpacity)
-flutter test      # 6 testes: fluxos de login e primeiro acesso, e abertura do app
+flutter test      # 13 testes: login e primeiro acesso, abertura do app e modelo de ano letivo
 ```
 
 ### E-mail em desenvolvimento
@@ -200,8 +208,10 @@ mostram "Não foi possível conectar ao servidor".
 
 1. **Cadastre uma Coordenação** ("Não tem conta? Cadastre-se"). Cada cadastro é uma
    escola independente.
-2. **Configurar Ano Letivo** — etapas, notas mínima/máxima e critérios. Fica salvo como
-   padrão da escola; entrar de novo edita em vez de duplicar.
+2. **Anos Letivos** — cadastre o ano (por exemplo, 2026) e marque-o como atual: turmas e etapas só
+   existem dentro de um ano da escola. Depois, **Configurar Ano Letivo** — etapas, notas
+   mínima/máxima e critérios do ano atual (para outro ano, use o menu do ano em Anos Letivos).
+   Fica salvo como padrão da escola; entrar de novo edita em vez de duplicar.
 3. **Gerenciar Turmas** — crie a turma e toque nela para adicionar alunos (manualmente
    ou por planilha).
 4. **Professores** — cadastre o professor. Sem SMTP configurado, copie o link do convite

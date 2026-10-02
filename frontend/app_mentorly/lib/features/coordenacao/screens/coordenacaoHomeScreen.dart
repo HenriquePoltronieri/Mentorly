@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../app/routes.dart';
 import '../../../core/services/apiService.dart';
 import '../../../core/services/authService.dart';
+import '../controllers/configAnoLetivoController.dart';
 
 // Tela principal da coordenacao, depois do login. Funciona como um menu.
 //
@@ -75,15 +76,27 @@ class CoordenacaoHomeScreen extends StatelessWidget {
               Navigator.pushNamed(context, AppRoutes.listaTurmasProfessor);
             },
           ),
+          // Anos letivos da escola: cadastrar, marcar o atual e encerrar.
+          _ItemMenu(
+            titulo: 'Anos Letivos',
+            subtitulo: 'Criar anos, marcar o ano atual e encerrar anos',
+            icone: Icons.event_note_outlined,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.anosLetivos);
+            },
+          ),
           // As tres telas de configuracao formam UM fluxo com passos
           // encadeados (etapas -> notas -> criterios). Entrar direto no
           // passo 2 ou 3 deixava a tela sem as etapas carregadas, entao o
-          // menu agora tem uma unica porta de entrada: o passo 1.
+          // menu agora tem uma unica porta de entrada: o passo 1. Por aqui
+          // o fluxo configura o ano ATUAL da escola; para configurar outro
+          // ano (por exemplo, o do planejamento), use Anos Letivos.
           _ItemMenu(
             titulo: 'Configurar Ano Letivo',
-            subtitulo: 'Etapas, notas de aprovação e critérios de avaliação',
+            subtitulo: 'Etapas, notas de aprovação e critérios do ano atual',
             icone: Icons.calendar_month_outlined,
             onTap: () {
+              ConfigAnoLetivoController().anoLetivo = null;
               Navigator.pushNamed(context, AppRoutes.configEtapas);
             },
           ),

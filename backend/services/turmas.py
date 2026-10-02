@@ -1,8 +1,10 @@
 from models.turma_model import Turma
+from services.config.anos_letivos import resolver_ano_letivo, validar_ano
 
 
-def listar_turmas(coordenacao_id):
-    linhas = Turma.find_all_by_coordenacao(coordenacao_id)
+def listar_turmas(coordenacao_id, ano_letivo=None):
+    """Turmas da escola; com ano_letivo, so as daquele ano."""
+    linhas = Turma.find_all_by_coordenacao(coordenacao_id, ano_letivo)
     for linha in linhas:
         linha["total_alunos"] = Turma.contar_alunos(linha["id"])
     return [Turma.to_dict(linha) for linha in linhas]
@@ -27,8 +29,13 @@ def criar_turma(coordenacao_id, nome, descricao=None, disciplina=None,
     if Turma.find_by_nome(nome, coordenacao_id):
         raise ValueError("Ja existe uma turma com este nome nesta escola")
 
+    # Toda turma pertence a um ano letivo DESTA escola. Sem ano informado, vale
+    # o ano atual da escola (nunca o do relogio); ano de outra escola, ou nao
+    # cadastrado, vira LookupError (404); ano encerrado nao recebe turma nova.
+    ano = resolver_ano_letivo(coordenacao_id, ano_letivo)["ano"]
+
     turma_id = Turma.create(
-        coordenacao_id, nome, descricao, disciplina, turno, ano_letivo
+        coordenacao_id, nome, descricao, disciplina, turno, ano
     )
     return Turma.to_dict(Turma.find_by_id(turma_id, coordenacao_id))
 
@@ -47,9 +54,24 @@ def atualizar_turma(turma_id, coordenacao_id, nome=None, descricao=None,
         if duplicada and duplicada["id"] != turma_id:
             raise ValueError("Ja existe uma turma com este nome nesta escola")
 
+    novo_ano = None
+    if ano_letivo is not None and str(ano_letivo).strip() != "":
+        ano = validar_ano(ano_letivo)
+        # Reenviar o ano que a turma ja tem nao pode falhar so porque o ano
+        # foi encerrado depois: so uma MUDANCA de ano passa pela validacao.
+        if ano != atual["ano_letivo"]:
+            resolver_ano_letivo(coordenacao_id, ano)
+            # As atividades da turma apontam para etapas do ano antigo; mover
+            # a turma de ano deixaria atividade e etapa em anos diferentes.
+            if Turma.contar_atividades(turma_id):
+                raise ValueError(
+                    "A turma ja tem atividades e nao pode mudar de ano letivo"
+                )
+            novo_ano = ano
+
     Turma.update(
         turma_id, coordenacao_id, nome, descricao, disciplina, turno,
-        ano_letivo,
+        novo_ano,
     )
     return Turma.to_dict(Turma.find_by_id(turma_id, coordenacao_id))
 

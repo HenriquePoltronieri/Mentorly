@@ -95,7 +95,7 @@ Na mesma virada, o sistema ganhou login de verdade:
 O atalho "Entrar no painel da coordenação", que existia só para chegar nas telas enquanto o login
 não tinha backend, foi removido.
 
-## Marcos 1 a 5
+## Marcos 1 a 6
 
 A partir daí o desenvolvimento passou a ser organizado por marcos, descritos em
 [roadmap.md](roadmap.md):
@@ -107,6 +107,7 @@ A partir daí o desenvolvimento passou a ser organizado por marcos, descritos em
 | 3 — Ciclo escolar | Boletim da turma, consolidado, fechamento e reabertura de etapa, bloqueio de alterações em etapa fechada |
 | 4 — Alunos e correções | Editar e excluir aluno; importação de notas sem ambiguidade por nome; `SECRET_KEY` sem valor padrão; correção do arredondamento intermediário; aviso de alunos incompletos no fechamento |
 | 5 — Exclusão de nota | Excluir uma nota lançada, com confirmação e bloqueio em etapa fechada |
+| 6 — Ano letivo | Cadastro de anos letivos por escola (`planejamento`, `atual`, `encerrado`), turma e etapa presas a um ano da escola por chave estrangeira, um único ano atual garantido pelo banco, migração dos dados existentes e fim do ano assumido pelo relógio no boletim, dashboard e etapa atual |
 
 ## Simplificação técnica
 
@@ -120,15 +121,16 @@ URLs e os status HTTP foram preservados.
 
 ## Estado atual
 
-Os Marcos 1 a 5 estão concluídos e o projeto tem 20 funcionalidades demonstráveis, listadas em
+Os Marcos 1 a 6 estão concluídos e o projeto tem 20 funcionalidades demonstráveis, listadas em
 [funcionalidades.md](funcionalidades.md). A verificação mais recente (02/10/2026):
 
-- `py_compile`: 85 arquivos, OK;
+- `py_compile`: 88 arquivos, OK;
 - `smoke_db`: OK;
-- `smoke_api`: 185 verificações, 0 falhas;
-- `test_calculo`: 10 testes, OK;
+- `smoke_api`: 251 verificações, 0 falhas;
+- `test_calculo`: 13 testes, OK;
+- `test_migracao_ano_letivo`: 24 verificações, 0 falhas;
 - `flutter analyze`: 0 warnings e 0 errors;
-- `flutter test`: 6 testes, OK.
+- `flutter test`: 13 testes, OK.
 
-Faltam, para o MVP, o ano letivo como entidade própria, a transferência de aluno com histórico, a
-gestão completa de professores e a IA. O plano, com datas, está em [roadmap.md](roadmap.md).
+Faltam, para o MVP, a transferência de aluno com histórico, a gestão completa de professores e a
+IA. O plano, com datas, está em [roadmap.md](roadmap.md).

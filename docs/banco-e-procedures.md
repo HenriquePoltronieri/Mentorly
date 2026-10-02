@@ -23,11 +23,12 @@ que impede uma escola de ver os dados da outra.
 | Tabela | O que guarda | Como chega na escola |
 |---|---|---|
 | `coordenacao` | A escola em si (login da Coordenação) | é a raiz |
+| `ano_letivo` | Anos letivos da escola (`planejamento`, `atual` ou `encerrado`) | `coordenacao_id` |
 | `professor` | Professores da escola | `coordenacao_id` |
-| `turma` | Turmas da escola | `coordenacao_id` |
+| `turma` | Turmas da escola, cada uma em um ano letivo | `coordenacao_id` + `ano_letivo` (FK composta) |
 | `professor_turma` | O vínculo que a Coordenação cria | `coordenacao_id` (FK composta) |
 | `aluno` | Alunos de uma turma | `turma_id` → `turma.coordenacao_id` |
-| `etapa` | Etapas do ano letivo (padrão da escola), com a flag `fechada` | `coordenacao_id` |
+| `etapa` | Etapas de um ano letivo (padrão da escola), com a flag `fechada` | `coordenacao_id` + `ano_letivo` (FK composta) |
 | `criterio` | Critérios de avaliação de cada etapa | `coordenacao_id` + `etapa_id` |
 | `atividade` | Atividades criadas pelo Professor | `coordenacao_id` (FK composta) |
 | `nota` | Nota de um aluno em uma atividade | `atividade_id` / `aluno_id` |
@@ -179,6 +180,83 @@ etapa aberta ou em andamento nunca entra, porque isso equivaleria a tratá-la co
 nenhuma etapa fechada e completa, a situação é `em_andamento` e não há percentual. Com resultado,
 o percentual é a média das etapas consideradas, e a situação é `abaixo_do_minimo` se qualquer uma
 delas estiver abaixo do mínimo.
+
+## Marco 6 — ano letivo como cadastro da escola
+
+Antes do Marco 6, o ano letivo era só um número: `turma.ano_letivo` podia ser `NULL` e
+`etapa.ano_letivo` era um inteiro sem nenhuma regra. Quando faltava o ano, todo o sistema assumia o
+ano do relógio da máquina (`date.today().year`), então boletim, dashboard e criação de etapa
+podiam apontar para anos diferentes e o resultado dependia da data em que o código rodava.
+
+### A tabela
+
+```sql
+ano_letivo (
+    id, coordenacao_id, ano,
+    status ENUM('planejamento', 'atual', 'encerrado') DEFAULT 'planejamento',
+    atual_unico GENERATED (IF(status = 'atual', 1, NULL)),
+    UNIQUE (coordenacao_id, ano),
+    UNIQUE (coordenacao_id, atual_unico)
+)
+```
+
+- **Cada escola tem os seus anos.** `UNIQUE (coordenacao_id, ano)`: a mesma escola não repete um ano, e
+  duas escolas podem ter o mesmo ano (2026) sem se tocar.
+- **No máximo um ano atual por escola.** `atual_unico` é uma coluna gerada que vale 1 só quando o
+  status é `atual`. O índice único aceita vários `NULL` (anos em planejamento ou encerrados) e
+  recusa dois `1` na mesma escola. É a regra feita pelo próprio MySQL, sem trigger. Trocar o ano
+  atual exige encerrar o antigo e marcar o novo; o backend faz os dois comandos na mesma transação.
+
+### Quem é a fonte de verdade
+
+O **cadastro `ano_letivo`** diz quais anos a escola tem e qual é o atual. `turma.ano_letivo` e
+`etapa.ano_letivo` continuam guardando o número do ano, mas agora esse número é a **chave
+estrangeira composta** `(coordenacao_id, ano_letivo)` para o cadastro. Não existe um segundo campo
+para o mesmo dado: o banco recusa turma ou etapa de um ano que a escola não cadastrou, e nunca
+aceita o ano de outra escola. `turma.ano_letivo` passou a ser `NOT NULL`. A API e o Flutter
+continuam lendo o mesmo campo `ano_letivo`/`anoLetivo`.
+
+| Regra | Onde é garantida |
+|---|---|
+| Turma e etapa só existem em um ano cadastrado pela própria escola | FK composta no banco |
+| Um único ano atual por escola | índice único da coluna gerada, no banco |
+| Não se apaga ano que ainda tem turma ou etapa | `ON DELETE RESTRICT`, mais uma mensagem clara no service |
+| Ano encerrado não recebe turma nem etapa nova | service (`resolver_ano_letivo`) |
+| Turma só muda de ano se ainda não tiver atividades | service (`atualizar_turma`) |
+| A etapa de uma atividade é do mesmo ano da turma | service (`validar_ano_da_etapa`) |
+
+### O contexto de ano no resto do sistema
+
+- **Sem ano informado, vale o ano atual da escola** (`resolver_ano_letivo`), nunca o do relógio.
+- **Boletim, desempenho do aluno e lista de alunos** usam o ano da **própria turma**.
+- **Dashboard do Professor** usa o ano atual da escola (ou `?ano_letivo=`, se a escola tiver o ano) e só
+  conta as turmas desse ano. Sem ano atual, o resumo vem zerado e com `anoLetivo` nulo.
+- **Etapa atual** (`etapa_atual`) procura só entre as etapas do ano recebido. A data de hoje serve
+  apenas para escolher entre as etapas desse ano. `etapa_atual` e `calcular_todas_etapas` exigem
+  o ano: sem ele, listariam etapas de todos os anos.
+- **Aviso de alunos incompletos** ao fechar a etapa conta só turmas do mesmo ano da etapa.
+- **Ano encerrado** mantém todos os dados. Encerrar é só trocar o status: não há promoção de alunos,
+  transferência nem criação automática de turmas do ano seguinte.
+
+### A migração (`_anos_letivos_cadastrados`)
+
+`schema.sql` só cria o que ainda não existe, então um banco que já tem dados depende da migração,
+em `database/migrations.py`. Ela preserva tudo e roda sozinha na subida do backend ou no
+`init_db.py`:
+
+1. turma sem ano recebe o **ano corrente** — exatamente o ano que o sistema já assumia para ela;
+2. cada par (escola, ano) que já existe em `turma` ou `etapa` vira uma linha de `ano_letivo`;
+3. só nas escolas que ainda não têm ano atual: o atual é o ano corrente (ou o maior ano da escola,
+   se o corrente não existir), os anos anteriores ficam `encerrado` e os posteriores `planejamento`;
+4. `turma.ano_letivo` vira `NOT NULL` e as duas FKs são instaladas.
+
+A migração é **idempotente**: a guarda é a presença das duas FKs. Se uma execução parar no meio, a
+seguinte continua e nunca troca o ano atual que o usuário já tenha escolhido. Atividades antigas
+cuja etapa é de um ano diferente do da turma não são alteradas nem apagadas: a migração só avisa
+quantas são, e a regra nova impede que isso volte a acontecer.
+
+`scripts/test_migracao_ano_letivo.py` cria um banco temporário no formato antigo e prova tudo isso:
+contagens preservadas, anos e status escolhidos, idempotência e retomada de execução interrompida.
 
 ## Sobre o instalador de procedures
 

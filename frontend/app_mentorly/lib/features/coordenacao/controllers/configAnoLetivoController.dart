@@ -1,12 +1,19 @@
+import '../services/anosLetivosService.dart';
 import '../services/etapasService.dart';
 import '../services/criteriosService.dart';
 import '../models/etapaModel.dart';
 import '../models/criterioAvaliacaoModel.dart';
 
-// Controla a configuracao do ano letivo (etapas, notas min/max, criterios).
+// Controla a configuracao do ano letivo (etapas, notas min/max, criterios)
+// de UM ano da escola por vez.
 //
 // Singleton porque as tres telas do fluxo (configEtapas, configNotasEtapa,
 // configCriterios) compartilham a mesma lista de etapas.
+//
+// O ano configurado vem do cadastro de anos letivos da escola: a tela de Anos
+// Letivos escolhe um ano explicitamente, e quem entra pelo menu "Configurar
+// Ano Letivo" usa o ano ATUAL (usarAnoAtualDaEscola). Nao existe mais um
+// ano "assumido" pelo calendario do aparelho.
 class ConfigAnoLetivoController {
   static final ConfigAnoLetivoController _instancia =
       ConfigAnoLetivoController._interno();
@@ -21,14 +28,34 @@ class ConfigAnoLetivoController {
   List<EtapaModel> etapas = [];
   List<CriterioAvaliacaoModel> criterios = [];
 
-  int anoLetivo = DateTime.now().year;
+  final AnosLetivosService _anosService = AnosLetivosService();
+
+  // Ano em configuracao. Nulo ate alguem escolher um (ou a escola ter um ano
+  // atual): nesse caso nao ha o que configurar.
+  int? anoLetivo;
 
   bool get jaConfigurado => etapas.isNotEmpty;
 
-  // Carrega o que a escola ja tem configurado. Chamado ao abrir o fluxo,
-  // pra ele virar edicao em vez de recomecar do zero.
+  // Define o ano a configurar como o ano ATUAL cadastrado pela escola.
+  // Fica nulo se a escola ainda nao marcou nenhum.
+  Future<void> usarAnoAtualDaEscola() async {
+    final anos = await _anosService.listarAnos();
+    anoLetivo = null;
+    for (final ano in anos) {
+      if (ano.ehAtual) anoLetivo = ano.ano;
+    }
+  }
+
+  // Carrega o que a escola ja tem configurado no ano escolhido. Chamado ao
+  // abrir o fluxo, pra ele virar edicao em vez de recomecar do zero.
   Future<void> carregarConfiguracaoExistente() async {
-    final resposta = await _etapasService.listarEtapas(anoLetivo: anoLetivo);
+    final ano = anoLetivo;
+    if (ano == null) {
+      etapas = [];
+      criterios = [];
+      return;
+    }
+    final resposta = await _etapasService.listarEtapas(anoLetivo: ano);
 
     etapas = resposta
         .map((item) => EtapaModel.fromJson(item as Map<String, dynamic>))
@@ -50,6 +77,10 @@ class ConfigAnoLetivoController {
   // Cria (ou reaproveita) as etapas no backend AGORA, para que elas ja
   // tenham id quando as proximas telas forem gravar notas e criterios.
   Future<void> definirQuantidadeEtapas(int quantidade) async {
+    final ano = anoLetivo;
+    if (ano == null) {
+      throw Exception('Escolha um ano letivo antes de configurar as etapas');
+    }
     final novas = <EtapaModel>[];
 
     for (var numero = 1; numero <= quantidade; numero++) {
@@ -61,7 +92,7 @@ class ConfigAnoLetivoController {
       final resposta = await _etapasService.criarEtapa(
         nome: nome,
         ordem: numero,
-        anoLetivo: anoLetivo,
+        anoLetivo: ano,
       );
 
       final etapa = EtapaModel.fromJson(resposta);

@@ -59,9 +59,10 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
 
   bool get _editando => widget.atividade != null;
 
-  // Etapas sao configuradas por ano letivo. Turma sem ano definido usa o
-  // ano corrente, que e o caso da maioria das turmas cadastradas a mao.
-  int get _anoLetivo => _turmaSelecionada?.anoLetivo ?? DateTime.now().year;
+  // Etapas sao configuradas por ano letivo, e a atividade so aceita etapa do
+  // MESMO ano da turma. Toda turma tem ano (o backend exige), entao nao ha
+  // mais ano "assumido" pelo calendario do aparelho.
+  int? get _anoLetivo => _turmaSelecionada?.anoLetivo;
 
   @override
   void initState() {
@@ -402,7 +403,8 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
       return _LinhaEstado(
         icone: Icons.info_outline,
         texto: 'A Coordenação ainda não configurou as etapas do ano letivo '
-            '($_anoLetivo). Sem elas não é possível criar atividades.',
+            '${_anoLetivo ?? 'da turma'}. Sem elas não é possível criar '
+            'atividades.',
         cor: Colors.orange[800],
         aoTentarDeNovo: _carregarEtapas,
       );

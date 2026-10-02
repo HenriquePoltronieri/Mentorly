@@ -111,7 +111,8 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
             leading: const CircleAvatar(child: Icon(Icons.class_)),
             title: Text(turma['nome'] ?? ''),
             subtitle: Text(
-              '${turma['disciplina'] ?? ''} • ${turma['turno'] ?? ''} • ${turma['totalAlunos'] ?? 0} aluno(s)',
+              '${turma['disciplina'] ?? ''} • ${turma['turno'] ?? ''} • ${turma['totalAlunos'] ?? 0} aluno(s)'
+              '${turma['anoLetivo'] != null ? ' • Ano letivo ${turma['anoLetivo']}' : ''}',
             ),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {

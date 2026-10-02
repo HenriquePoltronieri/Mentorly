@@ -90,7 +90,10 @@ class _BoletimTurmasScreenState extends State<BoletimTurmasScreen> {
           leading: const CircleAvatar(child: Icon(Icons.grading_outlined)),
           title: Text(turma.nome),
           subtitle: Text(
-            turma.descricao.isEmpty ? 'Sem descrição' : turma.descricao,
+            [
+              turma.descricao.isEmpty ? 'Sem descrição' : turma.descricao,
+              turma.rotuloAno,
+            ].where((texto) => texto.isNotEmpty).join(' • '),
           ),
           trailing: const Icon(Icons.arrow_forward_ios, size: 14),
           onTap: () {

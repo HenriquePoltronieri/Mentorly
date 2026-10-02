@@ -1,4 +1,4 @@
-"""Controller da configuracao do ano letivo (etapas e criterios).
+"""Controller da configuracao do ano letivo (anos, etapas e criterios).
 
 Configurar o ano letivo e ato da Coordenacao: todas as rotas de escrita
 usam @coordenacao_required. O que e salvo aqui vale como PADRAO DA ESCOLA
@@ -9,6 +9,13 @@ atividades.
 from flask import jsonify, request
 
 from auth.decorators import coordenacao_atual
+from services.config.anos_letivos import (
+    AnoLetivoConflito,
+    AtualizarAnoLetivoService,
+    CriarAnoLetivoService,
+    ExcluirAnoLetivoService,
+    ListarAnosLetivosService,
+)
 from services.config.criterios import (
     AtualizarCriterioService,
     BuscarCriterioService,
@@ -29,6 +36,53 @@ from services.config.etapas import (
 
 
 class ConfigController:
+    # -----------------------------------------------------------------
+    # Anos letivos (so a Coordenacao; o id da escola vem do token)
+    # -----------------------------------------------------------------
+    def listar_anos_letivos(self):
+        return jsonify(ListarAnosLetivosService().execute(coordenacao_atual()))
+
+    def criar_ano_letivo(self):
+        dados = request.get_json(silent=True) or {}
+        try:
+            ano = CriarAnoLetivoService().execute(
+                coordenacao_atual(),
+                dados.get("ano") or dados.get("ano_letivo"),
+                dados.get("status"),
+                dados.get("encerrar_atual", dados.get("encerrarAtual", False)),
+            )
+        except AnoLetivoConflito as erro:
+            return jsonify({"error": str(erro)}), 409
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(ano), 201
+
+    def atualizar_ano_letivo(self, ano_letivo_id):
+        dados = request.get_json(silent=True) or {}
+        try:
+            ano = AtualizarAnoLetivoService().execute(
+                ano_letivo_id,
+                coordenacao_atual(),
+                dados.get("status"),
+                dados.get("encerrar_atual", dados.get("encerrarAtual", False)),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except AnoLetivoConflito as erro:
+            return jsonify({"error": str(erro)}), 409
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(ano)
+
+    def excluir_ano_letivo(self, ano_letivo_id):
+        try:
+            ExcluirAnoLetivoService().execute(ano_letivo_id, coordenacao_atual())
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except AnoLetivoConflito as erro:
+            return jsonify({"error": str(erro)}), 409
+        return "", 204
+
     # -----------------------------------------------------------------
     # Etapas
     # -----------------------------------------------------------------
@@ -58,6 +112,9 @@ class ConfigController:
                 dados.get("data_fim") or dados.get("dataFim"),
                 dados.get("ativa", True),
             )
+        except LookupError as erro:
+            # Ano letivo que esta escola nao tem.
+            return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(etapa), 201

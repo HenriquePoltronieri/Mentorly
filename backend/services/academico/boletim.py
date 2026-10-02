@@ -7,15 +7,17 @@ mesma funcao; quem valida se o usuario pode ver a turma e o controller
 (turma_acessivel / Turma.find_by_id_para_professor), nao esta funcao.
 """
 
-from datetime import date
-
 from models.aluno_model import Aluno
 from services.academico.calculo import calcular_consolidado_geral, calcular_todas_etapas
 
 
 def montar_boletim_turma(turma, coordenacao_id):
-    """turma: dict com pelo menos id e (opcionalmente) ano_letivo."""
-    ano_letivo = turma.get("ano_letivo") or date.today().year
+    """turma: dict com id e ano_letivo (toda turma tem ano, desde o Marco 6).
+
+    O boletim usa as etapas do ano da PROPRIA turma: turma de 2025 nunca
+    recebe etapa de 2026, nem o contrario.
+    """
+    ano_letivo = turma["ano_letivo"]
 
     boletim = []
     for linha in Aluno.find_all_by_turma(turma["id"]):

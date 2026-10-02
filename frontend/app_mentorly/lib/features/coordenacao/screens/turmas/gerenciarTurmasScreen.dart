@@ -160,7 +160,10 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
           leading: const CircleAvatar(child: Icon(Icons.class_)),
           title: Text(turma.nome),
           subtitle: Text(
-            turma.descricao.isEmpty ? 'Sem descrição' : turma.descricao,
+            [
+              turma.descricao.isEmpty ? 'Sem descrição' : turma.descricao,
+              turma.rotuloAno,
+            ].where((texto) => texto.isNotEmpty).join(' • '),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

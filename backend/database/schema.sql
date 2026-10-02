@@ -23,6 +23,39 @@ CREATE TABLE IF NOT EXISTS coordenacao (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
+-- ano_letivo: o cadastro de anos de CADA escola (Marco 6).
+--
+-- E a fonte de verdade de "quais anos a escola tem" e de "qual e o atual".
+-- turma e etapa guardam o numero do ano, mas esse numero e chave estrangeira
+-- composta (coordenacao_id, ano_letivo) para ca: o banco recusa turma ou
+-- etapa de um ano que a escola nao cadastrou, e nunca cruza escolas.
+--
+-- status: planejamento (preparando o proximo ano), atual (o ano em curso,
+-- que o dashboard e a etapa atual usam) ou encerrado (dados continuam
+-- disponiveis; so nao nasce turma nem etapa nova nele).
+--
+-- Uma escola tem NO MAXIMO um ano atual: atual_unico vale 1 so quando
+-- status = 'atual' e NULL nos demais, e o indice unico permite varios NULL
+-- mas nenhum 1 repetido. E o jeito de o proprio MySQL garantir a regra sem
+-- trigger. A coluna e gerada: nunca entra em INSERT nem UPDATE.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS ano_letivo (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    coordenacao_id INT NOT NULL,
+    ano            INT NOT NULL,
+    status         ENUM('planejamento', 'atual', 'encerrado')
+                       NOT NULL DEFAULT 'planejamento',
+    atual_unico    TINYINT GENERATED ALWAYS AS (IF(status = 'atual', 1, NULL)) VIRTUAL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_ano_letivo_escola_ano (coordenacao_id, ano),
+    UNIQUE KEY uk_ano_letivo_atual (coordenacao_id, atual_unico),
+    CONSTRAINT fk_ano_letivo_coordenacao
+        FOREIGN KEY (coordenacao_id) REFERENCES coordenacao (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
 -- professor pertence a UMA coordenacao.
 -- senha_hash comeca nulo: a coordenacao cadastra o professor e ele
 -- recebe um convite por email para criar a propria senha.
@@ -52,7 +85,9 @@ CREATE TABLE IF NOT EXISTS professor (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
--- turma pertence a UMA coordenacao (ponto critico do desenho).
+-- turma pertence a UMA coordenacao (ponto critico do desenho) e a UM ano
+-- letivo dessa escola (Marco 6). ano_letivo e o numero do ano e, ao mesmo
+-- tempo, a FK composta para ano_letivo: e a unica fonte do ano da turma.
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS turma (
     id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,13 +96,18 @@ CREATE TABLE IF NOT EXISTS turma (
     descricao      TEXT NULL,
     disciplina     VARCHAR(100) NULL,
     turno          VARCHAR(30)  NULL,
-    ano_letivo     INT NULL,
+    ano_letivo     INT NOT NULL,
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_turma_nome_escola (coordenacao_id, nome),
     UNIQUE KEY uk_turma_escola (coordenacao_id, id),
+    KEY idx_turma_ano (coordenacao_id, ano_letivo),
     CONSTRAINT fk_turma_coordenacao
         FOREIGN KEY (coordenacao_id) REFERENCES coordenacao (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_turma_ano_letivo
+        FOREIGN KEY (coordenacao_id, ano_letivo)
+        REFERENCES ano_letivo (coordenacao_id, ano)
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -119,7 +159,9 @@ CREATE TABLE IF NOT EXISTS aluno (
 -- -----------------------------------------------------
 -- etapa: configuracao PADRAO DA ESCOLA para um ano letivo.
 -- Nao e recriada a cada acesso: a chave (coordenacao_id, ano_letivo, ordem)
--- garante que reconfigurar atualiza em vez de duplicar.
+-- garante que reconfigurar atualiza em vez de duplicar. ano_letivo e FK
+-- composta para o cadastro de anos da escola (Marco 6); o indice dessa FK e
+-- o proprio uk_etapa_ordem, que comeca por (coordenacao_id, ano_letivo).
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS etapa (
     id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,6 +181,10 @@ CREATE TABLE IF NOT EXISTS etapa (
     UNIQUE KEY uk_etapa_escola (coordenacao_id, id),
     CONSTRAINT fk_etapa_coordenacao
         FOREIGN KEY (coordenacao_id) REFERENCES coordenacao (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_etapa_ano_letivo
+        FOREIGN KEY (coordenacao_id, ano_letivo)
+        REFERENCES ano_letivo (coordenacao_id, ano)
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

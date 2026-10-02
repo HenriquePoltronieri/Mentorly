@@ -24,6 +24,10 @@ from database.connection import execute, query_all, query_one
 
 SUFIXO = "smoke-api@mentorly.local"
 
+# Ano letivo dos testes. Fixo de proposito: antes do Marco 6 os testes so
+# passavam porque o relogio da maquina estava em 2026.
+ANO = 2026
+
 falhas = []
 _passos = [0]
 
@@ -60,6 +64,7 @@ def limpar():
         execute("DELETE FROM criterio WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM etapa WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM turma WHERE coordenacao_id = %s", (cid,))
+        execute("DELETE FROM ano_letivo WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM professor WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM coordenacao WHERE id = %s", (cid,))
 
@@ -112,6 +117,12 @@ def montar_escola(cliente_flask, rotulo):
     assert resposta.status_code == 201, resposta.get_json()
     coord.token = resposta.get_json()["token"]
 
+    # Marco 6: a escola cadastra o ano letivo atual antes de criar turma ou
+    # etapa. O ano e fixo (ANO): nenhum teste depende do relogio da maquina.
+    ano = coord.post("/api/config/anos-letivos", {"ano": ANO, "status": "atual"})
+    assert ano.status_code == 201, ano.get_json()
+
+    # A turma nasce SEM informar o ano: ela herda o ano atual da escola.
     turma = coord.post("/api/classes", {
         "name": "9 Ano %s" % rotulo, "description": "Turma de teste"
     }).get_json()
@@ -1355,6 +1366,361 @@ def main():
                and etapa_sem_nota["atividades_sem_nota"] == 1,
                "o calculo existente trata a nota excluida como ausente, "
                "nao como zero (etapa volta a em_andamento)")
+
+        # ---------------------------------------------------------
+        print("\n[16] Marco 6 - ano letivo como cadastro da escola")
+
+        def anos_de(cliente):
+            resposta = cliente.get("/api/config/anos-letivos")
+            assert resposta.status_code == 200, resposta.get_json()
+            return resposta.get_json()
+
+        def ano_por_numero(cliente, ano):
+            return next((a for a in anos_de(cliente) if a["ano"] == ano), None)
+
+        def anos_atuais(cliente):
+            return [a["ano"] for a in anos_de(cliente) if a["status"] == "atual"]
+
+        def virar_para(cliente, ano_id, status, encerrar_atual=False):
+            corpo = {"status": status}
+            if encerrar_atual:
+                corpo["encerrar_atual"] = True
+            return cliente.put("/api/config/anos-letivos/%d" % ano_id, corpo)
+
+        # --- cadastro, isolamento e papeis
+        lista_a = anos_de(coord_a)
+        ano_a_2026 = next((a for a in lista_a if a["ano"] == ANO), None)
+        checar(ano_a_2026 is not None and ano_a_2026["status"] == "atual"
+               and ano_a_2026["totalTurmas"] >= 1
+               and ano_a_2026["totalEtapas"] >= 1,
+               "M6-1: a escola A lista 2026 como ano atual, com turmas e etapas")
+        checar(not ({a["id"] for a in anos_de(coord_b)}
+                    & {a["id"] for a in lista_a}),
+               "M6-2: escolas A e B nao compartilham registro de ano (as duas tem 2026)")
+        checar(Cliente(cliente_flask).get("/api/config/anos-letivos")
+               .status_code == 401,
+               "M6-3: sem token, a lista de anos responde 401")
+        checar(professor_a.get("/api/config/anos-letivos").status_code == 403,
+               "M6-4: Professor nao lista anos letivos (403)")
+        checar(professor_a.post("/api/config/anos-letivos",
+                                {"ano": 2040}).status_code == 403
+               and virar_para(professor_a, ano_a_2026["id"],
+                              "encerrado").status_code == 403
+               and professor_a.delete(
+                   "/api/config/anos-letivos/%d" % ano_a_2026["id"]
+               ).status_code == 403,
+               "M6-5: Professor nao cria, altera nem exclui ano letivo (403)")
+        checar(ano_por_numero(coord_a, ANO)["status"] == "atual"
+               and ano_por_numero(coord_a, 2040) is None,
+               "M6-6: as tentativas do Professor nao mudaram nada")
+
+        # --- criar
+        resposta = coord_a.post("/api/config/anos-letivos", {"ano": 2027})
+        ano_2027 = resposta.get_json()
+        checar(resposta.status_code == 201 and ano_2027["ano"] == 2027
+               and ano_2027["status"] == "planejamento",
+               "M6-7: criar 2027 sem status nasce em planejamento")
+        checar(coord_a.post("/api/config/anos-letivos",
+                            {"ano": 2027}).status_code == 409,
+               "M6-8: a mesma escola nao repete o ano (409)")
+        resposta = coord_b.post("/api/config/anos-letivos", {"ano": 2027})
+        ano_b_2027 = resposta.get_json()
+        checar(resposta.status_code == 201 and ano_b_2027["id"] != ano_2027["id"],
+               "M6-9: outra escola pode ter o mesmo ano 2027")
+        for corpo, motivo in (({"ano": "abc"}, "texto"),
+                              ({"ano": 1999}, "antes de 2000"),
+                              ({"ano": 2101}, "depois de 2100"),
+                              ({}, "ausente")):
+            checar(coord_a.post("/api/config/anos-letivos",
+                                corpo).status_code == 400,
+                   "M6-10: ano invalido (%s) responde 400" % motivo)
+        checar(coord_a.post("/api/config/anos-letivos",
+                            {"ano": 2041, "status": "qualquer"}
+                            ).status_code == 400,
+               "M6-11: status invalido responde 400")
+
+        # --- um unico ano atual por escola
+        resposta = coord_a.post("/api/config/anos-letivos",
+                                {"ano": 2042, "status": "atual"})
+        checar(resposta.status_code == 409 and "2026" in resposta.get_json()["error"],
+               "M6-12: criar um segundo ano atual responde 409 e diz qual e o atual")
+        checar(virar_para(coord_a, ano_2027["id"], "atual").status_code == 409,
+               "M6-13: marcar 2027 como atual com 2026 atual responde 409")
+        checar(anos_atuais(coord_a) == [ANO],
+               "M6-14: depois das tentativas, so 2026 continua atual")
+        resposta = virar_para(coord_a, ano_2027["id"], "atual", encerrar_atual=True)
+        checar(resposta.status_code == 200 and anos_atuais(coord_a) == [2027]
+               and ano_por_numero(coord_a, ANO)["status"] == "encerrado",
+               "M6-15: confirmando a troca, 2027 vira atual e 2026 encerra, juntos")
+        virar_para(coord_a, ano_a_2026["id"], "atual", encerrar_atual=True)
+        virar_para(coord_a, ano_2027["id"], "planejamento")
+        checar(anos_atuais(coord_a) == [ANO]
+               and ano_por_numero(coord_a, 2027)["status"] == "planejamento",
+               "M6-16: a troca e reversivel (2026 atual, 2027 em planejamento)")
+
+        # --- outra escola, ids inexistentes e valores invalidos
+        checar(virar_para(coord_a, ano_b_2027["id"], "encerrado").status_code == 404
+               and coord_a.delete(
+                   "/api/config/anos-letivos/%d" % ano_b_2027["id"]
+               ).status_code == 404
+               and ano_por_numero(coord_b, 2027)["status"] == "planejamento",
+               "M6-17: A nao altera nem exclui o ano da escola B (404) e o ano de B segue igual")
+        checar(virar_para(coord_a, 999999, "atual").status_code == 404,
+               "M6-18: ano inexistente responde 404")
+        checar(virar_para(coord_a, ano_2027["id"], "invalido").status_code == 400,
+               "M6-19: status invalido na atualizacao responde 400")
+
+        # --- excluir e encerrar
+        ano_2050 = coord_a.post("/api/config/anos-letivos", {"ano": 2050}).get_json()
+        checar(coord_a.delete("/api/config/anos-letivos/%d" % ano_2050["id"]
+                              ).status_code == 204
+               and ano_por_numero(coord_a, 2050) is None,
+               "M6-20: ano sem turma nem etapa pode ser excluido")
+        resposta = coord_a.delete("/api/config/anos-letivos/%d" % ano_a_2026["id"])
+        checar(resposta.status_code == 409 and ano_por_numero(coord_a, ANO),
+               "M6-21: ano com turmas e etapas nao e excluido (409)")
+        coord_a.post("/api/config/anos-letivos", {"ano": 2025, "status": "encerrado"})
+        checar(coord_a.post("/api/classes", {
+            "name": "Turma em ano encerrado", "ano_letivo": 2025
+        }).status_code == 409,
+               "M6-22: turma nova em ano encerrado responde 409")
+        checar(coord_a.post("/api/config/etapas", {
+            "nome": "Etapa 2025", "ordem": 1, "ano_letivo": 2025
+        }).status_code == 400,
+               "M6-23: etapa nova em ano encerrado responde 400")
+
+        # --- turma pertence a um ano da propria escola
+        checar(coord_a.get("/api/classes/%d" % turma_a["id"]).get_json()["anoLetivo"]
+               == ANO,
+               "M6-24: turma criada sem informar o ano herdou o ano atual (2026)")
+        resposta = coord_a.post("/api/classes",
+                                {"name": "Turma 2027 Plano", "ano_letivo": 2027})
+        turma_2027 = resposta.get_json()
+        checar(resposta.status_code == 201 and turma_2027["anoLetivo"] == 2027,
+               "M6-25: turma criada em ano em planejamento")
+        checar(coord_a.post("/api/classes", {
+            "name": "Turma ano inexistente", "ano_letivo": 2035
+        }).status_code == 404,
+               "M6-26: turma em ano que a escola nao cadastrou responde 404")
+        coord_b.post("/api/config/anos-letivos", {"ano": 2029})
+        checar(coord_a.post("/api/classes", {
+            "name": "Turma no ano da escola B", "ano_letivo": 2029
+        }).status_code == 404,
+               "M6-27: A nao cria turma em ano que so a escola B tem")
+        checar(coord_b.post("/api/classes", {
+            "name": "Turma B 2029", "ano_letivo": 2029
+        }).status_code == 201,
+               "M6-28: a escola B cria turma no ano dela")
+
+        mover = coord_a.post("/api/classes", {"name": "Turma Mover Ano"}).get_json()
+        resposta = coord_a.put("/api/classes/%d" % mover["id"], {"ano_letivo": 2027})
+        checar(resposta.status_code == 200 and resposta.get_json()["anoLetivo"] == 2027,
+               "M6-29: turma sem atividades pode mudar de ano")
+        resposta = coord_a.put("/api/classes/%d" % turma_c["id"], {"ano_letivo": 2027})
+        checar(resposta.status_code == 400 and "atividades" in resposta.get_json()["error"],
+               "M6-30: turma com atividades nao muda de ano (400)")
+        checar(coord_a.put("/api/classes/%d" % mover["id"],
+                           {"ano_letivo": 2029}).status_code == 404,
+               "M6-31: mudar a turma para o ano que so a B tem responde 404")
+        checar(coord_a.put("/api/classes/%d" % turma_a["id"],
+                           {"name": "9 Ano A", "ano_letivo": ANO}).status_code == 200,
+               "M6-32: reenviar o mesmo ano ao editar a turma nao falha")
+        ids_2027 = {t["id"] for t in
+                    coord_a.get("/api/classes?ano_letivo=2027").get_json()}
+        checar({turma_2027["id"], mover["id"]} <= ids_2027
+               and turma_a["id"] not in ids_2027,
+               "M6-33: GET /api/classes?ano_letivo=2027 traz so as turmas desse ano")
+
+        # --- etapa pertence a um ano
+        def etapa_no_ano(cliente, nome, ordem, ano):
+            resposta = cliente.post("/api/config/etapas",
+                                    {"nome": nome, "ordem": ordem, "ano_letivo": ano})
+            etapa = resposta.get_json()
+            if resposta.status_code == 201:
+                cliente.post("/api/config/etapas/%d/notas" % etapa["id"],
+                             {"nota_minima": 6, "nota_maxima": 10})
+            return resposta, etapa
+
+        resposta, etapa_27 = etapa_no_ano(coord_a, "Etapa 2027", 1, 2027)
+        checar(resposta.status_code == 201 and etapa_27["anoLetivo"] == 2027,
+               "M6-34: etapa criada em 2027 pertence a 2027")
+        resposta = coord_a.post("/api/config/etapas", {"nome": "Etapa sem ano", "ordem": 77})
+        checar(resposta.status_code == 201 and resposta.get_json()["anoLetivo"] == ANO,
+               "M6-35: etapa criada sem informar o ano usa o ano atual (2026)")
+        etapas_padrao = coord_a.get("/api/config/etapas").get_json()
+        checar(etapas_padrao and all(e["anoLetivo"] == ANO for e in etapas_padrao),
+               "M6-36: GET /api/config/etapas sem ano traz so as do ano atual")
+        checar([e["id"] for e in
+                coord_a.get("/api/config/etapas?ano_letivo=2027").get_json()]
+               == [etapa_27["id"]],
+               "M6-37: GET /api/config/etapas?ano_letivo=2027 traz so as de 2027")
+        checar(coord_a.post("/api/config/etapas", {
+            "nome": "Etapa X", "ordem": 1, "ano_letivo": 2035
+        }).status_code == 404,
+               "M6-38: etapa em ano que a escola nao cadastrou responde 404")
+        checar(coord_a.post("/api/config/etapas", {
+            "nome": "Etapa X", "ordem": 1, "ano_letivo": 2029
+        }).status_code == 404,
+               "M6-39: A nao cria etapa em ano que so a escola B tem")
+
+        # --- atividade: turma e etapa do MESMO ano
+        prof6 = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Ano", "email": "prof.ano.%s" % SUFIXO,
+            "disciplina": "Historia",
+        }).get_json()
+        professor_6 = ativar_professor(prof6)
+        t26 = coord_a.post("/api/classes", {"name": "T6 2026"}).get_json()
+        t27 = coord_a.post("/api/classes",
+                           {"name": "T6 2027", "ano_letivo": 2027}).get_json()
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof6["id"],
+                     {"turma_ids": [t26["id"], t27["id"]]})
+        etapa_26 = criar_etapa(coord_a, "E26 Contexto", 95, 6, 10)
+        crit_26 = criar_criterio(coord_a, etapa_26["id"], "Provas", 100)
+        crit_27 = criar_criterio(coord_a, etapa_27["id"], "Provas", 100)
+
+        def nova_atividade(cliente, turma_id, etapa_id, criterio_id, titulo):
+            return cliente.post("/api/activities", {
+                "title": titulo, "class_id": turma_id, "etapa_id": etapa_id,
+                "criterio_id": criterio_id, "nota_maxima": 10,
+            })
+
+        resposta = nova_atividade(professor_6, t26["id"], etapa_27["id"],
+                                  crit_27["id"], "Turma 2026 com etapa 2027")
+        checar(resposta.status_code == 400
+               and "ano letivo" in resposta.get_json()["error"],
+               "M6-40: atividade de turma 2026 com etapa de 2027 responde 400")
+        checar(nova_atividade(professor_6, t27["id"], etapa_26["id"],
+                              crit_26["id"], "Turma 2027 com etapa 2026"
+                              ).status_code == 400,
+               "M6-41: atividade de turma 2027 com etapa de 2026 responde 400")
+        resposta = nova_atividade(professor_6, t26["id"], etapa_26["id"],
+                                  crit_26["id"], "Prova 2026")
+        ativ_26 = resposta.get_json()
+        checar(resposta.status_code == 201,
+               "M6-42: turma e etapa de 2026 formam uma atividade valida")
+        resposta = nova_atividade(professor_6, t27["id"], etapa_27["id"],
+                                  crit_27["id"], "Prova 2027")
+        ativ_27 = resposta.get_json()
+        checar(resposta.status_code == 201,
+               "M6-43: turma e etapa de 2027 formam uma atividade valida")
+        etapa_b_2029 = etapa_no_ano(coord_b, "Etapa B 2029", 1, 2029)[1]
+        crit_b_2029 = criar_criterio(coord_b, etapa_b_2029["id"], "Provas", 100)
+        checar(nova_atividade(professor_6, t27["id"], etapa_b_2029["id"],
+                              crit_b_2029["id"], "Etapa da escola B"
+                              ).status_code == 404,
+               "M6-44: atividade nao usa a etapa de outra escola, mesmo de outro ano (404)")
+        checar(professor_6.put("/api/activities/%d" % ativ_26["id"], {
+            "etapa_id": etapa_27["id"], "criterio_id": crit_27["id"]
+        }).status_code == 400,
+               "M6-45: editar a atividade para uma etapa de outro ano responde 400")
+        checar(professor_6.put("/api/activities/%d" % ativ_26["id"],
+                               {"class_id": t27["id"]}).status_code == 400,
+               "M6-46: mover a atividade para turma de outro ano, mantendo a etapa, responde 400")
+        checar(professor_6.put("/api/activities/%d" % ativ_26["id"],
+                               {"title": "Prova 2026 renomeada"}).status_code == 200,
+               "M6-47: editar a atividade sem tocar em turma ou etapa continua permitido")
+
+        # --- dashboard, estatisticas e boletim respeitam o ano
+        al_26 = coord_a.post("/api/coordenacao/turmas/%d/alunos" % t26["id"],
+                             {"nome": "Aluno Risco 2026"}).get_json()
+        al_27 = coord_a.post("/api/coordenacao/turmas/%d/alunos" % t27["id"],
+                             {"nome": "Aluno Risco 2027"}).get_json()
+        lancar(professor_6, ativ_26["id"], al_26["id"], 2)
+        lancar(professor_6, ativ_27["id"], al_27["id"], 3)
+
+        def nomes_em_risco(painel):
+            return [a["nome"] for a in painel["alunosEmRisco"]]
+
+        painel = professor_6.get("/api/professor/dashboard").get_json()
+        checar(painel["anoLetivo"] == ANO and painel["anoLetivoStatus"] == "atual"
+               and painel["totalTurmas"] == 1 and painel["totalAlunos"] == 1
+               and nomes_em_risco(painel) == ["Aluno Risco 2026"],
+               "M6-48: o dashboard usa so o ano atual: a turma 2027 (planejamento) nao entra")
+        painel_27 = professor_6.get("/api/professor/dashboard?ano_letivo=2027").get_json()
+        checar(painel_27["anoLetivo"] == 2027 and painel_27["totalTurmas"] == 1
+               and nomes_em_risco(painel_27) == ["Aluno Risco 2027"],
+               "M6-49: pedindo o ano 2027, o dashboard mostra so a turma e o risco de 2027")
+        checar(professor_6.get("/api/professor/dashboard?ano_letivo=2035"
+                               ).status_code == 404,
+               "M6-50: dashboard de um ano que a escola nao tem responde 404")
+        virar_para(coord_a, ano_2027["id"], "atual", encerrar_atual=True)
+        painel = professor_6.get("/api/professor/dashboard").get_json()
+        checar(painel["anoLetivo"] == 2027 and painel["totalTurmas"] == 1
+               and nomes_em_risco(painel) == ["Aluno Risco 2027"],
+               "M6-51: na virada do ano o dashboard passa para 2027, sem misturar os dois")
+        virar_para(coord_a, ano_a_2026["id"], "atual", encerrar_atual=True)
+
+        ids_26 = {e["id"] for e in
+                  coord_a.get("/api/config/etapas?ano_letivo=2026").get_json()}
+        ids_27 = {e["id"] for e in
+                  coord_a.get("/api/config/etapas?ano_letivo=2027").get_json()}
+        checar(ids_26 and ids_27 and not ids_26 & ids_27,
+               "M6-52: as etapas de 2026 e de 2027 sao conjuntos separados")
+
+        est_26 = professor_6.get(
+            "/api/professor/alunos/%d/estatisticas" % al_26["id"]).get_json()
+        est_27 = professor_6.get(
+            "/api/professor/alunos/%d/estatisticas" % al_27["id"]).get_json()
+        checar(est_26["anoLetivo"] == ANO
+               and {e["etapa_id"] for e in est_26["etapas"]} == ids_26,
+               "M6-53: o desempenho do aluno de 2026 traz so etapas de 2026")
+        checar(est_27["anoLetivo"] == 2027
+               and {e["etapa_id"] for e in est_27["etapas"]} == ids_27,
+               "M6-54: o desempenho do aluno de 2027 traz so etapas de 2027")
+
+        def etapas_do_boletim(boletim):
+            return [{e["etapa_id"] for e in aluno["etapas"]}
+                    for aluno in boletim["alunos"]]
+
+        bol_26 = professor_6.get("/api/professor/turmas/%d/boletim" % t26["id"]).get_json()
+        bol_27 = professor_6.get("/api/professor/turmas/%d/boletim" % t27["id"]).get_json()
+        checar(bol_26["ano_letivo"] == ANO and etapas_do_boletim(bol_26) == [ids_26],
+               "M6-55: o boletim da turma de 2026 traz so etapas de 2026")
+        checar(bol_27["ano_letivo"] == 2027 and etapas_do_boletim(bol_27) == [ids_27],
+               "M6-56: o boletim da turma de 2027 traz so etapas de 2027")
+        bol_coord = coord_a.get("/api/coordenacao/turmas/%d/boletim" % t27["id"]).get_json()
+        checar(bol_coord["ano_letivo"] == 2027 and etapas_do_boletim(bol_coord) == [ids_27],
+               "M6-57: o boletim da Coordenacao tambem usa o ano da propria turma")
+
+        media_26 = professor_6.get(
+            "/api/professor/turmas/%d/alunos" % t26["id"]).get_json()
+        media_27 = professor_6.get(
+            "/api/professor/turmas/%d/alunos" % t27["id"]).get_json()
+        checar(media_26[0]["media"] == 2.0 and media_27[0]["media"] == 3.0,
+               "M6-58: a media de cada turma sai da etapa atual do ano da propria turma")
+
+        # --- escola sem ano atual
+        coord_e = Cliente(cliente_flask)
+        resposta = coord_e.post("/api/auth/cadastro-coordenacao", {
+            "nome": "Escola E", "email": "e.%s" % SUFIXO, "senha": "senha123",
+        })
+        coord_e.token = resposta.get_json()["token"]
+        checar(anos_de(coord_e) == [],
+               "M6-59: uma escola nova nao tem ano letivo nenhum")
+        resposta = coord_e.post("/api/classes", {"name": "Turma sem ano"})
+        checar(resposta.status_code == 409 and "ano letivo" in resposta.get_json()["error"],
+               "M6-60: sem ano atual, criar turma sem informar o ano responde 409")
+        checar(coord_e.get("/api/config/etapas").get_json() == []
+               and coord_e.post("/api/config/etapas",
+                                {"nome": "E", "ordem": 1}).status_code == 400,
+               "M6-61: sem ano atual nao ha etapas, e criar etapa sem ano responde 400")
+        ano_e = coord_e.post("/api/config/anos-letivos",
+                             {"ano": ANO, "status": "atual"}).get_json()
+        turma_e = coord_e.post("/api/classes", {"name": "Turma E"}).get_json()
+        prof_e = coord_e.post("/api/coordenacao/professores", {
+            "nome": "Professor E", "email": "prof.e.%s" % SUFIXO,
+        }).get_json()
+        coord_e.post("/api/coordenacao/professores/%d/turmas" % prof_e["id"],
+                     {"turma_ids": [turma_e["id"]]})
+        professor_e = ativar_professor(prof_e)
+        painel_e = professor_e.get("/api/professor/dashboard").get_json()
+        checar(painel_e["anoLetivo"] == ANO and painel_e["totalTurmas"] == 1,
+               "M6-62: com o ano atual cadastrado, o dashboard da escola E funciona")
+        virar_para(coord_e, ano_e["id"], "encerrado")
+        painel_e = professor_e.get("/api/professor/dashboard").get_json()
+        checar(painel_e["anoLetivo"] is None and painel_e["totalTurmas"] == 0
+               and painel_e["alunosEmRisco"] == [],
+               "M6-63: encerrado o ano e sem outro atual, o dashboard vem zerado, sem adivinhar ano")
 
         print("\nLimpando os dados de teste...")
         limpar()

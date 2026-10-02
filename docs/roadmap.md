@@ -63,22 +63,37 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 - proteção contra duplo toque;
 - autorização por Professor, turma e escola.
 
+## Marco 6 — Ano letivo completo
+**Status: ✅ Concluído**
+
+> O ano letivo deixa de ser um número solto e passa a ser um cadastro de cada escola, que controla turmas, etapas, etapa atual, dashboard e boletim.
+
+- tabela `ano_letivo (id, coordenacao_id, ano, status)`, com os estados `planejamento`, `atual` e `encerrado`;
+- um único ano `atual` por escola, garantido pelo próprio MySQL;
+- `turma.ano_letivo` e `etapa.ano_letivo` viraram chave estrangeira composta para o cadastro de anos da escola (turma sem ano deixou de existir);
+- migration idempotente que preserva os dados existentes;
+- `date.today().year` deixou de decidir o ano acadêmico em todos os pontos mapeados;
+- dashboard, boletim, desempenho do aluno e etapa atual usam o ano correto;
+- atividade só aceita etapa do mesmo ano da turma;
+- gestão de anos letivos pela Coordenação (API e tela Flutter); o Professor não administra anos.
+
 ---
 
 # 2. Estado técnico validado
 
-Verificação mais recente (02/10/2026):
+Verificação mais recente (02/10/2026, depois do Marco 6):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 85 arquivos, OK |
+| `py_compile` | 88 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 185 verificações, 0 falhas |
-| `test_calculo` | 10 testes, OK |
+| `smoke_api` | 251 verificações, 0 falhas |
+| `test_calculo` | 13 testes, OK |
+| `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `flutter analyze` | 0 warnings, 0 errors (restam infos de estilo, como `file_names` e `withOpacity`) |
-| `flutter test` | 6 testes, todos passando |
+| `flutter test` | 13 testes, todos passando |
 
-A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5.
+A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
 Por contagem conservadora, o Mentorly possui hoje **20 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
 
@@ -111,7 +126,7 @@ A etapa atual da disciplina exige:
 - [x] revisar `git status` e `git diff`;
 - [x] verificar arquivos sensíveis;
 - [x] organizar commits;
-- [ ] realizar push;
+- [x] realizar push;
 - [ ] conferir os arquivos no repositório remoto;
 - [ ] confirmar acesso do professor ao repositório.
 
@@ -169,7 +184,7 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 | Etapa | Período |
 |---|---|
 | Etapa 0 — Git e checkpoint | 02/10 – 03/10 |
-| Marco 6 — Ano letivo completo | 03/10 – 06/10 |
+| Marco 6 — Ano letivo completo ✅ | 03/10 – 06/10 |
 | Marco 7 — Transferência de aluno com histórico | 06/10 – 08/10 |
 | Marco 8 — Gestão completa de professores | 08/10 – 10/10 |
 | Marco 9 — IA | 10/10 – 12/10 |
@@ -196,31 +211,37 @@ De **21/10 a 06/11**, o desenvolvimento normal está encerrado. A prioridade pas
 - ensaiar a apresentação.
 
 ## Marco 6 — Ano letivo completo
-**03/10 – 06/10 · próximo marco · não implementado**
+**03/10 – 06/10 · ✅ concluído**
 
-Decisão estrutural herdada do plano original:
+Modelagem (decisão estrutural herdada do plano original, adaptada ao código):
 
 ```text
-AnoLetivo
+ano_letivo
 id
 coordenacao_id
-ano
-status
+ano                       UNIQUE (coordenacao_id, ano)
+status                    planejamento | atual | encerrado
 ```
 
-Estados possíveis: `planejamento`, `atual`, `encerrado`.
+- **Fonte de verdade do ano:** o cadastro `ano_letivo` da escola. `turma.ano_letivo` e `etapa.ano_letivo` continuam guardando o número do ano, mas agora esse número é chave estrangeira composta `(coordenacao_id, ano_letivo)` para o cadastro: o banco recusa turma ou etapa de um ano que a escola não tem e nunca cruza escolas. Não há um segundo campo para o mesmo dado.
+- **Um ano atual por escola:** coluna gerada `atual_unico` com índice único. Dois anos `atual` na mesma escola são recusados pelo MySQL, sem trigger.
+- **Contexto padrão:** sem ano informado, vale o ano atual da escola. `date.today()` continua sendo usado só para datas (por exemplo, escolher entre as etapas de um ano), nunca para decidir qual é o ano acadêmico.
+- **Ano encerrado** mantém os dados e só deixa de receber turma e etapa novas. **Ano em planejamento** aceita turmas e etapas, mas não vira o contexto do dashboard enquanto não for o atual.
+- **Atividade** só aceita etapa do mesmo ano letivo da turma.
+- **Turma** só muda de ano enquanto não tiver atividades.
 
-O novo modelo deverá organizar, no futuro: turmas, etapas, dados acadêmicos e histórico.
+Os pontos que usavam `date.today().year` foram corrigidos:
 
-Pontos que hoje usam o ano corrente (`date.today().year`) e que precisarão ser considerados:
+- `boletim.py` — usa o ano da própria turma;
+- `etapas.py` — etapa nova usa o ano atual da escola; listagem sem ano traz só o ano atual; contagem de alunos incompletos considera só turmas do mesmo ano da etapa;
+- `professor/dashboard.py` — usa o ano atual da escola (ou o ano pedido) e só conta turmas desse ano;
+- `professor/estatisticas_aluno.py` — usa o ano da turma do aluno;
+- `professor/listar_turmas.py` — usa o ano da turma;
+- `etapa_atual` e `calcular_todas_etapas` em `calculo.py` — exigem o ano e nunca listam etapas de todos os anos.
 
-- `backend/services/academico/boletim.py`
-- `backend/services/config/etapas.py`
-- `backend/services/professor/dashboard.py`
-- `backend/services/professor/estatisticas_aluno.py`
-- `backend/services/professor/listar_turmas.py`
+Encerrar o ano é só trocar o status: **não** há promoção automática de alunos, transferência nem criação automática de turmas do próximo ano. Isso pertence ao Marco 7 e à evolução futura.
 
-Além deles, `etapa_atual` em `backend/services/academico/calculo.py` usa a data de hoje para escolher a etapa corrente, e a chave única de `etapa` é `(coordenacao_id, ano_letivo, ordem)`.
+Detalhes técnicos e a migração estão em [banco-e-procedures.md](banco-e-procedures.md).
 
 ## Marco 7 — Transferência de aluno com histórico
 **06/10 – 08/10 · depende diretamente do Marco 6**
@@ -278,7 +299,7 @@ Seguindo o plano original, a prioridade são insights explicáveis sobre dados e
 # 5. Itens estruturais que não podem sumir
 
 ### Ano letivo real
-Mesmo depois da apresentação, porque condiciona o histórico. O Marco 6 entrega o conceito; a migração completa dos dados antigos pode continuar depois.
+Implementado no Marco 6. Continua sendo a base do histórico: o Marco 7 (transferência) vai se apoiar nele para registrar de qual turma e de qual ano o aluno veio.
 
 ### Transferência com histórico
 Não permitir implementação ingênua (ver Marco 7).
@@ -709,7 +730,7 @@ Mais tarde pode ser sofisticada.
 
 ## Fase 6 — Completar gestão de alunos
 
-**Status: 🟡 parcial.** Editar e excluir aluno ✅ (Marco 4). **Transferência pendente** (Marco 7), com dependência direta do Marco 6.
+**Status: 🟡 parcial.** Editar e excluir aluno ✅ (Marco 4). **Transferência pendente** (Marco 7); a dependência do Marco 6 já está resolvida.
 
 Implementar:
 
@@ -738,7 +759,7 @@ Isso leva à necessidade futura de matrícula/ano letivo.
 
 ## Fase 7 — Melhorar o modelo de ano letivo
 
-**Status: ⏳ próximo marco (Marco 6).** Hoje o ano corrente vem de `date.today().year` em vários pontos — ver seção 4.
+**Status: ✅ concluída (Marco 6).** O ano letivo é um cadastro de cada escola e controla turmas, etapas, etapa atual, dashboard e boletim — ver seção 4.
 
 Hoje o sistema aparentemente usa sempre o ano corrente.
 
@@ -843,7 +864,7 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
-**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (185 verificações), `test_calculo` (10 testes) e `flutter test` (6 testes). Uma suíte estruturada por módulo continua como evolução.
+**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (251 verificações), `test_calculo` (13 testes), `test_migracao_ano_letivo` (24 verificações) e `flutter test` (13 testes). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
@@ -1009,7 +1030,7 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 | 8 | Dashboard/aluno em risco correto | 🟠 | ✅ Marco 2 |
 | 9 | Detalhe do aluno | 🟠 | ✅ Marco 3 |
 | 10 | Editar/excluir/transferir aluno | 🟡 | 🟡 editar e excluir no Marco 4; transferir no Marco 7 |
-| 11 | Ano letivo real | 🟡 | ⏳ Marco 6 |
+| 11 | Ano letivo real | 🟡 | ✅ Marco 6 |
 | 12 | Gestão completa de professores | 🟡 | ⏳ Marco 8 |
 | 13 | Recuperação de senha | 🟡 | ⏳ pendente |
 | 14 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |

@@ -16,14 +16,18 @@ O público são coordenadores pedagógicos e professores do Ensino Fundamental e
 
 Dois papéis usam o sistema:
 
-- **Coordenação.** Cria a conta da escola e configura o ano letivo: etapas (por exemplo, quatro
-  bimestres), nota mínima e máxima de cada etapa e os critérios de avaliação com seus pesos
+- **Coordenação.** Cria a conta da escola, cadastra os **anos letivos** (um é o atual) e configura
+  cada ano: etapas (por exemplo, quatro bimestres), nota mínima e máxima de cada etapa e os critérios de avaliação com seus pesos
   (por exemplo, Provas 70% e Trabalhos 30%). Cadastra turmas, alunos (à mão ou por planilha) e
   professores, e vincula cada professor às turmas que ele leciona. Acompanha o boletim das turmas
   e fecha cada etapa quando o resultado está definido.
 - **Professor.** Recebe um convite, define a senha e passa a ver **somente as turmas vinculadas a
   ele**. Cria atividades escolhendo a etapa, o critério e o valor máximo, lança notas (na tela ou
   por planilha), corrige ou exclui uma nota e acompanha o desempenho dos alunos.
+
+Cada turma e cada etapa pertencem a um ano letivo da escola, e o Mentorly nunca mistura anos: o
+dashboard do Professor mostra o ano atual, o boletim usa o ano da turma, e um ano encerrado
+mantém seus dados.
 
 O Mentorly calcula a média de cada etapa, indica os alunos abaixo da nota mínima, gera o boletim
 da turma e um consolidado do aluno. Uma etapa fechada fica protegida contra alterações até que a
@@ -51,15 +55,14 @@ funcionalidades demonstráveis, em [funcionalidades.md](funcionalidades.md).
 O projeto começou pelo frontend: as telas de um sistema escolar completo foram desenhadas antes
 de existir um backend. Depois vieram uma primeira entrega, focada em turmas e atividades, e a
 construção do backend de verdade: login com JWT, isolamento entre escolas, professores, alunos,
-etapas, critérios, notas e planilhas. Os Marcos 1 a 5 (avaliação, desempenho, ciclo escolar,
-gerenciamento de alunos e exclusão de nota) estão concluídos. A história completa está em
+etapas, critérios, notas e planilhas. Os Marcos 1 a 6 (avaliação, desempenho, ciclo escolar,
+gerenciamento de alunos, exclusão de nota e ano letivo) estão concluídos. A história completa está em
 [historico-do-projeto.md](historico-do-projeto.md).
 
 ## O que ainda falta
 
 Planejado em [roadmap.md](roadmap.md) para antes da apresentação:
 
-- **Ano letivo completo**, como entidade própria, para não misturar dados de anos diferentes;
 - **Transferência de aluno com histórico**;
 - **Gestão completa de professores** (editar, reenviar convite, desativar);
 - **IA**, com insights acadêmicos explicáveis para o Professor. A IA vai trabalhar sobre os dados

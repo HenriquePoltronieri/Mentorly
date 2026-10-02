@@ -2,6 +2,7 @@ from datetime import datetime
 
 from models.atividade_model import Atividade
 from models.professor_turma_model import ProfessorTurma
+from models.turma_model import Turma
 from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
@@ -51,10 +52,15 @@ class CreateActivityService:
         if not ProfessorTurma.professor_leciona_na_turma(professor_id, turma_id):
             raise LookupError("Turma nao encontrada")
 
+        # A etapa precisa ser do mesmo ano letivo da turma.
+        turma = Turma.find_by_id(turma_id, coordenacao_id)
+        if not turma:
+            raise LookupError("Turma nao encontrada")
+
         # Etapa e criterio precisam ser da escola do token. Nunca confiar no
         # id que chegou do cliente.
         etapa_id, criterio_id = validar_etapa_e_criterio(
-            coordenacao_id, etapa_id, criterio_id
+            coordenacao_id, etapa_id, criterio_id, ano_turma=turma["ano_letivo"]
         )
         nota_maxima = validar_nota_maxima(nota_maxima)
 

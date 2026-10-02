@@ -37,7 +37,8 @@ class Aluno:
 
         coordenacao_id e para o service checar a posse; ano_letivo e o
         que decide quais etapas entram no calculo academico do aluno
-        (Marco 2) - sem ano_letivo na turma, o service cai no ano corrente.
+        (Marco 2). Desde o Marco 6 toda turma tem ano (NOT NULL e FK para o
+        cadastro de anos da escola), entao nao ha mais fallback.
         """
         return query_one(
             "SELECT al.id, al.turma_id, al.nome, al.matricula, al.email, "

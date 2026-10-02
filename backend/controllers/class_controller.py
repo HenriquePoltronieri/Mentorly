@@ -26,7 +26,9 @@ class ClassController:
             linhas = ProfessorTurma.turmas_do_professor(usuario_atual_id())
             return jsonify([Turma.to_dict(linha) for linha in linhas])
 
-        return jsonify(listar_turmas(coordenacao_atual()))
+        # ?ano_letivo=2026 filtra pelas turmas daquele ano.
+        ano_letivo = request.args.get("ano_letivo", type=int)
+        return jsonify(listar_turmas(coordenacao_atual(), ano_letivo))
 
     def relatorio_turmas_atividades(self):
         return jsonify(relatorio_turmas_atividades(coordenacao_atual()))
@@ -63,6 +65,9 @@ class ClassController:
                 dados.get("turno"),
                 dados.get("ano_letivo") or dados.get("anoLetivo"),
             )
+        except LookupError as erro:
+            # Ano letivo que esta escola nao tem (inclusive o de outra escola).
+            return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 409
 

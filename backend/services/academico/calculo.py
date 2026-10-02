@@ -172,8 +172,16 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
     return base
 
 
+def _exigir_ano(ano_letivo):
+    """Etapa sem ano misturaria anos diferentes: Etapa.find_all_by_coordenacao
+    sem ano devolve todos. Quem chama precisa dizer de qual ano fala."""
+    if ano_letivo is None:
+        raise ValueError("ano_letivo e obrigatorio para localizar etapas")
+
+
 def calcular_todas_etapas(aluno_id, turma_id, coordenacao_id, ano_letivo):
-    """Desempenho do aluno em cada etapa configurada da escola, em ordem."""
+    """Desempenho do aluno em cada etapa do ano letivo da turma, em ordem."""
+    _exigir_ano(ano_letivo)
     etapas = Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
     resultado = []
     for linha in etapas:
@@ -185,12 +193,17 @@ def calcular_todas_etapas(aluno_id, turma_id, coordenacao_id, ano_letivo):
 
 
 def etapa_atual(coordenacao_id, ano_letivo):
-    """Usa a etapa ativa que abrange hoje; sem datas, usa a de maior ordem.
+    """Etapa atual DENTRO do ano letivo informado (nunca de outro ano).
+
+    Usa a etapa ativa que abrange hoje; sem datas, usa a de maior ordem.
+    A data de hoje so decide entre as etapas daquele ano: qual e o ano
+    atual da escola e decisao do cadastro de anos letivos, nao do relogio.
 
     Retorna tambem a regra usada, para o dashboard explicar a escolha.
     """
     from datetime import date
 
+    _exigir_ano(ano_letivo)
     linhas = Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
     ativas = [linha for linha in linhas if linha.get("ativa")]
     if not ativas:

@@ -26,12 +26,15 @@ class Turma:
     # Leitura
     # -----------------------------------------------------------------
     @staticmethod
-    def find_all_by_coordenacao(coordenacao_id):
-        return query_all(
-            "SELECT %s FROM turma WHERE coordenacao_id = %%s ORDER BY nome ASC"
-            % _COLUNAS,
-            (coordenacao_id,),
-        )
+    def find_all_by_coordenacao(coordenacao_id, ano_letivo=None):
+        """Turmas da escola; com ano_letivo, so as daquele ano."""
+        sql = "SELECT %s FROM turma WHERE coordenacao_id = %%s" % _COLUNAS
+        params = [coordenacao_id]
+        if ano_letivo is not None:
+            sql += " AND ano_letivo = %s"
+            params.append(ano_letivo)
+        sql += " ORDER BY nome ASC"
+        return query_all(sql, tuple(params))
 
     @staticmethod
     def find_by_id(turma_id, coordenacao_id):
@@ -62,6 +65,14 @@ class Turma:
             "WHERE t.id = %s AND pt.professor_id = %s",
             (turma_id, professor_id),
         )
+
+    @staticmethod
+    def contar_atividades(turma_id):
+        linha = query_one(
+            "SELECT COUNT(*) AS total FROM atividade WHERE turma_id = %s",
+            (turma_id,),
+        )
+        return linha["total"] if linha else 0
 
     @staticmethod
     def contar_alunos(turma_id):

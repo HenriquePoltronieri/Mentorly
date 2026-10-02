@@ -141,6 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final nome = _dados?['nome'] ?? '';
+    final anoLetivo = _dados?['anoLetivo'];
     final totalTurmas = _dados?['totalTurmas'] ?? 0;
     final totalAlunos = _dados?['totalAlunos'] ?? 0;
     final alunosEmRisco = _dados?['alunosEmRisco'] as List<dynamic>? ?? [];
@@ -152,7 +153,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'Olá Professor(a) $nome.',
           style: const TextStyle(fontSize: 22),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 8),
+        // Os numeros abaixo sao do ano letivo atual da escola (definido pela
+        // Coordenacao); sem ano atual, o resumo vem zerado e a tela avisa.
+        Text(
+          anoLetivo != null
+              ? 'Ano letivo $anoLetivo'
+              : 'A Coordenação ainda não definiu o ano letivo atual.',
+          style: TextStyle(color: Colors.grey[700]),
+        ),
+        const SizedBox(height: 16),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

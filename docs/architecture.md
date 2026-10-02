@@ -71,6 +71,17 @@ uma camada é pulada.
 - **Banco** — MySQL 8. O schema fica em `backend/database/schema.sql`, as migrações para bancos
   já criados em `backend/database/migrations.py` e as procedures em `procedures.sql`.
 
+### O ano letivo como contexto
+
+Cada escola tem os seus anos letivos (`ano_letivo`), e um deles é o **atual**. Turma e etapa
+pertencem a um ano da própria escola, garantido por chave estrangeira. Nenhuma camada decide o ano
+pelo relógio: `services/config/anos_letivos.py` concentra os casos de uso (listar, criar, mudar o
+status, excluir) e a função `resolver_ano_letivo`, que devolve o ano a usar (o informado, validado
+para a escola, ou o ano atual). Os Services de turma, etapa, dashboard, boletim e desempenho do
+aluno recebem ou deduzem o ano a partir daí; o motor (`calculo.py`) apenas **exige** o ano e nunca
+lista etapas de todos os anos. Só a Coordenação tem rotas de anos letivos; o Professor consome o
+contexto nas próprias turmas.
+
 ### O motor acadêmico e o boletim
 
 ```

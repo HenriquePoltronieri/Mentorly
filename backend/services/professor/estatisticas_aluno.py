@@ -1,5 +1,3 @@
-from datetime import date
-
 from models.nota_model import Nota
 from services.academico.calculo import (
     calcular_consolidado_geral,
@@ -19,7 +17,8 @@ class EstatisticasAlunoService:
 
     def execute(self, aluno_id, coordenacao_id, professor_id):
         aluno = aluno_acessivel(aluno_id, coordenacao_id, professor_id)
-        ano_letivo = aluno.get("ano_letivo") or date.today().year
+        # Ano da turma do aluno: o desempenho e sempre de UM ano letivo.
+        ano_letivo = aluno["ano_letivo"]
 
         etapas = calcular_todas_etapas(
             aluno_id, aluno["turma_id"], coordenacao_id, ano_letivo

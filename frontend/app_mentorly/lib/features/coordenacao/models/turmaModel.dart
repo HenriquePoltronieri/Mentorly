@@ -14,8 +14,9 @@ class TurmaModel {
   final String turno;
   final String professorId;
 
-  // Ano letivo da turma. Nulo enquanto a Coordenacao nao informar - quem
-  // precisa do ano (as etapas configuradas) cai no ano corrente.
+  // Ano letivo da turma: um dos anos cadastrados pela escola. Desde o Marco 6
+  // toda turma tem ano (o backend nao aceita turma sem ele); o campo continua
+  // anulavel so por causa de respostas antigas ou incompletas.
   final int? anoLetivo;
 
   TurmaModel({
@@ -42,6 +43,9 @@ class TurmaModel {
               .toString()),
     );
   }
+
+  // Texto curto do ano para listas ("Ano letivo 2026"); vazio se nao houver.
+  String get rotuloAno => anoLetivo == null ? '' : 'Ano letivo $anoLetivo';
 
   // Contrato que o Flask espera em POST/PUT /api/classes
   Map<String, dynamic> toJson() => {

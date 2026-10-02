@@ -25,6 +25,9 @@ from database.procedure import call_procedure
 
 MARCADOR = "smoke-test@mentorly.local"
 
+# Ano fixo dos testes: nada aqui depende do relogio da maquina.
+ANO = 2026
+
 
 def limpar():
     """Remove o que este script cria, respeitando a ordem das FKs."""
@@ -44,6 +47,7 @@ def limpar():
         execute("DELETE FROM criterio WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM etapa WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM turma WHERE coordenacao_id = %s", (cid,))
+        execute("DELETE FROM ano_letivo WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM professor WHERE coordenacao_id = %s", (cid,))
         execute("DELETE FROM coordenacao WHERE id = %s", (cid,))
 
@@ -56,10 +60,16 @@ def criar_escola(rotulo):
         ("Escola %s" % rotulo, "%s.%s" % (rotulo.lower(), MARCADOR),
          "hash-de-teste", "31999990000"),
     )
+    # Marco 6: turma e etapa so existem em um ano que a escola cadastrou.
+    insert(
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) "
+        "VALUES (%s, %s, 'atual')",
+        (coordenacao_id, ANO),
+    )
     turma_id = insert(
         "INSERT INTO turma (coordenacao_id, nome, descricao, ano_letivo) "
         "VALUES (%s, %s, %s, %s)",
-        (coordenacao_id, "9 Ano %s" % rotulo, "Turma de teste", 2026),
+        (coordenacao_id, "9 Ano %s" % rotulo, "Turma de teste", ANO),
     )
     professor_id = insert(
         "INSERT INTO professor (coordenacao_id, nome, email, disciplina) "
@@ -80,7 +90,7 @@ def criar_escola(rotulo):
         "INSERT INTO etapa "
         "(coordenacao_id, nome, ordem, ano_letivo, nota_minima, nota_maxima) "
         "VALUES (%s, %s, %s, %s, %s, %s)",
-        (coordenacao_id, "1 Etapa", 1, 2026, 6, 10),
+        (coordenacao_id, "1 Etapa", 1, ANO, 6, 10),
     )
     criterio_id = insert(
         "INSERT INTO criterio (coordenacao_id, etapa_id, nome, peso) "
@@ -249,6 +259,116 @@ def main():
     print("    sp_resumo_sistema(A): %s" % resumo)
 
     # ---------------------------------------------------------------
+    # Marco 6: o ano letivo e um cadastro da escola, e turma/etapa so podem
+    # apontar para um ano que ela tem. As escolas A e B ja tem 2026 atual:
+    # a mesma escola nao repete ano, escolas diferentes podem.
+    def deve_recusar(titulo, sql, params, falha):
+        try:
+            insert(sql, params)
+            falhas.append(falha)
+            print("    FALHOU: %s" % titulo)
+        except pymysql.err.MySQLError as erro:
+            print("    OK: o banco recusou (%s)" % str(erro)[:90])
+
+    print("\n[11] Ano letivo: turma em ano que a escola nao cadastrou")
+    deve_recusar(
+        "turma em ano nao cadastrado",
+        "INSERT INTO turma (coordenacao_id, nome, ano_letivo) VALUES (%s, %s, %s)",
+        (coord_a, "Turma sem ano cadastrado", 2031),
+        "o banco ACEITOU turma em ano que a escola nao cadastrou",
+    )
+
+    print("\n[12] Ano letivo: turma de A no ano cadastrado so pela escola B")
+    insert(
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) "
+        "VALUES (%s, %s, 'planejamento')",
+        (coord_b, 2030),
+    )
+    deve_recusar(
+        "turma de A usando ano de B",
+        "INSERT INTO turma (coordenacao_id, nome, ano_letivo) VALUES (%s, %s, %s)",
+        (coord_a, "Turma no ano da escola B", 2030),
+        "o banco ACEITOU turma da escola A em ano que so a escola B tem",
+    )
+
+    print("\n[13] Ano letivo: etapa em ano que a escola nao cadastrou")
+    deve_recusar(
+        "etapa em ano nao cadastrado",
+        "INSERT INTO etapa (coordenacao_id, nome, ordem, ano_letivo) "
+        "VALUES (%s, %s, %s, %s)",
+        (coord_a, "Etapa de 2031", 1, 2031),
+        "o banco ACEITOU etapa em ano que a escola nao cadastrou",
+    )
+
+    print("\n[14] Ano letivo: mesmo ano duas vezes na mesma escola")
+    deve_recusar(
+        "ano repetido na escola",
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) VALUES (%s, %s, %s)",
+        (coord_a, ANO, "planejamento"),
+        "o banco ACEITOU o mesmo ano duas vezes na mesma escola",
+    )
+    mesmos = query_all(
+        "SELECT coordenacao_id FROM ano_letivo "
+        "WHERE ano = %s AND coordenacao_id IN (%s, %s)",
+        (ANO, coord_a, coord_b),
+    )
+    if len(mesmos) == 2:
+        print("    OK: escolas diferentes podem ter o mesmo ano (A e B tem %d)" % ANO)
+    else:
+        falhas.append("escolas diferentes nao conseguiram ter o mesmo ano")
+
+    print("\n[15] Ano letivo: so um ano atual por escola")
+    insert(
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) "
+        "VALUES (%s, %s, 'planejamento')",
+        (coord_a, 2027),
+    )
+    try:
+        execute(
+            "UPDATE ano_letivo SET status = 'atual' "
+            "WHERE coordenacao_id = %s AND ano = %s", (coord_a, 2027),
+        )
+        falhas.append("o banco ACEITOU dois anos atuais na mesma escola")
+        print("    FALHOU: dois anos atuais")
+    except pymysql.err.IntegrityError as erro:
+        print("    OK: o banco recusou (%s)" % str(erro)[:90])
+    # Anos fora de 'atual' podem ser varios (planejamento e encerrado repetem).
+    insert(
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) "
+        "VALUES (%s, %s, 'encerrado')", (coord_a, 2025),
+    )
+    insert(
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) "
+        "VALUES (%s, %s, 'encerrado')", (coord_a, 2024),
+    )
+    print("    OK: anos encerrados e em planejamento podem ser varios")
+
+    print("\n[16] Ano letivo: status invalido e turma sem ano")
+    deve_recusar(
+        "status fora da lista",
+        "INSERT INTO ano_letivo (coordenacao_id, ano, status) VALUES (%s, %s, %s)",
+        (coord_a, 2040, "qualquer"),
+        "o banco ACEITOU um status invalido",
+    )
+    deve_recusar(
+        "turma sem ano",
+        "INSERT INTO turma (coordenacao_id, nome, ano_letivo) VALUES (%s, %s, NULL)",
+        (coord_a, "Turma sem ano"),
+        "o banco ACEITOU turma sem ano letivo",
+    )
+
+    print("\n[17] Ano letivo: nao se apaga ano que ainda tem turma")
+    try:
+        execute(
+            "DELETE FROM ano_letivo WHERE coordenacao_id = %s AND ano = %s",
+            (coord_a, ANO),
+        )
+        falhas.append("o banco ACEITOU apagar um ano que tem turma e etapa")
+        print("    FALHOU: o ano com dados foi apagado")
+    except pymysql.err.IntegrityError as erro:
+        print("    OK: o banco recusou (%s)" % str(erro)[:90])
+
+    # ---------------------------------------------------------------
     print("\nLimpando os dados de teste...")
     limpar()
 
@@ -258,7 +378,7 @@ def main():
         for f in falhas:
             print("  - %s" % f)
         sys.exit(1)
-    print("SMOKE TEST OK: escrita, leitura, isolamento e procedures.")
+    print("SMOKE TEST OK: escrita, leitura, isolamento, ano letivo e procedures.")
 
 
 if __name__ == "__main__":

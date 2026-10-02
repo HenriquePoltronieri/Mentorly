@@ -1,4 +1,5 @@
 from models.aluno_model import Aluno
+from models.ano_letivo_model import AnoLetivo
 from models.atividade_model import Atividade
 from models.coordenacao_model import Coordenacao
 from models.criterio_model import Criterio
@@ -10,6 +11,7 @@ from models.turma_model import Turma
 
 __all__ = [
     "Aluno",
+    "AnoLetivo",
     "Atividade",
     "Coordenacao",
     "Criterio",

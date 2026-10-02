@@ -12,9 +12,9 @@ um Service (exceção documentada na arquitetura).
 | # | Funcionalidade | Tela Flutter | Service/Controller Dart | Endpoint | Service backend | Model / Repository |
 |---|---|---|---|---|---|---|
 | 1 | Cadastro e login da Coordenação (cada cadastro é uma escola) | `cadastroScreen`, `loginScreen` | `AuthService.cadastrarCoordenacao`, `loginCoordenacao` | `POST /api/auth/cadastro-coordenacao`, `/login-coordenacao` | `CadastroCoordenacaoService`, `LoginCoordenacaoService` | `Coordenacao` |
-| 2 | Configurar o ano letivo: etapas com nota mínima e máxima | `configEtapasScreen`, `configNotasEtapaScreen` | `EtapasService` | `POST /api/config/etapas`, `POST /api/config/etapas/<id>/notas` | `SalvarEtapaService`, `DefinirNotasEtapaService` | `Etapa` |
+| 2 | Anos letivos (atual, em planejamento ou encerrado) e etapas com nota mínima e máxima | `anosLetivosScreen`, `configEtapasScreen`, `configNotasEtapaScreen` | `AnosLetivosService`, `EtapasService` | `GET`/`POST /api/config/anos-letivos`, `PUT`/`DELETE /api/config/anos-letivos/<id>`, `POST /api/config/etapas`, `POST /api/config/etapas/<id>/notas` | `ListarAnosLetivosService`, `CriarAnoLetivoService`, `AtualizarAnoLetivoService`, `ExcluirAnoLetivoService`, `SalvarEtapaService`, `DefinirNotasEtapaService` | `AnoLetivo`, `Etapa` |
 | 3 | Critérios de avaliação com pesos (os pesos de uma etapa somam 100) | `configCriteriosScreen` | `CriteriosService` | `/api/config/criterios/...` | `SalvarCriterioService` e demais | `Criterio` |
-| 4 | Gerenciar turmas (cadastrar, listar, editar, excluir) | `gerenciarTurmasScreen`, `adicionarTurmaModal` | `TurmasService` | `/api/classes` | funções de `services/turmas.py` | `Turma` |
+| 4 | Gerenciar turmas (cadastrar, listar, editar, excluir), cada uma em um ano letivo da escola | `gerenciarTurmasScreen`, `adicionarTurmaModal` | `TurmasService` | `/api/classes` | funções de `services/turmas.py` | `Turma` |
 | 5 | Cadastrar alunos manualmente | `listaAlunosTurmaScreen`, `adicionarAlunosModal` | `AlunosService.listarAlunos` (o cadastro usa o `ApiService` no modal) | `POST /api/coordenacao/turmas/<id>/alunos` | `CadastrarAlunoService` | `Aluno` |
 | 6 | Importar alunos por planilha XLSX (modelo para baixar e relatório de erros por linha) | `adicionarAlunosModal` | `ApiService` (envio de arquivo) | `POST /api/coordenacao/turmas/<id>/alunos/importar` | `ImportarAlunosService` | `Aluno` |
 | 7 | Editar e excluir aluno | `listaAlunosTurmaScreen`, `editarAlunoModal` | `AlunosService.excluirAluno` | `PUT` e `DELETE /api/coordenacao/alunos/<id>` | `AtualizarAlunoService`, `ExcluirAlunoService` | `Aluno` |
@@ -46,6 +46,9 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
   entre escolas por meio de chaves estrangeiras compostas.
 - **Permissões por papel.** A Coordenação não cria atividade nem lança nota, e o Professor não
   gerencia turmas nem configura o ano letivo. Isso responde 403 no backend, mesmo fora do app.
+- **Ano letivo como contexto.** O dashboard, o boletim, o desempenho do aluno e a etapa atual
+  usam o ano certo: o dashboard, o ano atual da escola; o boletim e o desempenho, o ano da própria
+  turma. Turma, etapa e atividade nunca se misturam entre anos.
 - **Motor de cálculo acadêmico** (`services/academico/calculo.py`): média ponderada por etapa, nota
   ausente diferente de zero, consolidado só com etapas fechadas.
 - **Bloqueio de alterações em etapa fechada** (atividade e nota), até a Coordenação reabrir.
@@ -64,7 +67,8 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
 - **Professores** → funcionalidade 8;
 - **Gerenciar Turmas** → 4; tocando em uma turma, abrem os alunos → 5, 6 e 7;
 - **Vincular Professores** → 9;
-- **Configurar Ano Letivo** → 2 e 3;
+- **Anos Letivos** → 2 (cadastrar anos, marcar o atual, encerrar); o menu de cada ano abre a configuração de etapas e critérios daquele ano;
+- **Configurar Ano Letivo** → 2 e 3, para o ano atual;
 - **Buscar Atividades** → 14;
 - **Relatório de Turmas** → 10;
 - **Desempenho Acadêmico** → 11.
@@ -81,10 +85,11 @@ Os testes automáticos abaixo passam no estado atual do repositório (02/10/2026
 
 | Teste | O que cobre | Resultado |
 |---|---|---|
-| `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta e procedures | OK |
-| `python scripts/smoke_api.py` | A API de ponta a ponta: login, isolamento entre escolas, permissões por papel, configuração do ano letivo, importação de planilha, avaliação, cálculo, boletim e fechamento de etapa, edição/exclusão de aluno e exclusão de nota | 185 verificações, 0 falhas |
-| `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 10 testes, OK |
-| `flutter test` | Fluxos de login e primeiro acesso, e abertura do app | 6 testes, OK |
+| `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
+| `python scripts/smoke_api.py` | A API de ponta a ponta: login, isolamento entre escolas, permissões por papel, configuração do ano letivo, importação de planilha, avaliação, cálculo, boletim e fechamento de etapa, edição/exclusão de aluno, exclusão de nota e o contexto de ano letivo (anos, turmas, etapas, atividades, dashboard, boletim) | 251 verificações, 0 falhas |
+| `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
+| `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
+| `flutter test` | Fluxos de login e primeiro acesso, abertura do app e modelo de ano letivo | 13 testes, OK |
 | `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors (restam infos de estilo) |
 
 Esses testes cobrem a API e a lógica, não a interface inteira. O teste manual de ponta a ponta,

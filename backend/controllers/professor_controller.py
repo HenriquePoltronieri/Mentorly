@@ -129,10 +129,15 @@ class ProfessorController:
     # Dashboard e estatisticas
     # -----------------------------------------------------------------
     def dashboard(self):
+        # Sem ?ano_letivo=, o contexto e o ano atual cadastrado pela escola.
         ano_letivo = request.args.get("ano_letivo", type=int)
-        return jsonify(
-            DashboardProfessorService().execute(usuario_atual_id(), ano_letivo)
-        )
+        try:
+            dados = DashboardProfessorService().execute(
+                usuario_atual_id(), ano_letivo
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return jsonify(dados)
 
     def estatisticas_aluno(self, aluno_id):
         try:

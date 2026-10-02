@@ -8,6 +8,37 @@ config_controller = ConfigController()
 
 
 # ---------------------------------------------------------------------
+# Anos letivos (Marco 6)
+# ---------------------------------------------------------------------
+
+# Administrar o ano letivo e ato da Coordenacao, inclusive a leitura da lista:
+# o Professor nao tem rota aqui, so consome o contexto (o ano das turmas dele e
+# o ano atual da escola, no dashboard).
+@config_blueprint.get("/anos-letivos")
+@coordenacao_required
+def listar_anos_letivos():
+    return config_controller.listar_anos_letivos()
+
+
+@config_blueprint.post("/anos-letivos")
+@coordenacao_required
+def criar_ano_letivo():
+    return config_controller.criar_ano_letivo()
+
+
+@config_blueprint.put("/anos-letivos/<int:ano_letivo_id>")
+@coordenacao_required
+def atualizar_ano_letivo(ano_letivo_id):
+    return config_controller.atualizar_ano_letivo(ano_letivo_id)
+
+
+@config_blueprint.delete("/anos-letivos/<int:ano_letivo_id>")
+@coordenacao_required
+def excluir_ano_letivo(ano_letivo_id):
+    return config_controller.excluir_ano_letivo(ano_letivo_id)
+
+
+# ---------------------------------------------------------------------
 # Etapas
 # ---------------------------------------------------------------------
 

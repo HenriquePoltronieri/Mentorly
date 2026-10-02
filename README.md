@@ -1,6 +1,6 @@
 # Mentorly
 
-> Estado atual: **Marcos 1 a 5 concluídos**. O plano até a apresentação e o histórico das
+> Estado atual: **Marcos 1 a 6 concluídos**. O plano até a apresentação e o histórico das
 > decisões estão em [docs/roadmap.md](docs/roadmap.md).
 
 ## Sobre o Projeto
@@ -51,7 +51,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 
 **Coordenação**
 1. Cadastro e login da Coordenação (cada cadastro é uma escola)
-2. Configurar o ano letivo: etapas com nota mínima e máxima
+2. Anos letivos (atual, em planejamento ou encerrado) e etapas com nota mínima e máxima
 3. Critérios de avaliação com pesos
 4. Gerenciar turmas (cadastrar, listar, editar e excluir)
 5. Cadastrar alunos manualmente
@@ -73,8 +73,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 19. Desempenho do aluno por etapa e consolidado
 20. Boletim da turma
 
-**Ainda não implementado:** ano letivo como entidade própria, transferência de aluno, gestão
-completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
+**Ainda não implementado:** transferência de aluno, gestão completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
@@ -121,10 +120,11 @@ Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
 |---|---|---|
 | `Coordenacao` | `coordenacao` | A escola e o login da Coordenação |
 | `Professor` | `professor` | Professor da escola, com convite para criar a senha |
-| `Turma` | `turma` | Turma da escola |
+| `AnoLetivo` | `ano_letivo` | Ano letivo da escola, com status `planejamento`, `atual` ou `encerrado` |
+| `Turma` | `turma` | Turma da escola, em um ano letivo da própria escola |
 | `ProfessorTurma` | `professor_turma` | Vínculo criado pela Coordenação |
 | `Aluno` | `aluno` | Aluno de uma turma |
-| `Etapa` | `etapa` | Etapa do ano letivo, com nota mínima/máxima e `fechada` |
+| `Etapa` | `etapa` | Etapa de um ano letivo, com nota mínima/máxima e `fechada` |
 | `Criterio` | `criterio` | Critério de avaliação de uma etapa, com peso |
 | `Atividade` | `atividade` | Atividade ligada a turma, etapa e critério |
 | `Nota` | `nota` | Nota de um aluno em uma atividade |
@@ -169,7 +169,7 @@ Professor sem token ou com o papel errado respondem 401/403.
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/classes` | Qualquer | Listar (Professor vê só as dele) |
+| GET | `/api/classes` | Qualquer | Listar (Professor vê só as dele); `?ano_letivo=` filtra pelo ano |
 | GET | `/api/classes/<id>` | Qualquer | Buscar por ID |
 | GET | `/api/classes/relatorio/atividades` | Coord. | Relatório de turmas (procedure) |
 | POST | `/api/classes` | Coord. | Criar turma |
@@ -191,6 +191,10 @@ Professor sem token ou com o papel errado respondem 401/403.
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
+| GET | `/api/config/anos-letivos` | Coord. | Listar os anos da escola, com totais de turmas e etapas |
+| POST | `/api/config/anos-letivos` | Coord. | Cadastrar ano (nasce em planejamento) |
+| PUT | `/api/config/anos-letivos/<id>` | Coord. | Mudar o status (`encerrar_atual` confirma a troca do ano atual) |
+| DELETE | `/api/config/anos-letivos/<id>` | Coord. | Excluir ano sem turma nem etapa |
 | GET | `/api/config/etapas` | Qualquer | Listar etapas |
 | GET | `/api/config/etapas/<id>` | Qualquer | Buscar etapa |
 | POST | `/api/config/etapas` | Coord. | Criar/atualizar etapa |
@@ -258,7 +262,7 @@ backend/
 │   ├── activity/               # criar, listar, buscar, atualizar e excluir atividade
 │   ├── aluno/                  # cadastrar, listar, editar e excluir aluno
 │   ├── auth/                   # cadastro, logins, convite e verificação em duas etapas
-│   ├── config/                 # etapas e critérios
+│   ├── config/                 # anos letivos, etapas e critérios
 │   ├── coordenacao/            # professores e vínculos
 │   ├── planilha/               # leitura, validação e importação de XLSX
 │   ├── professor/              # turmas, dashboard, estatísticas e notas
@@ -346,9 +350,10 @@ O backend precisa estar rodando. O endereço da API fica em um único lugar,
 
 ```bash
 cd backend
-python scripts/smoke_db.py       # conexão, isolamento entre escolas e procedures
-python scripts/smoke_api.py      # API de ponta a ponta (185 verificações)
+python scripts/smoke_db.py       # conexão, isolamento entre escolas, ano letivo e procedures
+python scripts/smoke_api.py      # API de ponta a ponta (251 verificações)
 python scripts/test_calculo.py   # motor de cálculo, sem banco
+python scripts/test_migracao_ano_letivo.py   # migração do ano letivo sobre um banco no formato antigo
 
 cd ../frontend/app_mentorly
 flutter analyze
@@ -369,8 +374,8 @@ não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ## Status do Projeto
 
-Em desenvolvimento. Os Marcos 1 a 5 (avaliação, desempenho, ciclo escolar, gerenciamento de
-alunos e exclusão de nota) estão concluídos e validados. Os próximos marcos são ano letivo,
+Em desenvolvimento. Os Marcos 1 a 6 (avaliação, desempenho, ciclo escolar, gerenciamento de
+alunos, exclusão de nota e ano letivo) estão concluídos e validados. Os próximos marcos são
 transferência de aluno, gestão de professores e IA, conforme [docs/roadmap.md](docs/roadmap.md).
 
 ---

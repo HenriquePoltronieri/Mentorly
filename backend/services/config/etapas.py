@@ -1,10 +1,10 @@
-from datetime import date
-
 from models.aluno_model import Aluno
+from models.ano_letivo_model import AnoLetivo
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
+from services.config.anos_letivos import resolver_ano_letivo
 
 
 class ListarEtapasService:
@@ -13,9 +13,18 @@ class ListarEtapasService:
     E o que faz a configuracao ser PADRAO DA ESCOLA: o app chama isto ao
     abrir o fluxo e, se ja houver etapas, edita as existentes em vez de
     montar tudo de novo.
+
+    Etapas sao sempre de UM ano letivo. Sem ano informado, devolve as do ano
+    atual da escola (lista vazia se a escola ainda nao marcou um): nunca
+    mistura etapas de anos diferentes.
     """
 
     def execute(self, coordenacao_id, ano_letivo=None):
+        if ano_letivo is None:
+            atual = AnoLetivo.atual(coordenacao_id)
+            if atual is None:
+                return []
+            ano_letivo = atual["ano"]
         linhas = Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
         resultado = []
         for linha in linhas:
@@ -66,7 +75,20 @@ class SalvarEtapaService:
         if ordem < 1:
             raise ValueError("A ordem da etapa precisa ser 1 ou maior")
 
-        ano_letivo = int(ano_letivo or date.today().year)
+        # O ano vem do cadastro da escola: sem ano informado, o ano atual
+        # (nunca o do relogio); ano que a escola nao tem vira 404. Reconfigurar
+        # uma etapa que ja existe e permitido mesmo em ano encerrado; criar
+        # etapa nova nele, nao.
+        registro = resolver_ano_letivo(
+            coordenacao_id, ano_letivo, permitir_encerrado=True
+        )
+        ano_letivo = registro["ano"]
+        if (registro["status"] == "encerrado"
+                and not Etapa.find_by_ordem(coordenacao_id, ano_letivo, ordem)):
+            raise ValueError(
+                "O ano letivo %d esta encerrado e nao recebe etapas novas"
+                % ano_letivo
+            )
 
         etapa_id = Etapa.upsert(
             coordenacao_id, nome, ordem, ano_letivo, data_inicio, data_fim, ativa
@@ -123,15 +145,17 @@ class ExcluirEtapaService:
 def _contar_alunos_incompletos(etapa):
     """Quantos alunos da escola ainda tem atividade sem nota nesta etapa.
 
-    Etapa e configuracao da escola inteira (nao de uma turma so), entao
-    percorre todas as turmas. Nao inventa nenhuma regra nova: usa o mesmo
-    calcular_desempenho_etapa que o boletim e o dashboard ja chamam, e so
-    conta quem tem "atividades_sem_nota" > 0. O fechamento continua sendo
-    permitido de qualquer forma - isto e so para a Coordenacao decidir com
-    informacao, nao para bloquear nada (Marco 4).
+    Etapa e configuracao da escola para UM ano letivo, entao percorre so as
+    turmas desse ano (as de outros anos nem usam esta etapa). Nao inventa
+    nenhuma regra nova: usa o mesmo calcular_desempenho_etapa que o boletim e
+    o dashboard ja chamam, e so conta quem tem "atividades_sem_nota" > 0. O
+    fechamento continua sendo permitido de qualquer forma - isto e so para a
+    Coordenacao decidir com informacao, nao para bloquear nada (Marco 4).
     """
     incompletos = 0
-    for turma in Turma.find_all_by_coordenacao(etapa["coordenacao_id"]):
+    for turma in Turma.find_all_by_coordenacao(
+        etapa["coordenacao_id"], etapa["ano_letivo"]
+    ):
         for aluno in Aluno.find_all_by_turma(turma["id"]):
             resultado = calcular_desempenho_etapa(aluno["id"], turma["id"], etapa)
             if resultado["atividades_sem_nota"] > 0:

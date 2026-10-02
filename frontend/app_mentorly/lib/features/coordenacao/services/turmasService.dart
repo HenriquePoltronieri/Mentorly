@@ -26,25 +26,32 @@ class TurmasService {
     return TurmaModel.fromJson(resposta);
   }
 
+  // [anoLetivo] e o ano da turma (um ano cadastrado pela escola). Sem ele, o
+  // backend usa o ano letivo atual da escola.
   Future<TurmaModel> cadastrarTurma({
     required String nome,
     String descricao = '',
+    int? anoLetivo,
   }) async {
     final resposta = await _api.post('/classes', {
       'name': nome,
       'description': descricao,
+      if (anoLetivo != null) 'ano_letivo': anoLetivo,
     });
     return TurmaModel.fromJson(resposta);
   }
 
+  // O backend so aceita mudar o ano de uma turma que ainda nao tem atividades.
   Future<TurmaModel> atualizarTurma({
     required String id,
     required String nome,
     String descricao = '',
+    int? anoLetivo,
   }) async {
     final resposta = await _api.put('/classes/$id', {
       'name': nome,
       'description': descricao,
+      if (anoLetivo != null) 'ano_letivo': anoLetivo,
     });
     return TurmaModel.fromJson(resposta);
   }

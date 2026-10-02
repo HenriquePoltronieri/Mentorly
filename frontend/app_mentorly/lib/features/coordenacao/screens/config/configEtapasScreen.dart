@@ -35,6 +35,11 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
   // edicao em vez de comecar do zero toda vez.
   Future<void> _carregarExistente() async {
     try {
+      // Entrando pelo menu, nao ha ano escolhido: configura o ano ATUAL da
+      // escola. Vindo de Anos Letivos, o ano ja foi escolhido la.
+      if (_controller.anoLetivo == null) {
+        await _controller.usarAnoAtualDaEscola();
+      }
       await _controller.carregarConfiguracaoExistente();
       if (!mounted) return;
       if (_controller.etapas.isNotEmpty) {
@@ -109,16 +114,53 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
     super.dispose();
   }
 
+  // A escola ainda nao marcou um ano atual: nao ha ano para configurar.
+  Widget _semAnoLetivo() {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_busy_outlined, size: 56, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          const Text(
+            'A escola ainda não tem um ano letivo atual.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Cadastre um ano letivo e marque-o como atual, ou escolha um ano '
+            'em Anos Letivos, para configurar as etapas.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pushReplacementNamed(context, AppRoutes.anosLetivos),
+            child: const Text('Abrir Anos Letivos'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ano letivo · Passo 1 de 3'),
+        title: Text(
+          _controller.anoLetivo == null
+              ? 'Ano letivo · Passo 1 de 3'
+              : 'Ano letivo ${_controller.anoLetivo} · Passo 1 de 3',
+        ),
         // Sai do fluxo e volta ao painel. O AppBar ja da o botao de voltar
         // automatico; este e so o rotulo do passo.
       ),
       body: _carregandoExistente
           ? const Center(child: CircularProgressIndicator())
+          : _controller.anoLetivo == null
+          ? _semAnoLetivo()
           : Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -126,9 +168,12 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
                 children: [
                   const PassoAnoLetivo(passoAtual: 1),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Quantas etapas o ano letivo tem?',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  Text(
+                    'Quantas etapas o ano letivo ${_controller.anoLetivo} tem?',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(

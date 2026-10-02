@@ -2,8 +2,10 @@ from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
+from models.turma_model import Turma
 from services.activity.create_activity import parse_data
 from services.activity.validacao import (
+    validar_ano_da_etapa,
     validar_etapa_e_criterio,
     validar_nota_maxima,
 )
@@ -57,15 +59,29 @@ class UpdateActivityService:
             ):
                 raise LookupError("Turma nao encontrada")
 
+        # A etapa da atividade precisa ser do mesmo ano letivo da turma em que
+        # ela vai ficar (a nova, se estiver sendo movida).
+        turma_final = turma_id if turma_id is not None else atual["turma_id"]
+        turma = Turma.find_by_id(turma_final, coordenacao_id)
+        if not turma:
+            raise LookupError("Turma nao encontrada")
+
         # Etapa e criterio: so mexe quando vieram na requisicao, mas quando
-        # vieram passam pela validacao completa de escola.
+        # vieram passam pela validacao completa de escola e de ano.
         if etapa_id is not None or criterio_id is not None:
             etapa_id, criterio_id = validar_etapa_e_criterio(
                 coordenacao_id,
                 etapa_id if etapa_id is not None else atual.get("etapa_id"),
                 criterio_id if criterio_id is not None
                 else atual.get("criterio_id"),
+                ano_turma=turma["ano_letivo"],
             )
+        elif turma_final != atual["turma_id"] and atual.get("etapa_id"):
+            # Mover a atividade de turma mantendo a etapa: a etapa tem que ser
+            # do ano da turma nova.
+            etapa_da_atividade = Etapa.find_by_id(atual["etapa_id"], coordenacao_id)
+            if etapa_da_atividade:
+                validar_ano_da_etapa(etapa_da_atividade, turma["ano_letivo"])
 
         if nota_maxima is not None:
             nota_maxima = validar_nota_maxima(nota_maxima)

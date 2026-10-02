@@ -38,9 +38,26 @@ def validar_nota_maxima(bruto, obrigatorio=True):
     return valor
 
 
+def validar_ano_da_etapa(etapa, ano_turma):
+    """A etapa e a turma da atividade precisam ser do MESMO ano letivo.
+
+    Sem isso, uma turma de 2026 poderia receber atividade de uma etapa de
+    2025 (ou 2027), e a nota cairia no calculo de um ano que nao e o dela.
+    """
+    if ano_turma is not None and etapa["ano_letivo"] != ano_turma:
+        raise ValueError(
+            "A etapa e do ano letivo %d, mas a turma e do ano letivo %d. "
+            "Escolha uma etapa do mesmo ano da turma."
+            % (etapa["ano_letivo"], ano_turma)
+        )
+
+
 def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
-                             obrigatorio=True):
+                             obrigatorio=True, ano_turma=None):
     """Confere que a etapa e o criterio sao da escola do token.
+
+    ano_turma e o ano letivo da turma da atividade: a etapa escolhida precisa
+    ser desse mesmo ano.
 
     Nunca confia no id que veio do cliente: as duas buscas ja filtram por
     coordenacao_id, entao um id da escola B simplesmente nao e encontrado.
@@ -73,6 +90,7 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
     etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
     if not etapa:
         raise LookupError("Etapa nao encontrada")
+    validar_ano_da_etapa(etapa, ano_turma)
     if etapa.get("fechada"):
         raise ValueError(
             "Esta etapa ja esta fechada. Peca a coordenacao para reabri-la "

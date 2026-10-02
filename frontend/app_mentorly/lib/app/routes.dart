@@ -10,6 +10,7 @@ import '../features/auth/screens/twoFactorScreen.dart';
 
 // telas coordenacao
 import '../features/coordenacao/screens/config/configEtapasScreen.dart';
+import '../features/coordenacao/screens/config/anosLetivosScreen.dart';
 import '../features/coordenacao/screens/config/configNotasEtapaScreen.dart';
 import '../features/coordenacao/screens/config/configCriteriosScreen.dart';
 import '../features/coordenacao/screens/coordenacaoHomeScreen.dart';
@@ -48,6 +49,7 @@ class AppRoutes {
 
   // coordenacao
   static const String coordenacaoHome = '/coordenacao/home';
+  static const String anosLetivos = '/coordenacao/anos-letivos';
   static const String configEtapas = '/coordenacao/config-etapas';
   static const String configNotasEtapa = '/coordenacao/config-notas';
   static const String configCriterios = '/coordenacao/config-criterios';
@@ -80,6 +82,7 @@ class AppRoutes {
     twoFactor: (context) => TwoFactorScreen(),
 
     coordenacaoHome: (context) => CoordenacaoHomeScreen(),
+    anosLetivos: (context) => AnosLetivosScreen(),
     configEtapas: (context) => ConfigEtapasScreen(),
     configNotasEtapa: (context) => ConfigNotasEtapaScreen(),
     configCriterios: (context) => ConfigCriteriosScreen(),

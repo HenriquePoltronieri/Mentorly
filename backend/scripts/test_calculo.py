@@ -153,5 +153,28 @@ class ConsolidadoGeralTest(unittest.TestCase):
         self.assertEqual(resultado["situacao"], "abaixo_do_minimo")
 
 
+class ContextoDeAnoTest(unittest.TestCase):
+    """Marco 6: o motor nunca decide o ano; quem chama diz de qual ano fala."""
+
+    def test_etapa_atual_exige_o_ano(self):
+        with self.assertRaises(ValueError):
+            calculo.etapa_atual(1, None)
+
+    def test_calculo_de_todas_as_etapas_exige_o_ano(self):
+        # Sem ano, Etapa.find_all_by_coordenacao devolveria etapas de TODOS
+        # os anos e o boletim misturaria anos diferentes.
+        with self.assertRaises(ValueError):
+            calculo.calcular_todas_etapas(1, 1, 1, None)
+
+    def test_etapa_atual_procura_so_no_ano_pedido(self):
+        with patch.object(
+            calculo.Etapa, "find_all_by_coordenacao", return_value=[]
+        ) as busca:
+            etapa, regra = calculo.etapa_atual(7, 2027)
+        busca.assert_called_once_with(7, 2027)
+        self.assertIsNone(etapa)
+        self.assertEqual(regra, "sem_etapas_configuradas")
+
+
 if __name__ == "__main__":
     unittest.main()
