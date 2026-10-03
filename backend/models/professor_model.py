@@ -17,8 +17,8 @@ class Professor:
     @staticmethod
     def find_all_by_coordenacao(coordenacao_id):
         return query_all(
-            "SELECT id, coordenacao_id, nome, email, disciplina, "
-            "       (senha_hash IS NOT NULL) AS ativo, created_at, updated_at "
+            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, "
+            "       habilitado, created_at, updated_at "
             "FROM professor WHERE coordenacao_id = %s ORDER BY nome ASC",
             (coordenacao_id,),
         )
@@ -28,14 +28,14 @@ class Professor:
         """Com coordenacao_id, so encontra se o professor for daquela escola."""
         if coordenacao_id is None:
             return query_one(
-                "SELECT id, coordenacao_id, nome, email, disciplina, "
-                "       (senha_hash IS NOT NULL) AS ativo, created_at, updated_at "
+                "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, "
+                "       habilitado, created_at, updated_at "
                 "FROM professor WHERE id = %s",
                 (professor_id,),
             )
         return query_one(
-            "SELECT id, coordenacao_id, nome, email, disciplina, "
-            "       (senha_hash IS NOT NULL) AS ativo, created_at, updated_at "
+            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, "
+            "       habilitado, created_at, updated_at "
             "FROM professor WHERE id = %s AND coordenacao_id = %s",
             (professor_id, coordenacao_id),
         )
@@ -44,7 +44,7 @@ class Professor:
     def find_by_email(email):
         """Traz senha_hash e dados do convite: usado so pelo login/ativacao."""
         return query_one(
-            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, "
+            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, habilitado, "
             "       convite_token, convite_expira_em, created_at, updated_at "
             "FROM professor WHERE email = %s",
             (email,),
@@ -53,7 +53,7 @@ class Professor:
     @staticmethod
     def find_by_convite(token):
         return query_one(
-            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, "
+            "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, habilitado, "
             "       convite_token, convite_expira_em "
             "FROM professor WHERE convite_token = %s",
             (token,),
@@ -91,12 +91,15 @@ class Professor:
         )
 
     @staticmethod
-    def update(professor_id, coordenacao_id, nome=None, disciplina=None):
+    def update(professor_id, coordenacao_id, nome=None, email=None, disciplina=None):
         campos = []
         valores = []
         if nome is not None:
             campos.append("nome = %s")
             valores.append(nome)
+        if email is not None:
+            campos.append("email = %s")
+            valores.append(email)
         if disciplina is not None:
             campos.append("disciplina = %s")
             valores.append(disciplina)
@@ -107,6 +110,14 @@ class Professor:
             "UPDATE professor SET %s WHERE id = %%s AND coordenacao_id = %%s"
             % ", ".join(campos),
             tuple(valores),
+        )
+
+    @staticmethod
+    def definir_habilitado(professor_id, coordenacao_id, habilitado):
+        return execute(
+            "UPDATE professor SET habilitado = %s "
+            "WHERE id = %s AND coordenacao_id = %s",
+            (1 if habilitado else 0, professor_id, coordenacao_id),
         )
 
     @staticmethod
@@ -123,14 +134,24 @@ class Professor:
     def to_dict(linha):
         if not linha:
             return None
+        habilitado = booleano(linha.get("habilitado", True))
+        senha_configurada = bool(linha.get("senha_hash") or linha.get("ativo"))
+        status = (
+            "desativado" if not habilitado
+            else "ativo" if senha_configurada
+            else "convite_pendente"
+        )
         return {
             "id": linha["id"],
             "nome": linha["nome"],
             "email": linha["email"],
             "disciplina": linha.get("disciplina"),
             "tipo": "professor",
-            # ativo = ja criou senha pelo convite
-            "ativo": booleano(linha.get("ativo")),
+            # Legado: ativo continua significando que a senha foi criada.
+            "ativo": senha_configurada,
+            "habilitado": habilitado,
+            "senhaConfigurada": senha_configurada,
+            "status": status,
             "totalTurmas": linha.get("total_turmas"),
             "created_at": iso(linha.get("created_at")),
             "updated_at": iso(linha.get("updated_at")),

@@ -262,18 +262,15 @@ O histórico pode ser consultado pela Coordenação na lista de alunos. A migrat
 duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo e data de criação.
 
 ## Marco 8 — Gestão completa de professores
-**08/10 – 10/10**
+**08/10 – 10/10 · ✅ concluído em ambiente temporário**
 
-- editar professor;
-- reenviar convite;
-- visualizar turmas vinculadas;
-- vincular e desvincular turmas;
-- desativar professor;
-- estado ativo/inativo.
+- `professor.habilitado` é o estado administrativo persistido; a migration idempotente deixa todos os registros legados habilitados;
+- `ativo` continua compatível e significa apenas que a senha foi criada; a API também devolve `status`: `convite_pendente`, `ativo` ou `desativado`;
+- a Coordenação edita nome, email e disciplina, reenvia convite apenas para conta pendente, consulta e gerencia turmas, desativa e reativa;
+- desativar não apaga vínculos, atividades, notas nem histórico; o login e todo endpoint de Professor conferem `habilitado`, inclusive para JWT emitido antes da desativação;
+- a Coordenação e as turmas são sempre validadas pela escola do JWT; Professor não acessa endpoints administrativos.
 
-Decisão original mantida: **não excluir fisicamente professor que já tem histórico.** A preferência é desativar.
-
-Observação técnica: hoje o campo `ativo` devolvido pela API é *derivado* (`senha_hash IS NOT NULL`, isto é, "já criou a senha pelo convite") e não existe como coluna. A desativação precisará de um campo próprio, com outro nome, para não colidir com esse significado.
+Decisão mantida: **não excluir fisicamente professor que já tem histórico.** A migration do banco real permanece para o fechamento separado do Marco 8.
 
 ## Marco 9 — IA
 **10/10 – 12/10 · obrigatória para o MVP**
@@ -802,25 +799,11 @@ Isso evita misturar dados de anos diferentes.
 
 ## Fase 8 — Completar gestão de professores
 
-**Status: 🟡 parcial.** Cadastro de professor com convite, listagem e vínculo com turmas existem. Editar, reenviar convite, desvincular, visualizar turmas e desativar ficam para o Marco 8.
+**Status: ✅ concluída (Marco 8).** A Coordenação administra cadastro, edição, convite pendente,
+vínculos, desativação e reativação. `habilitado` é separado de `senha_hash`, portanto uma conta
+pendente não é confundida com uma conta desativada e um JWT antigo perde acesso após desativação.
 
-Adicionar:
-
-- editar professor;
-- remover/desativar professor;
-- reenviar convite;
-- visualizar turmas vinculadas;
-- desvincular turma;
-- professor inativo;
-- talvez redefinição administrativa de acesso.
-
-Recomendação: não excluir fisicamente professor que já possui histórico.
-
-Melhor:
-
-```text
-ativo = false
-```
+Professor, atividades, notas e vínculos não são excluídos nessa operação.
 
 ---
 
@@ -1036,7 +1019,7 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 | 9 | Detalhe do aluno | 🟠 | ✅ Marco 3 |
 | 10 | Editar/excluir/transferir aluno | 🟡 | ✅ Marcos 4 e 7 |
 | 11 | Ano letivo real | 🟡 | ✅ Marco 6 |
-| 12 | Gestão completa de professores | 🟡 | ⏳ Marco 8 |
+| 12 | Gestão completa de professores | 🟡 | ✅ Marco 8 |
 | 13 | Recuperação de senha | 🟡 | ⏳ pendente |
 | 14 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
 | 15 | Testes completos | 🟠 | 🟡 parcial |

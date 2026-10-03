@@ -16,7 +16,14 @@ from services.aluno.listar_alunos import ListarAlunosService
 from services.aluno.transferir_aluno import HistoricoAlunoService, TransferirAlunoService
 from services.coordenacao.cadastrar_professor import CadastrarProfessorService
 from services.coordenacao.listar_professores import ListarProfessoresService
+from services.coordenacao.gerenciar_professor import (
+    DesativarProfessorService,
+    EditarProfessorService,
+    ReativarProfessorService,
+    ReenviarConviteProfessorService,
+)
 from services.coordenacao.vincular_turmas import (
+    DesvincularTurmaDoProfessorService,
     ListarTurmasDoProfessorService,
     VincularTurmasService,
 )
@@ -45,6 +52,48 @@ class CoordenacaoController:
             return jsonify({"error": str(erro)}), 409
         return jsonify(professor), 201
 
+    def editar_professor(self, professor_id):
+        dados = request.get_json(silent=True) or {}
+        try:
+            professor = EditarProfessorService().execute(
+                coordenacao_atual(), professor_id, dados.get("nome"),
+                dados.get("email"), dados.get("disciplina"),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 409
+        return jsonify(professor)
+
+    def desativar_professor(self, professor_id):
+        try:
+            professor = DesativarProfessorService().execute(
+                coordenacao_atual(), professor_id
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return jsonify(professor)
+
+    def reativar_professor(self, professor_id):
+        try:
+            professor = ReativarProfessorService().execute(
+                coordenacao_atual(), professor_id
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return jsonify(professor)
+
+    def reenviar_convite_professor(self, professor_id):
+        try:
+            professor = ReenviarConviteProfessorService().execute(
+                coordenacao_atual(), professor_id
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        return jsonify(professor)
+
     # -----------------------------------------------------------------
     # Vinculo professor x turma
     # -----------------------------------------------------------------
@@ -68,6 +117,15 @@ class CoordenacaoController:
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(resultado), 201
+
+    def desvincular_turma(self, professor_id, turma_id):
+        try:
+            DesvincularTurmaDoProfessorService().execute(
+                coordenacao_atual(), professor_id, turma_id
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        return "", 204
 
     # -----------------------------------------------------------------
     # Alunos das turmas

@@ -25,6 +25,9 @@ class CriarSenhaProfessorService:
         if not linha:
             raise PermissionError("Convite invalido ou ja utilizado")
 
+        if not linha.get("habilitado", True):
+            raise PermissionError("Professor desativado. Procure a Coordenacao.")
+
         # O email digitado precisa bater com o dono do convite: sem isso,
         # quem tivesse o link poderia ativar a conta de outro professor.
         if email and linha["email"].lower() != email:

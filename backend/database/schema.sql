@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS professor (
     email             VARCHAR(150) NOT NULL,
     disciplina        VARCHAR(100) NULL,
     senha_hash        VARCHAR(255) NULL,
+    habilitado        TINYINT(1) NOT NULL DEFAULT 1,
     convite_token     VARCHAR(64)  NULL,
     convite_expira_em DATETIME     NULL,
     created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS professor (
     UNIQUE KEY uk_professor_email (email),
     UNIQUE KEY uk_professor_escola (coordenacao_id, id),
     KEY idx_professor_coordenacao (coordenacao_id),
+    KEY idx_professor_habilitado (coordenacao_id, habilitado),
     KEY idx_professor_convite (convite_token),
     CONSTRAINT fk_professor_coordenacao
         FOREIGN KEY (coordenacao_id) REFERENCES coordenacao (id)

@@ -33,6 +33,9 @@ uma camada é pulada.
   Os decorators de `backend/auth/decorators.py` (`@auth_required`, `@coordenacao_required`,
   `@professor_required`) validam o token e o papel. A escola e o professor da requisição vêm
   **sempre do token**, nunca do corpo ou da URL.
+- **Disponibilidade do Professor.** `professor.habilitado` é o estado administrativo persistido;
+  `senha_hash` só indica que o convite foi concluído. `@professor_required` consulta o estado atual
+  do Professor, então um JWT emitido antes de desativá-lo perde acesso imediatamente.
 - **Motor acadêmico único.** Nenhuma tela e nenhum outro service calcula nota. Dashboard,
   desempenho do aluno, boletim e fechamento de etapa passam por
   `backend/services/academico/calculo.py`.

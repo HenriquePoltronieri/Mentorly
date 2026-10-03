@@ -58,8 +58,8 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 6. Importar alunos por planilha
 7. Editar e excluir aluno
 8. Transferir aluno entre turmas com histórico preservado
-9. Cadastrar professor com convite
-10. Vincular professores a turmas
+9. Gerenciar professores: cadastrar, editar, convidar, desativar e reativar
+10. Visualizar, vincular e desvincular professores de turmas
 11. Relatório de turmas e atividades
 12. Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa
 
@@ -74,7 +74,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 20. Desempenho do aluno por etapa e consolidado
 21. Boletim da turma
 
-**Ainda não implementado:** gestão completa de professores e IA. Estão planejados em [docs/roadmap.md](docs/roadmap.md).
+**Ainda não implementado:** IA. O planejamento está em [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
@@ -120,7 +120,7 @@ Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
 | Model | Tabela | O que representa |
 |---|---|---|
 | `Coordenacao` | `coordenacao` | A escola e o login da Coordenação |
-| `Professor` | `professor` | Professor da escola, com convite para criar a senha |
+| `Professor` | `professor` | Professor da escola, com convite e estado administrativo `habilitado` |
 | `AnoLetivo` | `ano_letivo` | Ano letivo da escola, com status `planejamento`, `atual` ou `encerrado` |
 | `Turma` | `turma` | Turma da escola, em um ano letivo da própria escola |
 | `ProfessorTurma` | `professor_turma` | Vínculo criado pela Coordenação |
@@ -216,7 +216,10 @@ Professor sem token ou com o papel errado respondem 401/403.
 | Método | Rota | Descrição |
 |---|---|---|
 | GET / POST | `/api/coordenacao/professores` | Listar / cadastrar professor (com convite) |
-| GET / POST | `/api/coordenacao/professores/<id>/turmas` | Ver / vincular turmas do professor |
+| PUT | `/api/coordenacao/professores/<id>` | Editar professor |
+| POST | `/api/coordenacao/professores/<id>/desativar`, `/reativar`, `/reenviar-convite` | Administrar acesso e convite pendente |
+| GET / POST | `/api/coordenacao/professores/<id>/turmas` | Ver / definir turmas do professor |
+| DELETE | `/api/coordenacao/professores/<id>/turmas/<turma_id>` | Desvincular turma, preservando dados acadêmicos |
 | GET / POST | `/api/coordenacao/turmas/<id>/alunos` | Listar / cadastrar alunos da turma |
 | PUT / DELETE | `/api/coordenacao/alunos/<id>` | Editar / excluir aluno |
 | GET | `/api/coordenacao/turmas/<id>/alunos/modelo-planilha` | Baixar modelo de planilha |
@@ -377,9 +380,9 @@ não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ## Status do Projeto
 
-Em desenvolvimento. Os Marcos 1 a 7 (avaliação, desempenho, ciclo escolar, gerenciamento de
-alunos, exclusão de nota, ano letivo e transferência com histórico) estão concluídos e validados.
-Os próximos marcos são gestão de professores e IA, conforme [docs/roadmap.md](docs/roadmap.md).
+Em desenvolvimento. Os Marcos 1 a 8 (avaliação, desempenho, ciclo escolar, gerenciamento de
+alunos, exclusão de nota, ano letivo, transferência com histórico e gestão de professores) estão
+concluídos em código e testes. O próximo marco é IA, conforme [docs/roadmap.md](docs/roadmap.md).
 
 ---
 

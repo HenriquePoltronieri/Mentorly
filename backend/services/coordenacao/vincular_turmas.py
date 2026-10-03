@@ -29,7 +29,8 @@ class VincularTurmasService:
                 raise ValueError("Lista de turmas invalida")
             if not Turma.find_by_id(turma_id, coordenacao_id):
                 raise LookupError("Turma %s nao pertence a esta escola" % turma_id)
-            ids_limpos.append(turma_id)
+            if turma_id not in ids_limpos:
+                ids_limpos.append(turma_id)
 
         ProfessorTurma.definir_turmas(coordenacao_id, professor_id, ids_limpos)
 
@@ -49,3 +50,23 @@ class ListarTurmasDoProfessorService:
             raise LookupError("Professor nao encontrado")
         linhas = ProfessorTurma.turmas_do_professor(professor_id)
         return [Turma.to_dict(linha) for linha in linhas]
+
+
+class DesvincularTurmaDoProfessorService:
+    """Remove somente o acesso atual; atividades e notas nao sao tocadas."""
+
+    def execute(self, coordenacao_id, professor_id, turma_id):
+        if not Professor.find_by_id(professor_id, coordenacao_id):
+            raise LookupError("Professor nao encontrado")
+        if not Turma.find_by_id(turma_id, coordenacao_id):
+            raise LookupError("Turma nao encontrada")
+        removidos = ProfessorTurma.desvincular(
+            coordenacao_id, professor_id, turma_id
+        )
+        if not removidos:
+            raise LookupError("Vinculo nao encontrado")
+        return {
+            "professorId": professor_id,
+            "turmaId": turma_id,
+            "desvinculado": True,
+        }

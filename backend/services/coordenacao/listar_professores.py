@@ -1,13 +1,10 @@
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
-from repositories.consultas import professores_por_coordenacao
+from models.professor_model import Professor
 
 
 class ListarProfessoresService:
     """Professores da escola de quem esta logado.
-
-    Usa a procedure sp_professores_por_coordenacao, que ja filtra por
-    coordenacao_id e traz a contagem de turmas de cada professor.
 
     Devolve tambem a lista "turmas" de cada professor: a tela de vinculo
     (listaTurmasProfessorScreen) usa ela para mostrar quantas turmas o
@@ -15,19 +12,13 @@ class ListarProfessoresService:
     """
 
     def execute(self, coordenacao_id):
-        linhas = professores_por_coordenacao(coordenacao_id)
+        linhas = Professor.find_all_by_coordenacao(coordenacao_id)
 
         professores = []
         for linha in linhas:
             turmas = ProfessorTurma.turmas_do_professor(linha["id"])
-            professores.append({
-                "id": linha["id"],
-                "nome": linha["nome"],
-                "email": linha["email"],
-                "disciplina": linha.get("disciplina"),
-                "tipo": "professor",
-                "ativo": bool(linha.get("ativo")),
-                "totalTurmas": linha.get("total_turmas", 0),
-                "turmas": [Turma.to_dict(t) for t in turmas],
-            })
+            professor = Professor.to_dict(linha)
+            professor["totalTurmas"] = len(turmas)
+            professor["turmas"] = [Turma.to_dict(t) for t in turmas]
+            professores.append(professor)
         return professores

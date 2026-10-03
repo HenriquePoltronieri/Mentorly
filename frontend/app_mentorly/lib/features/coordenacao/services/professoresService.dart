@@ -24,4 +24,33 @@ class ProfessoresService {
     });
     return resposta as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> editarProfessor({
+    required int professorId,
+    required String nome,
+    required String email,
+    String? disciplina,
+  }) async {
+    final resposta = await _api.put('/coordenacao/professores/$professorId', {
+      'nome': nome,
+      'email': email,
+      if (disciplina != null) 'disciplina': disciplina,
+    });
+    return resposta as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> desativarProfessor(int professorId) async {
+    final resposta = await _api.post('/coordenacao/professores/$professorId/desativar', {});
+    return resposta as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reativarProfessor(int professorId) async {
+    final resposta = await _api.post('/coordenacao/professores/$professorId/reativar', {});
+    return resposta as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reenviarConvite(int professorId) async {
+    final resposta = await _api.post('/coordenacao/professores/$professorId/reenviar-convite', {});
+    return resposta as Map<String, dynamic>;
+  }
 }

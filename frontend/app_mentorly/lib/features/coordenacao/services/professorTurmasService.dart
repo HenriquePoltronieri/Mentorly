@@ -32,4 +32,11 @@ class ProfessorTurmasService {
     final resposta = await _api.get('/coordenacao/professores/$professorId/turmas');
     return resposta as List;
   }
+
+  Future<void> desvincularTurma({
+    required int professorId,
+    required int turmaId,
+  }) async {
+    await _api.delete('/coordenacao/professores/$professorId/turmas/$turmaId');
+  }
 }

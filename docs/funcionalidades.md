@@ -19,8 +19,8 @@ um Service (exceção documentada na arquitetura).
 | 6 | Importar alunos por planilha XLSX (modelo para baixar e relatório de erros por linha) | `adicionarAlunosModal` | `ApiService` (envio de arquivo) | `POST /api/coordenacao/turmas/<id>/alunos/importar` | `ImportarAlunosService` | `Aluno` |
 | 7 | Editar e excluir aluno | `listaAlunosTurmaScreen`, `editarAlunoModal` | `AlunosService.excluirAluno` | `PUT` e `DELETE /api/coordenacao/alunos/<id>` | `AtualizarAlunoService`, `ExcluirAlunoService` | `Aluno` |
 | 8 | Transferir aluno com histórico de turmas | `listaAlunosTurmaScreen`, `transferirAlunoModal`, `historicoAlunoModal` | `AlunosService.transferirAluno`, `historicoAluno` | `POST /api/coordenacao/alunos/<id>/transferir`, `GET /historico` | `TransferirAlunoService`, `HistoricoAlunoService` | `Aluno`, `AlunoTurmaHistorico` |
-| 9 | Cadastrar professor, com convite para criar a senha | `cadastroProfessorScreen`, `listaProfessoresScreen` | `ProfessoresService` | `GET`/`POST /api/coordenacao/professores` | `CadastrarProfessorService`, `ListarProfessoresService` | `Professor`, `sp_professores_por_coordenacao` |
-| 10 | Vincular professores a turmas | `listaTurmasProfessorScreen` | `ProfessorTurmasService` | `GET`/`POST /api/coordenacao/professores/<id>/turmas` | `VincularTurmasService` | `ProfessorTurma` |
+| 9 | Gerenciar professor: cadastrar, editar, status, convite e reativação | `cadastroProfessorScreen`, `listaProfessoresScreen` | `ProfessoresService` | `GET`/`POST /api/coordenacao/professores`, `PUT /<id>`, `POST /desativar`, `/reativar`, `/reenviar-convite` | `CadastrarProfessorService`, `ListarProfessoresService`, services de `gerenciar_professor.py` | `Professor` |
+| 10 | Visualizar, vincular e desvincular professores de turmas | `listaTurmasProfessorScreen`, menu de `listaProfessoresScreen` | `ProfessorTurmasService` | `GET`/`POST /api/coordenacao/professores/<id>/turmas`, `DELETE /<id>/turmas/<turma_id>` | `VincularTurmasService`, `DesvincularTurmaDoProfessorService` | `ProfessorTurma` |
 | 11 | Relatório de turmas com a contagem de atividades | `relatorioTurmasScreen` | `TurmasService.relatorioTurmasAtividades` | `GET /api/classes/relatorio/atividades` | Repository | `sp_relatorio_turmas_atividades` |
 | 12 | Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa, com aviso de alunos incompletos | `boletimTurmasScreen`, `boletimTurmaScreen` (Coordenação) | `BoletimService`, `EtapasService.fecharEtapa`/`reabrirEtapa` | `GET /api/coordenacao/turmas/<id>/boletim`, `POST /api/config/etapas/<id>/fechar` e `/reabrir` | `montar_boletim_turma`, `FecharEtapaService`, `ReabrirEtapaService` | `calculo.py`, `Etapa` |
 
@@ -47,6 +47,8 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
   entre escolas por meio de chaves estrangeiras compostas.
 - **Permissões por papel.** A Coordenação não cria atividade nem lança nota, e o Professor não
   gerencia turmas nem configura o ano letivo. Isso responde 403 no backend, mesmo fora do app.
+- **Ciclo administrativo de Professor.** `habilitado` decide acesso; `senha_hash` decide se o
+  convite já foi concluído. Desativar bloqueia login e JWT antigo sem apagar vínculos, notas ou atividades.
 - **Ano letivo como contexto.** O dashboard, o boletim, o desempenho do aluno e a etapa atual
   usam o ano certo: o dashboard, o ano atual da escola; o boletim e o desempenho, o ano da própria
   turma. Turma, etapa e atividade nunca se misturam entre anos.
@@ -87,11 +89,12 @@ Os testes automáticos abaixo passam no estado atual do repositório (02/10/2026
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
-| `python scripts/smoke_api.py` | A API de ponta a ponta: login, isolamento entre escolas, permissões por papel, configuração do ano letivo, importação, avaliação, cálculo, boletim, transferência e histórico de aluno | 267 verificações, 0 falhas |
+| `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor, JWT desativado, convites e vínculos | 293 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado: preserva alunos/turmas, cria os vínculos iniciais e é idempotente | 8 verificações, 0 falhas |
-| `flutter test` | Fluxos de login e primeiro acesso, abertura do app e modelo de ano letivo | 13 testes, OK |
+| `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |
+| `flutter test` | Fluxos de login, primeiro acesso e modelos de ano letivo, histórico e Professor | 18 testes, OK |
 | `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors (restam infos de estilo) |
 
 Esses testes cobrem a API e a lógica, não a interface inteira. O teste manual de ponta a ponta,

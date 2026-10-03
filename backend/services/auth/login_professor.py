@@ -20,6 +20,9 @@ class LoginProfessorService:
         if not linha:
             raise PermissionError("Email ou senha invalidos")
 
+        if not linha.get("habilitado", True):
+            raise PermissionError("Professor desativado. Procure a Coordenacao.")
+
         # Professor cadastrado pela coordenacao que ainda nao abriu o convite
         # nao tem senha. Aqui a mensagem e especifica porque ajuda o usuario
         # e nao revela nada que ele ja nao saiba.

@@ -23,6 +23,30 @@ def cadastrar_professor():
     return coordenacao_controller.cadastrar_professor()
 
 
+@coordenacao_blueprint.put("/professores/<int:professor_id>")
+@coordenacao_required
+def editar_professor(professor_id):
+    return coordenacao_controller.editar_professor(professor_id)
+
+
+@coordenacao_blueprint.post("/professores/<int:professor_id>/desativar")
+@coordenacao_required
+def desativar_professor(professor_id):
+    return coordenacao_controller.desativar_professor(professor_id)
+
+
+@coordenacao_blueprint.post("/professores/<int:professor_id>/reativar")
+@coordenacao_required
+def reativar_professor(professor_id):
+    return coordenacao_controller.reativar_professor(professor_id)
+
+
+@coordenacao_blueprint.post("/professores/<int:professor_id>/reenviar-convite")
+@coordenacao_required
+def reenviar_convite_professor(professor_id):
+    return coordenacao_controller.reenviar_convite_professor(professor_id)
+
+
 @coordenacao_blueprint.get("/professores/<int:professor_id>/turmas")
 @coordenacao_required
 def listar_turmas_do_professor(professor_id):
@@ -33,6 +57,12 @@ def listar_turmas_do_professor(professor_id):
 @coordenacao_required
 def vincular_turmas(professor_id):
     return coordenacao_controller.vincular_turmas(professor_id)
+
+
+@coordenacao_blueprint.delete("/professores/<int:professor_id>/turmas/<int:turma_id>")
+@coordenacao_required
+def desvincular_turma(professor_id, turma_id):
+    return coordenacao_controller.desvincular_turma(professor_id, turma_id)
 
 
 @coordenacao_blueprint.get("/turmas/<int:turma_id>/alunos")

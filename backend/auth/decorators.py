@@ -48,13 +48,30 @@ def _carregar_usuario():
     return g.usuario
 
 
+def _professor_habilitado(usuario):
+    """Confere no banco o estado administrativo de token de Professor.
+
+    Algumas leituras compartilhadas usam ``@auth_required`` e decidem o
+    recorte pelo tipo do token. A guarda tambem precisa valer nelas, para um
+    JWT emitido antes da desativacao nao continuar servindo para consultas.
+    """
+    if usuario["tipo"] != TIPO_PROFESSOR:
+        return True
+    from models.professor_model import Professor
+    professor = Professor.find_by_id(usuario["id"], usuario["coordenacao_id"])
+    return bool(professor and professor.get("habilitado", True))
+
+
 def auth_required(funcao):
     """Exige um token valido, de qualquer papel."""
 
     @wraps(funcao)
     def wrapper(*args, **kwargs):
-        if _carregar_usuario() is None:
+        usuario = _carregar_usuario()
+        if usuario is None:
             return jsonify({"error": "Autenticacao necessaria"}), 401
+        if not _professor_habilitado(usuario):
+            return jsonify({"error": "Professor desativado"}), 403
         return funcao(*args, **kwargs)
 
     return wrapper
@@ -98,6 +115,10 @@ def professor_required(funcao):
             return jsonify(
                 {"error": "Esta acao e exclusiva do Professor"}
             ), 403
+        # O JWT pode ter sido emitido antes de uma desativacao. A guarda e a
+        # mesma de @auth_required, pois ambos precisam bloquear o token.
+        if not _professor_habilitado(usuario):
+            return jsonify({"error": "Professor desativado"}), 403
         return funcao(*args, **kwargs)
 
     return wrapper

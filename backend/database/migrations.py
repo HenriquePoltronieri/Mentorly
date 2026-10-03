@@ -204,6 +204,33 @@ def _historico_de_turma_dos_alunos():
     return bool(afetadas)
 
 
+# ---------------------------------------------------------------------
+# Marco 8: disponibilidade administrativa do professor
+# ---------------------------------------------------------------------
+
+def _professor_ganha_habilitado():
+    """Separa o acesso administrativo da criacao de senha do convite.
+
+    Antes deste campo, ``ativo`` era apenas uma projecao de
+    ``senha_hash IS NOT NULL``. Todos os professores legados recebem 1 para
+    preservar exatamente o acesso que ja possuíam; a migration nao toca
+    senha, convite, turmas, atividades ou notas.
+    """
+    if _coluna_existe("professor", "habilitado"):
+        return False
+    execute(
+        "ALTER TABLE professor ADD COLUMN habilitado TINYINT(1) "
+        "NOT NULL DEFAULT 1 AFTER senha_hash"
+    )
+    if not _indice_existe("professor", "idx_professor_habilitado"):
+        execute(
+            "ALTER TABLE professor ADD KEY idx_professor_habilitado "
+            "(coordenacao_id, habilitado)"
+        )
+    print("  [migracao] professor.habilitado (professores existentes habilitados)")
+    return True
+
+
 def _anos_letivos_cadastrados():
     """Transforma o ano solto de turma/etapa em FK para o cadastro de anos.
 
@@ -321,6 +348,7 @@ _MIGRACOES = (
     _etapa_ganha_fechada,
     _anos_letivos_cadastrados,
     _historico_de_turma_dos_alunos,
+    _professor_ganha_habilitado,
 )
 
 

@@ -1866,6 +1866,131 @@ def main():
             (aluno_excluir["id"],),
         )["n"] == 0, "M7-16: excluir aluno remove historico por cascade")
 
+        # ---------------------------------------------------------
+        print("\n[14] Marco 8 - gestao administrativa de professores")
+        prof8 = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Gestao", "email": "prof.gestao.%s" % SUFIXO,
+            "disciplina": "Geografia",
+        }).get_json()
+        lista8 = coord_a.get("/api/coordenacao/professores").get_json()
+        pendente8 = next(p for p in lista8 if p["id"] == prof8["id"])
+        checar(pendente8["status"] == "convite_pendente"
+               and pendente8["habilitado"] is True
+               and pendente8["senhaConfigurada"] is False,
+               "M8-01: professor novo fica com convite pendente")
+
+        convite_original = prof8["conviteToken"]
+        reenvio = coord_a.post(
+            "/api/coordenacao/professores/%d/reenviar-convite" % prof8["id"]
+        )
+        checar(reenvio.status_code == 200
+               and reenvio.get_json().get("conviteToken") != convite_original,
+               "M8-02: reenvio substitui convite pendente")
+        checar(cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "email": prof8["email"], "senha": "senha123",
+            "token": convite_original,
+        }).status_code == 403, "M8-03: convite anterior deixa de valer")
+
+        editado8 = coord_a.put(
+            "/api/coordenacao/professores/%d" % prof8["id"], {
+                "nome": "Professor Gestao Editado",
+                "email": "prof.gestao.editado.%s" % SUFIXO,
+            },
+        )
+        checar(editado8.status_code == 200
+               and editado8.get_json()["nome"] == "Professor Gestao Editado"
+               and editado8.get_json()["email"] == "prof.gestao.editado.%s" % SUFIXO,
+               "M8-04: Coordenacao edita nome e email do professor")
+        convite_editado = editado8.get_json().get("conviteToken")
+        checar(bool(convite_editado) and convite_editado != reenvio.get_json().get("conviteToken"),
+               "M8-05: editar email pendente renova o convite")
+        checar(coord_a.put(
+            "/api/coordenacao/professores/%d" % prof8["id"],
+            {"email": prof_a["email"]},
+        ).status_code == 409, "M8-06: conflito de email e recusado")
+        checar(cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "email": "prof.gestao.editado.%s" % SUFIXO,
+            "senha": "senha123", "token": convite_editado,
+        }).status_code == 200, "M8-07: convite editado ativa professor")
+
+        login8 = cliente_flask.post("/api/auth/login-professor", json={
+            "email": "prof.gestao.editado.%s" % SUFIXO, "senha": "senha123",
+        })
+        professor8 = Cliente(cliente_flask)
+        professor8.token = login8.get_json()["token"]
+        checar(login8.status_code == 200, "M8-08: professor ativo faz login")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/reenviar-convite" % prof8["id"]
+        ).status_code == 400, "M8-09: conta ativa nao recebe convite de primeiro acesso")
+        checar(professor8.put(
+            "/api/coordenacao/professores/%d" % prof8["id"], {"nome": "Invalido"}
+        ).status_code == 403, "M8-10: Professor nao acessa administracao de professores")
+
+        vinculo8 = coord_a.post(
+            "/api/coordenacao/professores/%d/turmas" % prof8["id"],
+            {"turma_ids": [turma_a["id"], turma_a["id"]]},
+        )
+        turmas8 = coord_a.get(
+            "/api/coordenacao/professores/%d/turmas" % prof8["id"]
+        ).get_json()
+        checar(vinculo8.status_code == 201 and len(turmas8) == 1,
+               "M8-11: vinculo duplicado nao e criado")
+        atividades_antes = query_one("SELECT COUNT(*) AS n FROM atividade")["n"]
+        checar(coord_a.delete(
+            "/api/coordenacao/professores/%d/turmas/%d" % (prof8["id"], turma_a["id"])
+        ).status_code == 204, "M8-12: Coordenacao desvincula uma turma")
+        checar(professor8.get(
+            "/api/professor/turmas/%d/alunos" % turma_a["id"]
+        ).status_code == 404, "M8-13: professor desvinculado perde acesso a turma")
+        checar(query_one("SELECT COUNT(*) AS n FROM atividade")["n"] == atividades_antes,
+               "M8-14: desvinculo nao apaga atividades")
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof8["id"],
+                     {"turma_ids": [turma_a2["id"]]})
+
+        desativado8 = coord_a.post(
+            "/api/coordenacao/professores/%d/desativar" % prof8["id"]
+        )
+        checar(desativado8.status_code == 200
+               and desativado8.get_json()["status"] == "desativado",
+               "M8-15: desativacao usa status administrativo persistido")
+        checar(cliente_flask.post("/api/auth/login-professor", json={
+            "email": "prof.gestao.editado.%s" % SUFIXO, "senha": "senha123",
+        }).status_code == 401, "M8-16: professor desativado nao recebe JWT")
+        checar(professor8.get("/api/professor/turmas").status_code == 403,
+               "M8-17: JWT emitido antes da desativacao perde acesso")
+        checar(professor8.get("/api/classes").status_code == 403,
+               "M8-17b: JWT antigo tambem perde acesso a leitura compartilhada")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/reenviar-convite" % prof8["id"]
+        ).status_code == 400, "M8-18: professor desativado nao recebe convite")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/reativar" % prof8["id"]
+        ).status_code == 200, "M8-19: Coordenacao reativa professor")
+        login8_reaberto = cliente_flask.post("/api/auth/login-professor", json={
+            "email": "prof.gestao.editado.%s" % SUFIXO, "senha": "senha123",
+        })
+        professor8.token = login8_reaberto.get_json()["token"]
+        checar(login8_reaberto.status_code == 200
+               and any(t["id"] == turma_a2["id"]
+                       for t in professor8.get("/api/professor/turmas").get_json()),
+               "M8-20: reativacao preserva vinculo restante e acesso")
+
+        checar(coord_a.put("/api/coordenacao/professores/%d" % prof_b["id"], {
+            "nome": "Outra escola",
+        }).status_code == 404, "M8-21: Coordenacao nao edita professor de outra escola")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/desativar" % prof_b["id"]
+        ).status_code == 404, "M8-22: Coordenacao nao desativa professor de outra escola")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/reativar" % prof_b["id"]
+        ).status_code == 404, "M8-23: Coordenacao nao reativa professor de outra escola")
+        checar(coord_a.post(
+            "/api/coordenacao/professores/%d/reenviar-convite" % prof_b["id"]
+        ).status_code == 404, "M8-24: Coordenacao nao reenvia convite de outra escola")
+        checar(coord_a.delete(
+            "/api/coordenacao/professores/%d/turmas/%d" % (prof_b["id"], turma_b["id"])
+        ).status_code == 404, "M8-25: Coordenacao nao desvincula professor de outra escola")
+
         print("\nLimpando os dados de teste...")
         limpar()
 
