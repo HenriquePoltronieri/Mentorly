@@ -81,24 +81,27 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 
 # 2. Estado técnico validado
 
-Verificação mais recente (02/10/2026, depois do Marco 6):
+Verificação mais recente (03/10/2026, depois do Marco 9):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 91 arquivos, OK |
+| `py_compile` | 97 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 267 verificações, 0 falhas |
+| `smoke_api` | 298 verificações, 0 falhas |
 | `test_calculo` | 13 testes, OK |
+| `test_ia` | 14 testes, OK; cliente externo simulado, sem internet |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
-| `flutter analyze` | 0 warnings, 0 errors (restam infos de estilo, como `file_names` e `withOpacity`) |
-| `flutter test` | 15 testes, todos passando |
+| `test_migracao_professor_habilitado` | 8 verificações, 0 falhas |
+| `flutter analyze` | 0 warnings, 0 errors; 90 infos de estilo (`file_names`, `withOpacity` e afins) |
+| `flutter test` | 21 testes, todos passando |
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o Mentorly possui hoje **21 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
+Por contagem conservadora, o Mentorly possui hoje **22 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
 
-A principal funcionalidade obrigatória ainda ausente é a integração real de Inteligência Artificial (Marco 9).
+A integração externa da IA está implementada com Mistral Small como padrão; falta configurar uma
+chave no ambiente e executar a chamada real controlada antes da demonstração.
 
 ---
 
@@ -262,7 +265,7 @@ O histórico pode ser consultado pela Coordenação na lista de alunos. A migrat
 duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo e data de criação.
 
 ## Marco 8 — Gestão completa de professores
-**08/10 – 10/10 · ✅ concluído em ambiente temporário**
+**08/10 – 10/10 · ✅ concluído, migrado no banco real e publicado**
 
 - `professor.habilitado` é o estado administrativo persistido; a migration idempotente deixa todos os registros legados habilitados;
 - `ativo` continua compatível e significa apenas que a senha foi criada; a API também devolve `status`: `convite_pendente`, `ativo` ou `desativado`;
@@ -270,10 +273,10 @@ duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo 
 - desativar não apaga vínculos, atividades, notas nem histórico; o login e todo endpoint de Professor conferem `habilitado`, inclusive para JWT emitido antes da desativação;
 - a Coordenação e as turmas são sempre validadas pela escola do JWT; Professor não acessa endpoints administrativos.
 
-Decisão mantida: **não excluir fisicamente professor que já tem histórico.** A migration do banco real permanece para o fechamento separado do Marco 8.
+Decisão mantida: **não excluir fisicamente professor que já tem histórico.** A migration foi aplicada no banco real com backup e validação antes da publicação.
 
 ## Marco 9 — IA
-**10/10 – 12/10 · obrigatória para o MVP**
+**10/10 – 12/10 · ✅ concluído em código e testes; configuração externa pendente no ambiente**
 
 **Escopo:** insights acadêmicos explicáveis para o Professor.
 
@@ -291,7 +294,16 @@ insight textual
 
 A IA **não** calcula nota, **não** altera nota, **não** decide aprovação, **não** fecha etapa e **não** substitui `calculo.py`.
 
-Dados que o service de IA poderá receber: etapas, critérios, notas, percentual, situação, atividades, atividades sem nota, evolução e alunos em risco.
+Implementação: `GerarInsightsTurmaService` valida JWT, vínculo e escola, usa a etapa atual do ano
+da turma e chama `calcular_desempenho_etapa`. O `AIClient` envia um JSON limitado a um provedor
+compatível com chat completions e valida a resposta estruturada. O Flutter só chama pelo botão
+**Gerar insights**. Não há persistência; falha externa retorna mensagem amigável e não afeta o
+restante do produto. O padrão é `mistral-small-latest`, com URL e modelo substituíveis por
+variáveis de ambiente.
+
+Dados enviados nesta versão: turma, ano, etapa, escala oficial, agregados da turma e, por aluno,
+primeiro nome, percentual, nota calculada, situação, completude, contagens de atividades e
+desempenho por critério. Email, matrícula, ids do banco e histórico bruto não são enviados.
 
 Seguindo o plano original, a prioridade são insights explicáveis sobre dados existentes, e não previsões opacas como "IA prevê reprovação".
 
@@ -852,7 +864,9 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
-**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (267 verificações), `test_calculo` (13 testes), `test_migracao_ano_letivo` (24 verificações), `test_migracao_transferencia_aluno` (8 verificações) e `flutter test` (15 testes). Uma suíte estruturada por módulo continua como evolução.
+**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (298 verificações), `test_calculo`
+(13 testes), `test_ia` (14 testes), três testes de migration (24, 8 e 8 verificações) e
+`flutter test` (21 testes). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
@@ -976,7 +990,8 @@ Se isso estiver estável, o projeto terá uma demonstração muito forte.
 
 ## Fase 13 — IA
 
-**Status: ⏳ pendente — agora obrigatória para o MVP (Marco 9).** O escopo está definido na seção 4.
+**Status: ✅ concluída em código e testes (Marco 9).** A chamada real controlada depende da chave
+do provedor no ambiente de demonstração.
 
 Somente depois do ciclo acadêmico estar confiável.
 
@@ -1025,4 +1040,4 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 | 15 | Testes completos | 🟠 | 🟡 parcial |
 | 16 | Limpeza de legado | 🟡 | 🟡 parcial |
 | 17 | Produção/deploy | 🔵 | ⏳ pendente |
-| 18 | IA | 🔵 | ⏳ Marco 9 (obrigatória para o MVP) |
+| 18 | IA | 🔵 | ✅ Marco 9 |

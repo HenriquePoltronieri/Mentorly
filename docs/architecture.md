@@ -39,6 +39,9 @@ uma camada é pulada.
 - **Motor acadêmico único.** Nenhuma tela e nenhum outro service calcula nota. Dashboard,
   desempenho do aluno, boletim e fechamento de etapa passam por
   `backend/services/academico/calculo.py`.
+- **IA explicativa separada.** O motor entrega percentuais, situações e critérios prontos. O
+  service de IA reduz e delimita esses dados, chama o provedor externo e valida o JSON. A IA não
+  calcula notas, não decide aprovação e não escreve no banco.
 
 ## No Flutter
 
@@ -96,6 +99,28 @@ backend/services/academico/
 `calculo.py` implementa a regra: desempenho do critério = pontos obtidos ÷ pontos possíveis, com o
 peso de cada critério, sem arredondamento intermediário. Nota ausente não é zero. O consolidado
 considera apenas etapas **fechadas** e completas. O boletim apenas agrega o resultado do motor.
+
+### IA como camada de leitura
+
+```text
+Aluno / Turma / Etapa / Critério / Atividade / Nota
+  → calcular_desempenho_etapa                 (verdade numérica)
+  → GerarInsightsTurmaService                 (autorização, redução e agregados)
+  → AIClient                                  (HTTP externo e JSON estruturado)
+  → InsightsTurmaScreen                       (exibição sob demanda)
+```
+
+`GerarInsightsTurmaService` exige o vínculo `professor_turma`, compara a escola da turma com a
+escola do JWT e usa a etapa do ano da própria turma. O payload contém nome da turma, ano, etapa,
+escala, agregados, primeiro nome do aluno, situação, percentuais, completude e critérios. Email,
+matrícula, identificadores do banco e autenticação não saem da aplicação. Detalhes individuais
+são limitados a 50 alunos; para turmas maiores, os agregados continuam considerando todos.
+
+O prompt de sistema manda tratar strings do JSON como dados inertes, usar somente evidências
+fornecidas e recusar inferências sobre intenção, personalidade ou futuro. O cliente aceita apenas
+o contrato `resumo`, `pontosPositivos`, `pontosAtencao` e `sugestoesGerais`. Ausência de chave,
+timeout, falha HTTP ou JSON inválido viram 503 amigável; nenhuma resposta artificial é criada.
+Não existe tabela de IA nem cache persistente nesta versão.
 
 ---
 
@@ -166,6 +191,22 @@ boletimTurmaScreen.dart                    (features/professor/screens/turmas/)
   → calcular_todas_etapas / calcular_consolidado_geral (backend/services/academico/calculo.py)
   → Aluno, Etapa, Criterio, Atividade, Nota (Models)
 ```
+
+## Exemplo 5 — Insights da turma (Professor)
+
+```text
+insightsTurmaScreen.dart
+  → InsightsIaService.gerar
+  → POST /api/professor/turmas/<id>/insights (@professor_required)
+  → ProfessorController.insights_turma
+  → GerarInsightsTurmaService.execute
+  → calcular_desempenho_etapa para cada aluno
+  → AIClient.gerar
+  → Mistral Small por padrão (provedor/modelo substituíveis por configuração)
+```
+
+O botão manual evita chamadas em rebuild. A indisponibilidade do provedor afeta somente essa
+requisição e não entra no fluxo do motor acadêmico.
 
 ---
 

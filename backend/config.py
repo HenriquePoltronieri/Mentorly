@@ -75,3 +75,24 @@ SMTP_CONFIG = {
 
 # Base do app Flutter, usada para montar o link do convite do professor.
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:3000")
+
+
+def _float_positivo_env(nome, padrao):
+    try:
+        valor = float(os.environ.get(nome, str(padrao)))
+        return valor if valor > 0 else float(padrao)
+    except (TypeError, ValueError):
+        return float(padrao)
+
+
+# Integracao opcional com um provedor de modelo de linguagem que exponha o
+# contrato de chat completions. Sem estas variaveis, apenas o recurso de
+# insights fica indisponivel; o restante da aplicacao continua funcionando.
+AI_CONFIG = {
+    "base_url": (
+        os.environ.get("AI_BASE_URL") or "https://api.mistral.ai/v1"
+    ).rstrip("/"),
+    "api_key": os.environ.get("AI_API_KEY", ""),
+    "model": os.environ.get("AI_MODEL") or "mistral-small-latest",
+    "timeout": _float_positivo_env("AI_TIMEOUT", 15),
+}

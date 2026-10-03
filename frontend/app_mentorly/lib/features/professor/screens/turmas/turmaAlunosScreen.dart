@@ -180,6 +180,15 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
                     icon: const Icon(Icons.grading_outlined, size: 18),
                     label: const Text('Boletim'),
                   ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.insightsTurma,
+                      arguments: _turma,
+                    ),
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                    label: const Text('Insights IA'),
+                  ),
                 ],
               ),
             ),

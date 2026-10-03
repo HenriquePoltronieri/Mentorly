@@ -27,6 +27,11 @@ from services.professor.notas import (
     LancarNotasService,
     ListarNotasService,
 )
+from services.ia.client import AIError
+from services.ia.gerar_insights_turma import (
+    DadosInsuficientesError,
+    GerarInsightsTurmaService,
+)
 
 XLSX_MIME = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -153,6 +158,19 @@ class ProfessorController:
         if not turma:
             return jsonify({"error": "Turma nao encontrada"}), 404
         return jsonify(montar_boletim_turma(turma, coordenacao_atual()))
+
+    def insights_turma(self, turma_id):
+        try:
+            dados = GerarInsightsTurmaService().execute(
+                turma_id, usuario_atual_id(), coordenacao_atual()
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except DadosInsuficientesError as erro:
+            return jsonify({"error": str(erro)}), 422
+        except AIError as erro:
+            return jsonify({"error": str(erro)}), 503
+        return jsonify(dados)
 
     # -----------------------------------------------------------------
     # Notas

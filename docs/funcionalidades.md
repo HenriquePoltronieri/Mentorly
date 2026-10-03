@@ -1,6 +1,6 @@
 # Funcionalidades
 
-O Mentorly tem hoje **21 funcionalidades demonstráveis**, contadas de forma conservadora: cada
+O Mentorly tem hoje **22 funcionalidades demonstráveis**, contadas de forma conservadora: cada
 linha abaixo tem tela no aplicativo, endpoint na API e regra no backend. Todas passam pelas
 camadas explicadas em [architecture.md](architecture.md).
 
@@ -37,6 +37,7 @@ um Service (exceção documentada na arquitetura).
 | 19 | Dashboard com alunos em risco na etapa atual | `dashboardScreen` | `ProfessorDashboardService` | `GET /api/professor/dashboard` | `DashboardProfessorService` | `calculo.py`, `Turma`, `Aluno` |
 | 20 | Desempenho do aluno: por etapa, por critério e consolidado | `alunoDetailScreen` | `ProfessorAlunoDetailService` | `GET /api/professor/alunos/<id>/estatisticas` | `EstatisticasAlunoService` | `calculo.py`, `Nota` |
 | 21 | Boletim da turma | `boletimTurmaScreen` (Professor) | `BoletimTurmaService` | `GET /api/professor/turmas/<id>/boletim` | `montar_boletim_turma` | `calculo.py`, `Aluno` |
+| 22 | Insights acadêmicos explicáveis da etapa atual | `insightsTurmaScreen` | `InsightsIaService` | `POST /api/professor/turmas/<id>/insights` | `GerarInsightsTurmaService`, `AIClient` | `calculo.py`, `Aluno`, `Turma` |
 
 O Professor também edita e exclui aluno nas turmas dele (`PUT`/`DELETE /api/professor/alunos/<id>`,
 os mesmos Services da funcionalidade 7), e importa alunos por planilha.
@@ -54,6 +55,8 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
   turma. Turma, etapa e atividade nunca se misturam entre anos.
 - **Motor de cálculo acadêmico** (`services/academico/calculo.py`): média ponderada por etapa, nota
   ausente diferente de zero, consolidado só com etapas fechadas.
+- **IA somente para interpretação.** Recebe resultados já calculados, usa primeiro nome e dados
+  acadêmicos mínimos, não escreve no banco e não produz nota, status ou previsão.
 - **Bloqueio de alterações em etapa fechada** (atividade e nota), até a Coordenação reabrir.
 
 ## Fora da lista
@@ -78,24 +81,25 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
 
 **Professor** — a barra superior tem **Dashboard** (18), **Turmas** e **Atividades**:
 
-- **Turmas** → turma → alunos (7) → aluno (19) e botão **Boletim** (20);
+- **Turmas** → turma → alunos (7) → aluno (20), botão **Boletim** (21) e **Insights IA** (22);
 - **Atividades** → turma → atividade → lançar, importar e excluir notas (15, 16 e 17); a busca (14)
   fica na própria tela de atividades.
 
 ## Situação dos testes
 
-Os testes automáticos abaixo passam no estado atual do repositório (02/10/2026):
+Os testes automáticos abaixo passam no estado atual do repositório (03/10/2026):
 
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
-| `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor, JWT desativado, convites e vínculos | 293 verificações, 0 falhas |
+| `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor e isolamento/acesso/falha da IA | 298 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
+| `python scripts/test_ia.py` | Payload mínimo, limite, autorização e cliente externo com respostas simuladas | 14 testes, OK |
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado: preserva alunos/turmas, cria os vínculos iniciais e é idempotente | 8 verificações, 0 falhas |
 | `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |
-| `flutter test` | Fluxos de login, primeiro acesso e modelos de ano letivo, histórico e Professor | 18 testes, OK |
-| `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors (restam infos de estilo) |
+| `flutter test` | Fluxos anteriores e model/tela inicial dos insights | 21 testes, OK |
+| `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors; 90 infos de estilo |
 
 Esses testes cobrem a API e a lógica, não a interface inteira. O teste manual de ponta a ponta,
 pelas telas do aplicativo, está previsto no [roadmap.md](roadmap.md) para 13/10.

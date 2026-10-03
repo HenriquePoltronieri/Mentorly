@@ -16,6 +16,7 @@ Uso (a partir da pasta backend):
 import io
 import os
 import sys
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1990,6 +1991,74 @@ def main():
         checar(coord_a.delete(
             "/api/coordenacao/professores/%d/turmas/%d" % (prof_b["id"], turma_b["id"])
         ).status_code == 404, "M8-25: Coordenacao nao desvincula professor de outra escola")
+
+        # ---------------------------------------------------------
+        print("\n[15] Marco 9 - insights academicos explicaveis")
+
+        class ClienteIaFalso:
+            model = "modelo-smoke"
+            payload = None
+
+            def gerar(self, payload):
+                ClienteIaFalso.payload = payload
+                return {
+                    "resumo": "Os dados mostram resultado abaixo do minimo.",
+                    "pontosPositivos": ["Ha registros completos na etapa."],
+                    "pontosAtencao": [{
+                        "titulo": "Desempenho da etapa",
+                        "evidencia": "O percentual registrado e 20%.",
+                        "sugestao": "Revisar o criterio com a turma.",
+                    }],
+                    "sugestoesGerais": ["Acompanhar os proximos registros."],
+                }
+
+        with patch(
+            "services.ia.gerar_insights_turma.AIClient",
+            return_value=ClienteIaFalso(),
+        ):
+            insights = professor_6.post(
+                "/api/professor/turmas/%d/insights" % t26["id"], {}
+            )
+            checar(insights.status_code == 200
+                   and insights.get_json()["geradoPorIA"] is True
+                   and insights.get_json()["insights"]["pontosAtencao"],
+                   "M9-01: Professor vinculado gera insights estruturados")
+            payload_ia = ClienteIaFalso.payload
+            payload_serializado = str(payload_ia)
+            checar(payload_ia["turma"]["anoLetivo"] == 2026
+                   and payload_ia["alunos"][0]["situacao"] == "abaixo_do_minimo"
+                   and "matricula" not in payload_serializado.lower()
+                   and "email" not in payload_serializado.lower(),
+                   "M9-02: payload usa calculo oficial e omite matricula/email")
+            checar(professor_a2.post(
+                "/api/professor/turmas/%d/insights" % t26["id"], {}
+            ).status_code == 404 and professor_b.post(
+                "/api/professor/turmas/%d/insights" % t26["id"], {}
+            ).status_code == 404,
+                   "M9-03: turma sem vinculo ou de outra escola fica oculta")
+            checar(coord_a.post(
+                "/api/professor/turmas/%d/insights" % t26["id"], {}
+            ).status_code == 403,
+                   "M9-04: Coordenacao nao usa endpoint exclusivo do Professor")
+
+        from services.ia.client import AIProviderError, MENSAGEM_INDISPONIVEL
+
+        class ClienteIaIndisponivel:
+            model = "modelo-smoke"
+
+            def gerar(self, payload):
+                raise AIProviderError(MENSAGEM_INDISPONIVEL)
+
+        with patch(
+            "services.ia.gerar_insights_turma.AIClient",
+            return_value=ClienteIaIndisponivel(),
+        ):
+            indisponivel = professor_6.post(
+                "/api/professor/turmas/%d/insights" % t26["id"], {}
+            )
+            checar(indisponivel.status_code == 503
+                   and "Tente novamente" in indisponivel.get_json()["error"],
+                   "M9-05: indisponibilidade externa retorna erro amigavel")
 
         print("\nLimpando os dados de teste...")
         limpar()

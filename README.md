@@ -1,6 +1,6 @@
 # Mentorly
 
-> Estado atual: **Marcos 1 a 7 concluídos**. O plano até a apresentação e o histórico das
+> Estado atual: **Marcos 1 a 9 concluídos em código e testes**. O plano até a apresentação e o histórico das
 > decisões estão em [docs/roadmap.md](docs/roadmap.md).
 
 ## Sobre o Projeto
@@ -8,7 +8,8 @@
 O Mentorly é um sistema de acompanhamento acadêmico para escolas. A **Coordenação** configura
 o ano letivo (etapas e critérios de avaliação), cadastra turmas, alunos e professores. Cada
 **Professor** vê apenas as turmas que a Coordenação vinculou a ele, cria atividades, lança
-notas e acompanha o desempenho dos alunos, com média por etapa, boletim e alunos em risco.
+notas e acompanha o desempenho dos alunos, com média por etapa, boletim, alunos em risco e
+insights acadêmicos explicáveis gerados sob demanda por IA.
 
 Cada cadastro de Coordenação é uma **escola independente**: nenhuma escola enxerga os dados de
 outra, e essa regra é garantida também pelo próprio banco de dados (chaves estrangeiras
@@ -37,6 +38,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 - MySQL 8 (com Stored Procedures)
 - PyJWT 2.9.0 (autenticação) e Werkzeug 3.0.4 (hash de senha)
 - openpyxl 3.1.5 (importação de planilhas XLSX)
+- integração HTTP configurável com modelo de linguagem externo
 
 ### Frontend
 - Flutter 3 (Dart SDK `>=3.0.0 <4.0.0`)
@@ -46,7 +48,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 21 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 22 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -73,8 +75,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 19. Dashboard com alunos em risco
 20. Desempenho do aluno por etapa e consolidado
 21. Boletim da turma
-
-**Ainda não implementado:** IA. O planejamento está em [docs/roadmap.md](docs/roadmap.md).
+22. Insights acadêmicos explicáveis da turma, gerados por IA a partir do motor acadêmico
 
 ---
 
@@ -106,6 +107,28 @@ Route                      (Blueprint + decorator de papel)
   Stored Procedures.
 - **Autenticação** — JWT com `{sub, tipo, coordenacao_id, exp}`. A escola sempre é lida do
   token, nunca de um parâmetro da requisição.
+
+Os insights mantêm uma separação explícita: `services/academico/calculo.py` produz todos os
+valores oficiais; `services/ia/gerar_insights_turma.py` monta um payload mínimo; e
+`services/ia/client.py` envia esses resultados a um provedor externo compatível com chat
+completions. A resposta não é persistida e uma falha externa não afeta notas, boletim ou login.
+
+### Configuração da IA
+
+Copie os nomes de `backend/.env.example` para `backend/.env` e configure:
+
+| Variável | Uso |
+|---|---|
+| `AI_BASE_URL` | URL base do provedor; padrão `https://api.mistral.ai/v1` |
+| `AI_API_KEY` | credencial do provedor; nunca deve ser versionada |
+| `AI_MODEL` | modelo; padrão `mistral-small-latest` |
+| `AI_TIMEOUT` | limite da chamada em segundos; padrão interno de 15 |
+
+O padrão do MVP é o Mistral Small: modelo pequeno, econômico e compatível com o modo JSON usado
+pelo cliente. Na consulta de 03/10/2026, o custo publicado era aproximadamente US$ 0,15 por
+milhão de tokens de entrada e US$ 0,60 por milhão de tokens de saída. URL e modelo continuam
+configuráveis para permitir troca sem alteração de código. Sem `AI_API_KEY`, o botão informa que
+os insights estão indisponíveis e o restante do Mentorly continua normal.
 
 A separação não é absolutamente rígida: existem poucos acessos diretos Controller → Model e
 Controller → Repository, e alguns modais Flutter usam o `ApiService` diretamente. Eles estão
@@ -235,6 +258,7 @@ Professor sem token ou com o papel errado respondem 401/403.
 | GET | `/api/professor/turmas/<id>/alunos/modelo-planilha` | Modelo de planilha de alunos |
 | POST | `/api/professor/turmas/<id>/alunos/importar` | Importar alunos por planilha |
 | GET | `/api/professor/turmas/<id>/boletim` | Boletim da turma |
+| POST | `/api/professor/turmas/<id>/insights` | Gerar insights da etapa atual com IA |
 | GET | `/api/professor/dashboard` | Dashboard (alunos em risco) |
 | GET | `/api/professor/alunos/<id>/estatisticas` | Desempenho do aluno por etapa |
 | PUT / DELETE | `/api/professor/alunos/<id>` | Editar / excluir aluno |
@@ -271,6 +295,7 @@ backend/
 │   ├── coordenacao/            # professores e vínculos
 │   ├── planilha/               # leitura, validação e importação de XLSX
 │   ├── professor/              # turmas, dashboard, estatísticas e notas
+│   ├── ia/                     # payload acadêmico e cliente do provedor externo
 │   ├── turmas.py               # CRUD de turma (funções)
 │   └── email_service.py
 ├── models/                     # SQL de cada entidade
@@ -281,7 +306,7 @@ backend/
 │   ├── procedure.py            # único ponto que executa CALL
 │   ├── procedures.sql
 │   └── schema.sql
-└── scripts/                    # init_db, smoke_db, smoke_api, test_calculo
+└── scripts/                    # init_db, smoke_db, smoke_api, test_calculo, test_ia
 
 docs/
 ├── architecture.md
@@ -356,10 +381,12 @@ O backend precisa estar rodando. O endereço da API fica em um único lugar,
 ```bash
 cd backend
 python scripts/smoke_db.py       # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py      # API de ponta a ponta (267 verificações)
+python scripts/smoke_api.py      # API de ponta a ponta (298 verificações)
 python scripts/test_calculo.py   # motor de cálculo, sem banco
+python scripts/test_ia.py        # payload, autorização e cliente externo, sem internet
 python scripts/test_migracao_ano_letivo.py   # migração do ano letivo sobre um banco no formato antigo
 python scripts/test_migracao_transferencia_aluno.py  # migration de histórico de turma
+python scripts/test_migracao_professor_habilitado.py # migration do status administrativo
 
 cd ../frontend/app_mentorly
 flutter analyze
@@ -380,9 +407,10 @@ não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ## Status do Projeto
 
-Em desenvolvimento. Os Marcos 1 a 8 (avaliação, desempenho, ciclo escolar, gerenciamento de
-alunos, exclusão de nota, ano letivo, transferência com histórico e gestão de professores) estão
-concluídos em código e testes. O próximo marco é IA, conforme [docs/roadmap.md](docs/roadmap.md).
+Em desenvolvimento. Os Marcos 1 a 9 (avaliação, desempenho, ciclo escolar, gerenciamento de
+alunos, exclusão de nota, ano letivo, transferência com histórico, gestão de professores e
+insights com IA) estão concluídos em código e testes. A integração externa depende das variáveis
+de ambiente do provedor e não altera nem persiste dados acadêmicos.
 
 ---
 

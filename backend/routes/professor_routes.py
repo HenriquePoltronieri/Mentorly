@@ -79,6 +79,12 @@ def boletim_turma(turma_id):
     return professor_controller.boletim_turma(turma_id)
 
 
+@professor_blueprint.post("/turmas/<int:turma_id>/insights")
+@professor_required
+def insights_turma(turma_id):
+    return professor_controller.insights_turma(turma_id)
+
+
 @professor_blueprint.delete("/notas/<int:nota_id>")
 @professor_required
 def excluir_nota(nota_id):

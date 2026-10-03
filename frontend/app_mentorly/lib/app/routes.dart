@@ -30,6 +30,7 @@ import '../features/professor/screens/turmas/listaTurmasScreen.dart';
 import '../features/professor/screens/turmas/turmaAlunosScreen.dart';
 import '../features/professor/screens/turmas/alunoDetailScreen.dart';
 import '../features/professor/screens/turmas/boletimTurmaScreen.dart';
+import '../features/professor/screens/turmas/insightsTurmaScreen.dart';
 import '../features/professor/screens/atividades/listaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/turmaAtividadesScreen.dart';
 import '../features/professor/screens/atividades/atividadeNotasScreen.dart';
@@ -68,6 +69,7 @@ class AppRoutes {
   static const String turmaAlunos = '/professor/turma-alunos';
   static const String alunoDetail = '/professor/aluno-detail';
   static const String boletimTurma = '/professor/boletim-turma';
+  static const String insightsTurma = '/professor/insights-turma';
   static const String listaAtividades = '/professor/atividades';
   static const String turmaAtividades = '/professor/turma-atividades';
   static const String atividadeNotas = '/professor/atividade-notas';
@@ -102,6 +104,7 @@ class AppRoutes {
     turmaAlunos: (context) => TurmaAlunosScreen(),
     alunoDetail: (context) => AlunoDetailScreen(),
     boletimTurma: (context) => BoletimTurmaScreen(),
+    insightsTurma: (context) => InsightsTurmaScreen(),
     listaAtividades: (context) => ListaAtividadesScreen(),
     turmaAtividades: (context) => TurmaAtividadesScreen(),
     atividadeNotas: (context) => AtividadeNotasScreen(),
