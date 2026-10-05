@@ -2,13 +2,19 @@
 
 Este roadmap organiza o estado atual, os próximos passos e as decisões estruturais do Mentorly.
 
-O desenvolvimento planejado deve estar concluído até **20/10/2026**. As duas semanas seguintes ficam reservadas para estudo do código, preparação da apresentação e ensaios.
+O desenvolvimento principal entra em congelamento em **20/10/2026**, com buffer até 22/10 e
+MVP concluído em 23/10. De 21/10 a 06/11, o foco passa gradualmente para estudo do código,
+preparação da apresentação e ensaios.
 
 A seção 6 preserva o plano original em 13 fases. Itens adiados não foram removidos do projeto: continuam documentados e só mudaram de prioridade.
 
 ---
 
 # 1. Estado atual
+
+Os Marcos 1–8 estão concluídos e publicados. Os Marcos 6–8 também já foram migrados e validados
+no banco real. O Marco 9A existe apenas no commit local `53eb7c3`; o remoto continua em
+`835344c` até a validação externa da IA.
 
 ## Marco 1 — Avaliação funcionando
 **Status: ✅ Concluído**
@@ -64,7 +70,7 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 - autorização por Professor, turma e escola.
 
 ## Marco 6 — Ano letivo completo
-**Status: ✅ Concluído**
+**Status: ✅ Concluído, migrado no banco real e publicado**
 
 > O ano letivo deixa de ser um número solto e passa a ser um cadastro de cada escola, que controla turmas, etapas, etapa atual, dashboard e boletim.
 
@@ -77,11 +83,37 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 - atividade só aceita etapa do mesmo ano da turma;
 - gestão de anos letivos pela Coordenação (API e tela Flutter); o Professor não administra anos.
 
+## Marco 7 — Transferência com histórico
+**Status: ✅ Concluído, migrado no banco real e publicado**
+
+- tabela `aluno_turma_historico` e um vínculo aberto representando a turma atual;
+- transferência transacional, com fechamento do vínculo anterior e criação do novo;
+- preservação das notas e atividades no contexto da turma original;
+- atualização correta do acesso dos Professores de origem e destino;
+- cadastro manual e importação criando o primeiro vínculo histórico.
+
+## Marco 8 — Gestão completa de professores
+**Status: ✅ Concluído, migrado no banco real e publicado**
+
+- edição e gestão de vínculos com turmas;
+- reenvio de convite para conta pendente;
+- desativação e reativação sem apagar histórico acadêmico;
+- `professor.habilitado` separado do estado de convite/senha;
+- login e JWT antigo bloqueados imediatamente quando o Professor é desativado.
+
+## Marco 9A — Insights acadêmicos explicáveis
+**Status: 🟡 Implementado em código; aguardando validação externa real e publicação**
+
+O commit local `53eb7c3` adiciona a infraestrutura de IA, o endpoint de insights da turma, a tela
+Flutter, isolamento por escola, tratamento de falhas e testes com cliente simulado. O provedor
+está configurado para Mistral com `mistral-small-latest`, mas ainda não houve chamada externa real
+porque `AI_API_KEY` não está disponível. O último `HEAD` publicado antes da IA é `835344c`.
+
 ---
 
 # 2. Estado técnico validado
 
-Verificação mais recente (03/10/2026, depois do Marco 9):
+Verificação mais recente (03/10/2026, sobre o commit local do Marco 9A):
 
 | Verificação | Resultado |
 |---|---|
@@ -98,10 +130,13 @@ Verificação mais recente (03/10/2026, depois do Marco 9):
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o Mentorly possui hoje **22 funcionalidades demonstráveis de MVP** (lista em [funcionalidades.md](funcionalidades.md)).
+Por contagem conservadora, o código local possui hoje **22 funcionalidades demonstráveis de
+MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os sub-marcos 9B, 9C e 9D não entram
+nessa contagem enquanto não tiverem implementação e evidência.
 
-A integração externa da IA está implementada com Mistral Small como padrão; falta configurar uma
-chave no ambiente e executar a chamada real controlada antes da demonstração.
+A infraestrutura e os Insights IA estão implementados e testados com cliente simulado, mas a
+integração externa real ainda precisa ser validada com credencial antes de o Marco 9A ser
+considerado operacionalmente encerrado.
 
 ---
 
@@ -130,7 +165,9 @@ A etapa atual da disciplina exige:
 - [x] revisar `git status` e `git diff`;
 - [x] verificar arquivos sensíveis;
 - [x] organizar commits;
-- [x] realizar push;
+- [x] realizar push dos Marcos 1–8;
+- [ ] validar a chamada externa real do Marco 9A;
+- [ ] publicar o Marco 9A;
 - [ ] conferir os arquivos no repositório remoto;
 - [ ] confirmar acesso do professor ao repositório.
 
@@ -154,6 +191,20 @@ Service
 Model / Repository
   ↓
 MySQL
+```
+
+O caminho de leitura da IA acrescenta uma integração externa sem entrar no motor acadêmico:
+
+```text
+calculo.py
+  ↓
+payload acadêmico estruturado
+  ↓
+Service de IA
+  ↓
+provedor externo
+  ↓
+resposta validada no Flutter
 ```
 
 - **Route:** declara o endereço e o decorator de papel (`@auth_required`, `@coordenacao_required`, `@professor_required`).
@@ -187,15 +238,15 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 
 | Etapa | Período |
 |---|---|
-| Etapa 0 — Git e checkpoint | 02/10 – 03/10 |
-| Marco 6 — Ano letivo completo ✅ | 03/10 – 06/10 |
-| Marco 7 — Transferência de aluno com histórico | 06/10 – 08/10 |
-| Marco 8 — Gestão completa de professores | 08/10 – 10/10 |
-| Marco 9 — IA | 10/10 – 12/10 |
-| Teste manual E2E | 13/10 |
+| Marcos 1–8 — base acadêmica e administrativa ✅ | concluídos e publicados até 05/10 |
+| Marco 9A — Insights + infraestrutura IA | código concluído; chamada real e publicação até 06/10 |
+| Marco 9B — Geração de atividades/questões | 06/10 – 07/10 |
+| Marco 9C — Correção assistida com rubrica | 07/10 – 10/10 |
+| Marco 9D — Feedback/recuperação | 10/10 – 11/10 |
+| Validação completa da IA | 11/10 – 12/10 |
+| E2E completo do sistema | 13/10 |
 | Correção de UX/bugs | 14/10 – 16/10 |
 | Documentação final | 16/10 – 17/10 |
-| Git final | 17/10 |
 | Auditoria final | 18/10 |
 | Correções finais | 19/10 – 20/10 |
 | Congelamento | 20/10 |
@@ -203,6 +254,7 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 | MVP | 23/10 |
 | Revisão | 30/10 |
 | Apresentação | 07/11 |
+| Estudo do código e apresentação | 21/10 – 06/11 |
 
 ## Período de estudo
 
@@ -215,7 +267,7 @@ De **21/10 a 06/11**, o desenvolvimento normal está encerrado. A prioridade pas
 - ensaiar a apresentação.
 
 ## Marco 6 — Ano letivo completo
-**03/10 – 06/10 · ✅ concluído**
+**✅ concluído, migrado no banco real e publicado**
 
 Modelagem (decisão estrutural herdada do plano original, adaptada ao código):
 
@@ -248,7 +300,7 @@ Encerrar o ano é só trocar o status: **não** há promoção automática de al
 Detalhes técnicos e a migração estão em [banco-e-procedures.md](banco-e-procedures.md).
 
 ## Marco 7 — Transferência de aluno com histórico
-**06/10 – 08/10 · ✅ concluído**
+**✅ concluído, migrado no banco real e publicado**
 
 `aluno.turma_id` continua sendo a referência rápida da turma atual, para manter as listas,
 dashboard, boletim e autorização do Professor compatíveis. A trilha é `aluno_turma_historico`:
@@ -265,7 +317,7 @@ O histórico pode ser consultado pela Coordenação na lista de alunos. A migrat
 duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo e data de criação.
 
 ## Marco 8 — Gestão completa de professores
-**08/10 – 10/10 · ✅ concluído, migrado no banco real e publicado**
+**✅ concluído, migrado no banco real e publicado**
 
 - `professor.habilitado` é o estado administrativo persistido; a migration idempotente deixa todos os registros legados habilitados;
 - `ativo` continua compatível e significa apenas que a senha foi criada; a API também devolve `status`: `convite_pendente`, `ativo` ou `desativado`;
@@ -275,47 +327,309 @@ duplicar, o vínculo inicial dos alunos já existentes usando turma, ano letivo 
 
 Decisão mantida: **não excluir fisicamente professor que já tem histórico.** A migration foi aplicada no banco real com backup e validação antes da publicação.
 
-## Marco 9 — IA
-**10/10 – 12/10 · ✅ concluído em código e testes; configuração externa pendente no ambiente**
+## Marco 9 — Inteligência Artificial aplicada ao Professor
 
-**Escopo:** insights acadêmicos explicáveis para o Professor.
+O bloco de IA passa a ser um conjunto pequeno de funcionalidades relacionadas. Todas reutilizam
+a infraestrutura de integração externa e preservam a separação entre verdade acadêmica,
+assistência generativa e decisão humana.
+
+### Marco 9A — Insights acadêmicos explicáveis
+
+**Estado: 🟡 implementado em código; aguardando validação externa real e publicação**
+
+**Fechamento previsto: até 06/10**
+
+Fluxo:
 
 ```text
-motor acadêmico
-      ↓
-dados confiáveis
-      ↓
-service de IA
-      ↓
-modelo
-      ↓
-insight textual
+Professor
+→ turma
+→ Insights IA
 ```
 
-A IA **não** calcula nota, **não** altera nota, **não** decide aprovação, **não** fecha etapa e **não** substitui `calculo.py`.
+A IA recebe resultados já calculados pelo Mentorly e produz:
 
-Implementação: `GerarInsightsTurmaService` valida JWT, vínculo e escola, usa a etapa atual do ano
-da turma e chama `calcular_desempenho_etapa`. O `AIClient` envia um JSON limitado a um provedor
-compatível com chat completions e valida a resposta estruturada. O Flutter só chama pelo botão
-**Gerar insights**. Não há persistência; falha externa retorna mensagem amigável e não afeta o
-restante do produto. O padrão é `mistral-small-latest`, com URL e modelo substituíveis por
-variáveis de ambiente.
+- resumo da turma;
+- pontos positivos;
+- pontos de atenção;
+- evidências numéricas;
+- sugestões pedagógicas.
 
-Dados enviados nesta versão: turma, ano, etapa, escala oficial, agregados da turma e, por aluno,
-primeiro nome, percentual, nota calculada, situação, completude, contagens de atividades e
-desempenho por critério. Email, matrícula, ids do banco e histórico bruto não são enviados.
+Regra arquitetural:
 
-Seguindo o plano original, a prioridade são insights explicáveis sobre dados existentes, e não previsões opacas como "IA prevê reprovação".
+```text
+motor acadêmico determinístico
+→ dados estruturados
+→ IA
+→ explicação
+```
+
+O commit local `53eb7c3` implementa cliente HTTP, configuração por ambiente, service, endpoint,
+Flutter, isolamento por escola, tratamento de indisponibilidade e testes com cliente simulado. A
+integração está preparada para Mistral com `mistral-small-latest`. Ainda não houve chamada externa
+real porque não existe `AI_API_KEY` disponível, e o commit ainda não foi publicado; `835344c`
+continua sendo o último `HEAD` publicado.
+
+Portanto, o Marco 9A tem implementação e cobertura automatizada, mas **não será considerado
+operacionalmente encerrado** antes de uma chamada real controlada, resultado real exibido no
+Mentorly e publicação do commit.
+
+A IA do 9A não calcula nota, não altera nota, não decide aprovação, não muda status e não escreve
+no banco.
+
+### Marco 9B — Geração assistida de atividades e questões
+
+**Estado: ⏳ planejado**
+
+**Prioridade: alta**
+
+**Período: 06/10–07/10**
+
+Objetivo: permitir que o Professor informe:
+
+- tema;
+- disciplina ou contexto;
+- etapa;
+- critério;
+- nível de dificuldade;
+- quantidade e tipo de questões.
+
+A IA poderá sugerir:
+
+- título;
+- enunciados e questões;
+- resposta esperada ou gabarito;
+- orientações;
+- possível rubrica.
+
+Fluxo previsto:
+
+```text
+Professor
+→ Criar atividade
+→ Gerar com IA
+→ informa contexto
+→ IA gera sugestão
+→ Professor revisa
+→ Professor aceita ou edita
+→ somente então salva a atividade
+```
+
+**A IA sugere; o Professor decide o que será salvo.** Nenhuma atividade será criada ou publicada
+automaticamente. A prioridade é alta porque o fluxo oferece demonstração visual forte, utilidade
+direta, baixo risco acadêmico e reaproveita a infraestrutura do 9A.
+
+### Marco 9C — Correção assistida de respostas discursivas
+
+**Estado: ⏳ planejado**
+
+**Prioridade: muito alta**
+
+**Período: 07/10–10/10**
+
+Esta é a funcionalidade de IA de maior impacto prevista para a demonstração. Como alunos ainda
+não possuem acesso ao Mentorly, a primeira versão será operada pelo Professor:
+
+```text
+Professor
+→ seleciona atividade e aluno
+→ informa ou cola a questão
+→ informa resposta esperada ou rubrica
+→ cola a resposta do aluno
+→ IA analisa
+```
+
+A saída deverá ser estruturada e apresentar:
+
+- avaliação por critério;
+- evidências encontradas na resposta;
+- pontos atendidos;
+- pontos faltantes;
+- sugestão de pontuação;
+- feedback pedagógico.
+
+Exemplo conceitual:
+
+```text
+Contexto histórico       22 / 30
+Mudanças tecnológicas    35 / 40
+Impactos sociais         18 / 30
+
+Sugestão                 75 / 100
+```
+
+A pontuação produzida pela IA é sempre uma sugestão. O fluxo obrigatório é:
+
+```text
+IA sugere
+→ Professor revisa
+→ Professor pode alterar
+→ Professor confirma
+→ somente então a nota pode ser lançada
+```
+
+Essa funcionalidade será tratada como **correção assistida**, nunca como correção automática
+definitiva. Não haverá caminho `IA → nota lançada automaticamente`.
+
+### Marco 9D — Feedback e recuperação personalizados
+
+**Estado: ⏳ planejado**
+
+**Prioridade: média**
+
+**Período: 10/10–11/10**
+
+Usará resultados acadêmicos que o Mentorly já calcula, como critérios, atividades, percentuais,
+etapa, situação e completude.
+
+Saídas previstas:
+
+- feedback individual apoiado em evidências registradas;
+- sugestão de conteúdo para revisão;
+- atividade de reforço sugerida;
+- critério a priorizar;
+- plano simples para acompanhar as próximas atividades.
+
+São sugestões pedagógicas. A IA não altera situação, recuperação oficial, nota ou qualquer regra
+acadêmica.
+
+### Princípios gerais da IA
+
+#### Motor acadêmico continua soberano
+
+`services/academico/calculo.py` continua responsável por notas, percentuais, pesos, situações e
+regras oficiais. Nenhum sub-marco de IA pode duplicar ou substituir esse cálculo.
+
+#### IA não é fonte de verdade
+
+A IA pode gerar, resumir, interpretar, sugerir e explicar. Ela não pode tomar decisão acadêmica
+definitiva.
+
+#### Human in the loop
+
+Sempre que o conteúdo puder afetar atividade, feedback ou nota:
+
+```text
+IA
+→ revisão do Professor
+→ confirmação humana
+→ persistência
+```
+
+#### Explicabilidade
+
+Toda análise de desempenho ou resposta deve apontar os dados, trechos ou critérios que sustentam
+a sugestão.
+
+#### Privacidade
+
+Enviar somente os dados mínimos necessários. Nunca enviar senha, JWT, códigos, email sem
+necessidade ou dados de outra escola.
+
+#### Falha segura
+
+Se o provedor de IA estiver indisponível, o restante do Mentorly continua funcionando. Não haverá
+resposta falsa ou template apresentado como se viesse do modelo.
+
+### Prioridades e regra de corte
+
+| Prioridade | Entrega |
+|---|---|
+| Muito alta | validação externa real do 9A e correção assistida do 9C |
+| Alta | geração de atividades e questões do 9B |
+| Média | feedback e recuperação do 9D |
+
+Se houver atraso, a ordem de preservação será:
+
+1. Insights acadêmicos;
+2. Correção assistida;
+3. Geração de atividades e questões;
+4. Feedback e recuperação, que pode ser simplificado ou adiado.
+
+### Critério de MVP da IA
+
+O bloco só será considerado demonstrável quando houver pelo menos:
+
+1. uma chamada real a modelo externo;
+2. resultado real exibido no Mentorly;
+3. Professor no controle da decisão;
+4. tratamento de indisponibilidade;
+5. nenhuma chave no Git;
+6. cálculo acadêmico separado;
+7. pelo menos uma funcionalidade generativa além de simples resumo.
+
+A meta desejada para a apresentação é:
+
+```text
+Insights acadêmicos
++ Geração de atividades
++ Correção assistida
++ Feedback e recuperação
+```
+
+### Fora do MVP atual
+
+Não entram no escopo atual:
+
+- aluno conversando diretamente com chatbot;
+- tutor virtual 24 horas;
+- correção autônoma sem Professor;
+- reconhecimento automático de prova manuscrita;
+- previsão de reprovação;
+- previsão de abandono;
+- análise psicológica;
+- ranking de inteligência;
+- IA modificando dados sem confirmação;
+- agente autônomo administrando a escola.
+
+### Fluxo previsto para a apresentação
+
+```text
+Professor entra
+→ abre turma
+→ gera insight da turma
+→ cria atividade com apoio da IA
+→ abre correção assistida
+→ cola resposta de aluno
+→ IA analisa pela rubrica
+→ Professor ajusta e confirma
+→ Mentorly registra a decisão humana
+```
+
+Esse fluxo deve demonstrar, de forma visível:
+
+```text
+IA generativa
++ IA analítica
++ controle humano
++ motor acadêmico determinístico
+```
 
 ---
 
 # 5. Itens estruturais que não podem sumir
 
 ### Ano letivo real
-Implementado no Marco 6. Continua sendo a base do histórico: o Marco 7 (transferência) vai se apoiar nele para registrar de qual turma e de qual ano o aluno veio.
+Implementado no Marco 6, migrado no banco real e publicado. É a base do histórico usado pelo
+Marco 7 para registrar de qual turma e de qual ano o aluno veio.
 
 ### Transferência com histórico
-Não permitir implementação ingênua (ver Marco 7).
+Concluída no Marco 7. `aluno.turma_id` continua sendo a referência rápida da turma atual e
+`aluno_turma_historico` preserva os vínculos anteriores. Notas e atividades antigas continuam no
+contexto original.
+
+### A03 — mover atividade com notas
+
+Permanece pendente: mover uma atividade que já possui notas pode deixar atividade e alunos em
+contextos de turma diferentes. A correção mínima é bloquear a troca de turma quando houver nota;
+uma solução mais ampla precisa respeitar ano letivo, autoria e histórico. Não resolver de forma
+implícita dentro dos marcos de IA.
+
+### A05 — contexto de ano letivo
+
+**Resolvida no Marco 6.** Ano letivo, etapa atual, dashboard e boletim deixaram de depender do
+ano do relógio. Turmas e etapas pertencem ao cadastro real da escola, e o Marco 7 usa esse
+contexto no histórico de transferência.
 
 ### `nota_historico`
 Continua como evolução futura:
@@ -340,6 +654,12 @@ Pergunta ainda **sem resposta** (não resolver agora):
 
 Hoje a regra é por vínculo com a turma, não por autoria.
 
+### N+1 aceito
+
+Algumas telas e relatórios calculam resultados aluno a aluno, produzindo consultas N+1. Esse
+custo é conhecido e aceito para o volume do MVP. Otimização só deve entrar com medição que mostre
+impacto real; não criar cache ou camada genérica apenas por antecipação.
+
 ### Soft-delete de professor
 Manter a decisão: desativar em vez de excluir (ver Marco 8).
 
@@ -351,6 +671,13 @@ Decisão pendente:
 - apenas Coordenação?
 
 A infraestrutura (`/api/auth/enviar-codigo`, `/api/auth/confirmar-codigo` e `twoFactorScreen`) existe, mas está fora do fluxo de login. Para o MVP, a recomendação do plano original é opcional ou somente para a Coordenação.
+
+### Segurança e implantação
+
+O isolamento por escola, o papel do JWT, a revogação prática do Professor desativado e a ausência
+de segredos no Git continuam requisitos permanentes. A implantação ainda está pendente: URL da
+API por ambiente, `SECRET_KEY`, SMTP, banco, HTTPS e credencial da IA precisam ser configurados
+fora do código antes de produção.
 
 ### Fórmula acadêmica
 Preservar a regra:
@@ -365,7 +692,8 @@ aplicada por critério, com o peso do critério, somando as contribuições e mu
 
 # 6. Plano original (Fases 1 a 13)
 
-O texto abaixo é o roadmap original, mantido como histórico e com o status de cada fase atualizado em 02/10/2026.
+O texto abaixo é o roadmap original, mantido como histórico e com o status de cada fase atualizado
+em 05/10/2026. As Fases 1–13 não foram removidas; os marcos atuais apenas refinam a execução.
 
 ---
 
@@ -821,7 +1149,9 @@ Professor, atividades, notas e vínculos não são excluídos nessa operação.
 
 ## Fase 9 — Recuperação de senha e segurança
 
-**Status: ⏳ pendente.** Recuperação de senha não consta nos marcos planejados até 20/10 (será reavaliada depois do Marco 9). A infraestrutura de 2FA existe, mas está fora do fluxo de login; a decisão continua em aberto (seção 5).
+**Status: ⏳ pendente.** Recuperação de senha não consta nos marcos planejados até 20/10 (será
+reavaliada depois do bloco de IA). A infraestrutura de 2FA existe, mas está fora do fluxo de
+login; a decisão continua em aberto (seção 5).
 
 ### Recuperação de senha
 
@@ -930,7 +1260,9 @@ Isso deve ser feito depois de confirmar qual arquitetura venceu.
 
 ## Fase 12 — Preparar apresentação/TCC
 
-**Status: ⏳ pendente.** As etapas do fluxo abaixo existem no app e na API (a API é coberta por `smoke_api`). O teste manual de ponta a ponta está previsto para 13/10 e o roteiro do vídeo ainda precisa ser refeito.
+**Status: ⏳ pendente.** As etapas acadêmicas do fluxo abaixo existem no app e na API (a API é
+coberta por `smoke_api`). O E2E completo está previsto para 13/10 e o roteiro do vídeo ainda
+precisa incorporar o bloco de IA.
 
 O fluxo demonstrável deveria ser:
 
@@ -986,12 +1318,34 @@ Gera boletim
 
 Se isso estiver estável, o projeto terá uma demonstração muito forte.
 
+A extensão prevista para a apresentação, após provar o ciclo acadêmico, é:
+
+```text
+PROFESSOR
+    ↓
+Gera insight da turma
+    ↓
+Gera e revisa uma sugestão de atividade
+    ↓
+Cola uma resposta discursiva e a rubrica
+    ↓
+IA aponta critérios, evidências e pontuação sugerida
+    ↓
+Professor ajusta e confirma
+    ↓
+Mentorly registra somente a decisão humana
+```
+
+A demonstração deve deixar visível a combinação entre IA generativa, IA analítica, controle
+humano e motor acadêmico determinístico.
+
 ---
 
 ## Fase 13 — IA
 
-**Status: ✅ concluída em código e testes (Marco 9).** A chamada real controlada depende da chave
-do provedor no ambiente de demonstração.
+**Status: 🟡 em execução.** O Marco 9A está implementado em código e testado com cliente simulado,
+mas aguarda chamada externa real e publicação. Os Marcos 9B, 9C e 9D estão planejados — ver a
+seção 4.
 
 Somente depois do ciclo acadêmico estar confiável.
 
@@ -1015,7 +1369,15 @@ Possibilidades:
 - sugerir alunos que precisam de atenção;
 - gerar insights para o professor.
 
-Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro priorizar insights explicáveis sobre dados existentes.
+O plano atual distribui essas possibilidades em quatro entregas:
+
+- **9A:** insights acadêmicos explicáveis;
+- **9B:** geração assistida de atividades e questões;
+- **9C:** correção assistida de respostas discursivas com rubrica;
+- **9D:** feedback e recuperação personalizados.
+
+Continuam proibidas previsões opacas como "IA prevê reprovação". Conteúdo e pontuação gerados
+pela IA precisam de revisão do Professor antes de qualquer persistência.
 
 ---
 
@@ -1035,9 +1397,13 @@ Evitar começar com previsões opacas como "IA prevê reprovação". Primeiro pr
 | 10 | Editar/excluir/transferir aluno | 🟡 | ✅ Marcos 4 e 7 |
 | 11 | Ano letivo real | 🟡 | ✅ Marco 6 |
 | 12 | Gestão completa de professores | 🟡 | ✅ Marco 8 |
-| 13 | Recuperação de senha | 🟡 | ⏳ pendente |
-| 14 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
-| 15 | Testes completos | 🟠 | 🟡 parcial |
-| 16 | Limpeza de legado | 🟡 | 🟡 parcial |
-| 17 | Produção/deploy | 🔵 | ⏳ pendente |
-| 18 | IA | 🔵 | ✅ Marco 9 |
+| 13 | IA — validação externa dos Insights | 🔴 | 🟡 Marco 9A em código; chamada real e publicação pendentes |
+| 14 | IA — correção assistida com rubrica | 🔴 | ⏳ Marco 9C |
+| 15 | IA — geração de atividades e questões | 🟠 | ⏳ Marco 9B |
+| 16 | Testes completos | 🟠 | 🟡 parcial |
+| 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ⏳ pendente |
+| 18 | Recuperação de senha | 🟡 | ⏳ pendente fora do bloco atual |
+| 19 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
+| 20 | IA — feedback e recuperação | 🟡 | ⏳ Marco 9D; pode ser simplificado ou adiado |
+| 21 | Limpeza de legado | 🟡 | 🟡 parcial |
+| 22 | Produção/deploy | 🔵 | ⏳ pendente |
