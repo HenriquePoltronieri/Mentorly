@@ -144,6 +144,7 @@ class AIClient:
             headers={
                 "Authorization": "Bearer %s" % self.api_key,
                 "Content-Type": "application/json",
+                "User-Agent": "Mentorly/1.0",
             },
             method="POST",
         )

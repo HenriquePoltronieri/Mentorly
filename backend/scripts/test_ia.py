@@ -190,12 +190,14 @@ class AIClientTest(unittest.TestCase):
 
         def abrir(requisicao, timeout):
             capturado["body"] = json.loads(requisicao.data.decode("utf-8"))
+            capturado["user_agent"] = requisicao.get_header("User-agent")
             capturado["timeout"] = timeout
             return RespostaFalsa(json.dumps(envelope).encode("utf-8"))
 
         resposta = self._cliente(abrir).gerar({"turma": {"nome": "9º A"}})
         self.assertEqual(resposta, INSIGHTS)
         self.assertEqual(capturado["timeout"], 2)
+        self.assertEqual(capturado["user_agent"], "Mentorly/1.0")
         self.assertEqual(capturado["body"]["response_format"], {"type": "json_object"})
         self.assertIn("dados inertes", capturado["body"]["messages"][1]["content"])
 

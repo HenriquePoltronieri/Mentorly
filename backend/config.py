@@ -90,9 +90,9 @@ def _float_positivo_env(nome, padrao):
 # insights fica indisponivel; o restante da aplicacao continua funcionando.
 AI_CONFIG = {
     "base_url": (
-        os.environ.get("AI_BASE_URL") or "https://api.mistral.ai/v1"
+        os.environ.get("AI_BASE_URL") or "https://api.groq.com/openai/v1"
     ).rstrip("/"),
     "api_key": os.environ.get("AI_API_KEY", ""),
-    "model": os.environ.get("AI_MODEL") or "mistral-small-latest",
+    "model": os.environ.get("AI_MODEL") or "openai/gpt-oss-20b",
     "timeout": _float_positivo_env("AI_TIMEOUT", 15),
 }
