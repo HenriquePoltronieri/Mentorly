@@ -94,7 +94,7 @@ Os testes automáticos abaixo passam no estado atual do repositório (03/10/2026
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
 | `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor e isolamento/acesso/falha da IA | 298 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
-| `python scripts/test_ia.py` | Payload mínimo, limite, autorização e cliente externo com respostas simuladas | 14 testes, OK |
+| `python scripts/test_ia.py` | Payload mínimo, limite, autorização e cliente externo com respostas simuladas | 22 testes, OK |
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado: preserva alunos/turmas, cria os vínculos iniciais e é idempotente | 8 verificações, 0 falhas |
 | `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |

@@ -13,8 +13,8 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 # 1. Estado atual
 
 Os Marcos 1–8 estão concluídos e publicados. Os Marcos 6–8 também já foram migrados e validados
-no banco real. O Marco 9A existe apenas no commit local `53eb7c3`; o remoto continua em
-`835344c` até a validação externa da IA.
+no banco real. O Marco 9A está publicado (`origin/main` em `fafc013`) e foi validado com a Groq
+real em 06/10/2026; a correção de estabilidade descrita abaixo ainda não foi publicada.
 
 ## Marco 1 — Avaliação funcionando
 **Status: ✅ Concluído**
@@ -102,18 +102,18 @@ no banco real. O Marco 9A existe apenas no commit local `53eb7c3`; o remoto cont
 - login e JWT antigo bloqueados imediatamente quando o Professor é desativado.
 
 ## Marco 9A — Insights acadêmicos explicáveis
-**Status: 🟡 Implementado em código; aguardando validação externa real e publicação**
+**Status: ✅ Validado com Groq real em fluxo completo do Mentorly (06/10/2026)**
 
-O commit local `53eb7c3` adiciona a infraestrutura de IA, o endpoint de insights da turma, a tela
-Flutter, isolamento por escola, tratamento de falhas e testes com cliente simulado. O provedor
-está configurado para Mistral com `mistral-small-latest`, mas ainda não houve chamada externa real
-porque `AI_API_KEY` não está disponível. O último `HEAD` publicado antes da IA é `835344c`.
+O 9A adiciona a infraestrutura de IA, o endpoint de insights da turma, a tela Flutter, isolamento
+por escola, tratamento de falhas e testes com cliente simulado. O provedor é a Groq, com o modelo
+`openai/gpt-oss-20b`, e a chamada real foi provada de ponta a ponta, inclusive na tela do Flutter.
+Detalhes e resultados na seção do Marco 9A mais abaixo.
 
 ---
 
 # 2. Estado técnico validado
 
-Verificação mais recente (03/10/2026, sobre o commit local do Marco 9A):
+Verificação mais recente (06/10/2026, com as correções de estabilidade do 9A):
 
 | Verificação | Resultado |
 |---|---|
@@ -121,7 +121,7 @@ Verificação mais recente (03/10/2026, sobre o commit local do Marco 9A):
 | `smoke_db` | OK |
 | `smoke_api` | 298 verificações, 0 falhas |
 | `test_calculo` | 13 testes, OK |
-| `test_ia` | 14 testes, OK; cliente externo simulado, sem internet |
+| `test_ia` | 22 testes, OK; cliente externo simulado, sem internet |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
 | `test_migracao_professor_habilitado` | 8 verificações, 0 falhas |
@@ -134,9 +134,9 @@ Por contagem conservadora, o código local possui hoje **22 funcionalidades demo
 MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os sub-marcos 9B, 9C e 9D não entram
 nessa contagem enquanto não tiverem implementação e evidência.
 
-A infraestrutura e os Insights IA estão implementados e testados com cliente simulado, mas a
-integração externa real ainda precisa ser validada com credencial antes de o Marco 9A ser
-considerado operacionalmente encerrado.
+A infraestrutura e os Insights IA estão implementados, testados com cliente simulado e validados
+com a Groq real (06/10/2026): chamada real pelo endpoint do Mentorly, resultado exibido no
+Flutter, falhas externas tratadas com mensagem amigável e a chave fora do Git.
 
 ---
 
@@ -166,8 +166,9 @@ A etapa atual da disciplina exige:
 - [x] verificar arquivos sensíveis;
 - [x] organizar commits;
 - [x] realizar push dos Marcos 1–8;
-- [ ] validar a chamada externa real do Marco 9A;
-- [ ] publicar o Marco 9A;
+- [x] validar a chamada externa real do Marco 9A;
+- [x] publicar o Marco 9A;
+- [ ] publicar a correção de estabilidade do 9A (limite de tokens, retry e prompt);
 - [ ] conferir os arquivos no repositório remoto;
 - [ ] confirmar acesso do professor ao repositório.
 
@@ -239,7 +240,7 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 | Etapa | Período |
 |---|---|
 | Marcos 1–8 — base acadêmica e administrativa ✅ | concluídos e publicados até 05/10 |
-| Marco 9A — Insights + infraestrutura IA | código concluído; chamada real e publicação até 06/10 |
+| Marco 9A — Insights + infraestrutura IA ✅ | validado com Groq real em 06/10 |
 | Marco 9B — Geração de atividades/questões | 06/10 – 07/10 |
 | Marco 9C — Correção assistida com rubrica | 07/10 – 10/10 |
 | Marco 9D — Feedback/recuperação | 10/10 – 11/10 |
@@ -335,9 +336,7 @@ assistência generativa e decisão humana.
 
 ### Marco 9A — Insights acadêmicos explicáveis
 
-**Estado: 🟡 implementado em código; aguardando validação externa real e publicação**
-
-**Fechamento previsto: até 06/10**
+**Estado: ✅ validado com Groq real em fluxo completo do Mentorly (06/10/2026)**
 
 Fluxo:
 
@@ -364,15 +363,49 @@ motor acadêmico determinístico
 → explicação
 ```
 
-O commit local `53eb7c3` implementa cliente HTTP, configuração por ambiente, service, endpoint,
-Flutter, isolamento por escola, tratamento de indisponibilidade e testes com cliente simulado. A
-integração está preparada para Mistral com `mistral-small-latest`. Ainda não houve chamada externa
-real porque não existe `AI_API_KEY` disponível, e o commit ainda não foi publicado; `835344c`
-continua sendo o último `HEAD` publicado.
+O 9A implementa cliente HTTP, configuração por ambiente, service, endpoint, Flutter, isolamento
+por escola, tratamento de indisponibilidade e testes com cliente simulado. O provedor é a Groq
+(`https://api.groq.com/openai/v1`), modelo `openai/gpt-oss-20b`, timeout de 15 s.
 
-Portanto, o Marco 9A tem implementação e cobertura automatizada, mas **não será considerado
-operacionalmente encerrado** antes de uma chamada real controlada, resultado real exibido no
-Mentorly e publicação do commit.
+**Validação real (06/10/2026).** Cenário sintético em banco temporário (uma turma com quatro alunos
+fictícios, dois critérios, notas variadas, um aluno abaixo do mínimo e uma atividade sem nota):
+
+- cadeia provada: Professor → turma vinculada → motor acadêmico → payload → `AIClient` → Groq →
+  JSON validado → Flutter → resultado na tela, com carregamento, botão desabilitado durante o pedido
+  e um único pedido mesmo com duplo clique;
+- o payload leva só o primeiro nome do aluno e dados acadêmicos: sem e-mail, matrícula, ids, senha,
+  token ou dados de outra escola;
+- autorização: Professor vinculado recebe 200; Professor não vinculado ou de outra escola, 404;
+  Coordenação, 403; sem token, 401; nenhuma dessas falhas chega à Groq;
+- dados insuficientes (turma sem alunos, sem atividades, sem notas ou sem etapa) devolvem 422 sem
+  chamar a Groq;
+- falhas externas (sem chave, chave inválida com 401 real da Groq, provedor recusando conexão,
+  timeout e resposta inválida) devolvem 503 com mensagem amigável, sem resposta fabricada, e o
+  restante do Mentorly segue funcionando; a tela mostra a mensagem e volta a funcionar com a
+  configuração restaurada;
+- na configuração final, nenhum número inventado e nenhum aluno ou critério inexistente nas
+  respostas analisadas.
+
+**Problemas que só apareceram com a Groq real** (a suíte com cliente simulado não os detectava):
+o limite de saída de 900 tokens truncava o JSON do modelo de raciocínio e a Groq recusava com 400;
+às vezes o modelo omitia chaves do contrato; o erro de contrato mostrava texto técnico ao Professor;
+e o modelo fazia inferências proibidas (esforço, participação, "atividade pendente", percentual
+comparado com nota mínima). Correções: 2500 tokens, uma nova tentativa para resposta inválida,
+mensagem amigável, regras explícitas no prompt e testes de regressão (`test_ia`: de 14 para 22).
+
+**Estabilidade medida.** Com a configuração final, **28 de 30 chamadas reais passaram na primeira
+tentativa e 30 de 30 após o retry, com 0 falhas definitivas**. A amostra é pequena; a meta de 95%
+na primeira tentativa não pode ser afirmada com folga. Foram comparadas três configurações
+(prompt atual, `json_schema` estrito e raciocínio reduzido); a atual foi a mais estável, e as
+outras introduziram contas feitas pela IA ou inferências proibidas. A latência do endpoint ficou
+entre 1,2 e 2,7 s sem retry, e chegou a cerca de 5,7 s quando o retry foi necessário.
+
+**Limites e pontos de atenção.** O plano gratuito da Groq limitou a conta a 8000 tokens por minuto
+e 200.000 tokens por dia; cada geração gasta cerca de 2,7 mil tokens, e o limite diário foi atingido
+durante os testes. A saída é probabilística: podem aparecer sugestões genéricas (por exemplo,
+incentivar participação). Na tela, o resultado anterior permanece visível abaixo da mensagem de erro
+quando uma nova geração falha. O texto é apoio pedagógico, e a tela avisa que notas e status oficiais
+são calculados pelo sistema.
 
 A IA do 9A não calcula nota, não altera nota, não decide aprovação, não muda status e não escreve
 no banco.
@@ -535,7 +568,7 @@ resposta falsa ou template apresentado como se viesse do modelo.
 
 | Prioridade | Entrega |
 |---|---|
-| Muito alta | validação externa real do 9A e correção assistida do 9C |
+| Muito alta | correção assistida do 9C |
 | Alta | geração de atividades e questões do 9B |
 | Média | feedback e recuperação do 9D |
 
@@ -1195,7 +1228,7 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 ## Fase 10 — Testes de verdade
 
 **Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (298 verificações), `test_calculo`
-(13 testes), `test_ia` (14 testes), três testes de migration (24, 8 e 8 verificações) e
+(13 testes), `test_ia` (22 testes), três testes de migration (24, 8 e 8 verificações) e
 `flutter test` (21 testes). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
@@ -1343,9 +1376,8 @@ humano e motor acadêmico determinístico.
 
 ## Fase 13 — IA
 
-**Status: 🟡 em execução.** O Marco 9A está implementado em código e testado com cliente simulado,
-mas aguarda chamada externa real e publicação. Os Marcos 9B, 9C e 9D estão planejados — ver a
-seção 4.
+**Status: 🟡 em execução.** O Marco 9A está implementado e validado com a Groq real (06/10/2026).
+Os Marcos 9B, 9C e 9D estão planejados — ver a seção 4.
 
 Somente depois do ciclo acadêmico estar confiável.
 
@@ -1397,7 +1429,7 @@ pela IA precisam de revisão do Professor antes de qualquer persistência.
 | 10 | Editar/excluir/transferir aluno | 🟡 | ✅ Marcos 4 e 7 |
 | 11 | Ano letivo real | 🟡 | ✅ Marco 6 |
 | 12 | Gestão completa de professores | 🟡 | ✅ Marco 8 |
-| 13 | IA — validação externa dos Insights | 🔴 | 🟡 Marco 9A em código; chamada real e publicação pendentes |
+| 13 | IA — validação externa dos Insights | 🔴 | ✅ Marco 9A validado com Groq real |
 | 14 | IA — correção assistida com rubrica | 🔴 | ⏳ Marco 9C |
 | 15 | IA — geração de atividades e questões | 🟠 | ⏳ Marco 9B |
 | 16 | Testes completos | 🟠 | 🟡 parcial |

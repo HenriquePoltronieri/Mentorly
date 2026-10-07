@@ -119,16 +119,25 @@ Copie os nomes de `backend/.env.example` para `backend/.env` e configure:
 
 | Variável | Uso |
 |---|---|
-| `AI_BASE_URL` | URL base do provedor; padrão `https://api.mistral.ai/v1` |
+| `AI_BASE_URL` | URL base do provedor; padrão `https://api.groq.com/openai/v1` |
 | `AI_API_KEY` | credencial do provedor; nunca deve ser versionada |
-| `AI_MODEL` | modelo; padrão `mistral-small-latest` |
+| `AI_MODEL` | modelo; padrão `openai/gpt-oss-20b` |
 | `AI_TIMEOUT` | limite da chamada em segundos; padrão interno de 15 |
 
-O padrão do MVP é o Mistral Small: modelo pequeno, econômico e compatível com o modo JSON usado
-pelo cliente. Na consulta de 03/10/2026, o custo publicado era aproximadamente US$ 0,15 por
-milhão de tokens de entrada e US$ 0,60 por milhão de tokens de saída. URL e modelo continuam
-configuráveis para permitir troca sem alteração de código. Sem `AI_API_KEY`, o botão informa que
-os insights estão indisponíveis e o restante do Mentorly continua normal.
+O provedor do MVP é a Groq, com o modelo `openai/gpt-oss-20b`, e a integração foi validada com
+chamadas reais em 06/10/2026 (ver [docs/roadmap.md](docs/roadmap.md)). URL e modelo continuam
+configuráveis para permitir troca sem alteração de código. Sem `AI_API_KEY`, ou com chave
+inválida, o provedor fora do ar ou uma resposta inválida, o botão mostra uma mensagem amigável e o
+restante do Mentorly continua normal.
+
+Cuidados de operação, observados com o plano gratuito da Groq em 06/10/2026:
+
+- o modelo gasta parte do limite de saída raciocinando, por isso o cliente pede até 2500 tokens
+  (900 truncava o JSON e a Groq recusava);
+- cada geração consome em torno de 2,7 mil tokens, e o plano gratuito limitou a conta a 8000
+  tokens por minuto e 200.000 tokens por dia, o que equivale a algumas dezenas de gerações por dia;
+- uma resposta fora do contrato é repetida uma vez; timeout, rede, chave e limite de uso não são
+  repetidos.
 
 A separação não é absolutamente rígida: existem poucos acessos diretos Controller → Model e
 Controller → Repository, e alguns modais Flutter usam o `ApiService` diretamente. Eles estão

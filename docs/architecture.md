@@ -233,7 +233,7 @@ Professor solicita
 
 Portanto, **IA não significa persistência automática**.
 
-#### Marco 9A — Insights Acadêmicos Explicáveis — implementado
+#### Marco 9A — Insights Acadêmicos Explicáveis — validado com Groq real
 
 ```text
 Aluno / Turma / Etapa / Critério / Atividade / Nota
@@ -256,9 +256,28 @@ não inferir intenção, personalidade ou futuro. O cliente aceita apenas o cont
 `pontosPositivos`, `pontosAtencao` e `sugestoesGerais`. Ausência de chave, timeout, falha HTTP ou
 JSON inválido viram erro amigável; nenhuma resposta artificial é criada.
 
-**Estado:** a infraestrutura e os Insights estão implementados e cobertos por testes com cliente
-simulado. A chamada externa real ainda precisa ser validada com `AI_API_KEY` antes de considerar a
-integração operacionalmente encerrada.
+**Estado:** implementado, coberto por testes com cliente simulado (a suíte automática nunca
+chama a Groq) e **validado em 06/10/2026 com a Groq real** no fluxo completo do Mentorly:
+Professor → turma vinculada → motor acadêmico → payload → `AIClient` → Groq → JSON validado →
+Flutter. Provedor `Groq`, modelo `openai/gpt-oss-20b`, timeout de 15 s.
+
+Decisões que vieram da validação real:
+
+- `max_tokens` de 2500: o modelo raciocina antes de responder e 900 truncava o JSON (a Groq
+  respondia 400 `json_validate_failed`);
+- uma nova tentativa quando o provedor recusa o JSON ou a resposta sai fora do contrato; falhas de
+  rede, timeout, chave e limite de uso não são repetidas;
+- o motivo técnico de uma resposta inválida vai só para o log, e o Professor recebe a mensagem
+  amigável;
+- o prompt proíbe, entre outras coisas, inferir esforço ou participação, comparar percentual com
+  nota mínima e tratar atividade sem nota como pendente, atrasada ou não entregue: ausência de
+  nota não significa ausência de entrega. Cada regra nasceu de uma violação observada em respostas
+  reais e tem teste de regressão.
+
+Limites conhecidos: a saída do modelo é probabilística, então podem sobrar sugestões genéricas
+(por exemplo, incentivar participação); o texto continua sendo apoio pedagógico, e a tela avisa que
+notas e status oficiais são calculados pelo sistema. O plano gratuito da Groq limita o uso diário
+(200.000 tokens/dia na conta usada).
 
 #### Marco 9B — Geração assistida de atividades e questões — planejado
 
@@ -621,16 +640,15 @@ insightsTurmaScreen.dart
 
   → AIClient.gerar
 
-  → Mistral Small por padrão (provedor/modelo substituíveis por configuração)
+  → Groq com openai/gpt-oss-20b por padrão (provedor/modelo substituíveis por configuração)
 
 ```
 
 O botão manual evita chamadas em rebuild. A indisponibilidade do provedor afeta somente essa
 requisição e não entra no fluxo do motor acadêmico.
 
-Esse fluxo está **implementado** e testado com cliente externo simulado. A chamada ao provedor real
-ainda depende da configuração local de `AI_API_KEY`, portanto a validação externa real continua
-pendente.
+Esse fluxo está **implementado**, testado com cliente externo simulado e **validado com a Groq real**
+em 06/10/2026 (ver Marco 9A acima). A chamada real depende de `AI_API_KEY` no ambiente local.
 
 ## Exemplo 6 — Correção assistida de resposta discursiva (planejado)
 
