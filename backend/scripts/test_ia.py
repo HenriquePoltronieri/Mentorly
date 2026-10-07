@@ -6,11 +6,14 @@ import os
 import sys
 import unittest
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.ia.client import (
+    MAX_TOKENS_RESPOSTA,
+    MENSAGEM_INDISPONIVEL,
+    SYSTEM_PROMPT,
     AIClient,
     AIConfigurationError,
     AIProviderError,
@@ -32,6 +35,9 @@ INSIGHTS = {
     }],
     "sugestoesGerais": ["Revisar os conteúdos com menor percentual."],
 }
+
+
+ENVELOPE_VALIDO = {"choices": [{"message": {"content": json.dumps(INSIGHTS)}}]}
 
 
 class ClienteFalso:
@@ -227,6 +233,118 @@ class AIClientTest(unittest.TestCase):
         )
         with self.assertRaises(AIResponseError):
             cliente.gerar({})
+
+
+    def test_limite_de_tokens_comporta_o_raciocinio_do_modelo(self):
+        capturado = {}
+
+        def abrir(requisicao, timeout):
+            capturado["body"] = json.loads(requisicao.data.decode("utf-8"))
+            return RespostaFalsa(json.dumps(ENVELOPE_VALIDO).encode("utf-8"))
+
+        self._cliente(abrir).gerar({})
+        # 900 truncava o JSON do gpt-oss-20b na Groq (json_validate_failed).
+        self.assertGreaterEqual(capturado["body"]["max_tokens"], 2000)
+        self.assertEqual(capturado["body"]["max_tokens"], MAX_TOKENS_RESPOSTA)
+
+    def test_resposta_invalida_e_repetida_uma_vez(self):
+        incompleto = {"choices": [{"message": {"content": '{"resumo":"ok"}'}}]}
+        respostas = [incompleto, ENVELOPE_VALIDO]
+        chamadas = []
+
+        def abrir(*args, **kwargs):
+            chamadas.append(1)
+            return RespostaFalsa(json.dumps(respostas[len(chamadas) - 1]).encode())
+
+        self.assertEqual(self._cliente(abrir).gerar({}), INSIGHTS)
+        self.assertEqual(len(chamadas), 2)
+
+    def test_resposta_invalida_duas_vezes_falha_sem_terceira_chamada(self):
+        chamadas = []
+
+        def abrir(*args, **kwargs):
+            chamadas.append(1)
+            return RespostaFalsa(b"nao-json")
+
+        with self.assertRaises(AIResponseError):
+            self._cliente(abrir).gerar({})
+        self.assertEqual(len(chamadas), 2)
+
+    def test_json_validate_failed_do_provedor_e_repetido(self):
+        corpo = b'{"error":{"code":"json_validate_failed"}}'
+        chamadas = []
+
+        def abrir(*args, **kwargs):
+            chamadas.append(1)
+            if len(chamadas) == 1:
+                raise HTTPError("https://x", 400, "Bad", {}, io.BytesIO(corpo))
+            return RespostaFalsa(json.dumps(ENVELOPE_VALIDO).encode())
+
+        self.assertEqual(self._cliente(abrir).gerar({}), INSIGHTS)
+        self.assertEqual(len(chamadas), 2)
+
+    def test_falhas_do_provedor_nao_sao_repetidas(self):
+        for erro in (
+            HTTPError("https://x", 401, "Unauthorized", {}, io.BytesIO(b"{}")),
+            HTTPError("https://x", 429, "Too Many", {}, io.BytesIO(b"{}")),
+            HTTPError("https://x", 400, "Bad", {}, io.BytesIO(b"{}")),
+            HTTPError("https://x", 500, "Erro", {}, None),
+            TimeoutError("tempo excedido"),
+            URLError("indisponivel"),
+        ):
+            chamadas = []
+
+            def abrir(*args, **kwargs):
+                chamadas.append(1)
+                raise erro
+
+            with self.subTest(erro=repr(erro)):
+                with self.assertRaises(AIProviderError):
+                    self._cliente(abrir).gerar({})
+                self.assertEqual(len(chamadas), 1)
+
+    def test_prompt_proibe_inferencias_observadas_com_a_groq_real(self):
+        prompt = " ".join(SYSTEM_PROMPT.split())
+        # Cada regra nasceu de uma violacao observada em respostas reais.
+        for regra in (
+            "nao infira esforco",
+            "nao mencione participacao, frequencia, comportamento",
+            "ausencia de nota nao significa ausencia de entrega",
+            "nunca compare um percentual com a nota minima",
+            "inclua sempre as quatro chaves",
+            "todo aluno com situacao abaixo_do_minimo",
+        ):
+            with self.subTest(regra=regra):
+                self.assertIn(regra, prompt)
+
+    def test_resposta_invalida_mostra_mensagem_amigavel(self):
+        for conteudo in ('{"resumo":"ok"}', "[]", '{"resumo":"","pontosPositivos":[],'
+                         '"pontosAtencao":[],"sugestoesGerais":[]}',
+                         '{"resumo":"ok","pontosPositivos":[],"pontosAtencao":["x"],'
+                         '"sugestoesGerais":[]}'):
+            envelope = {"choices": [{"message": {"content": conteudo}}]}
+            cliente = self._cliente(
+                lambda *args, _e=envelope, **kwargs: RespostaFalsa(json.dumps(_e).encode())
+            )
+            with self.subTest(conteudo=conteudo):
+                with self.assertRaises(AIResponseError) as contexto:
+                    cliente.gerar({})
+                self.assertEqual(str(contexto.exception), MENSAGEM_INDISPONIVEL)
+
+    def test_ausencia_de_nota_nao_vira_atividade_pendente(self):
+        """Regressao: a IA chamava atividade sem nota de "pendente" (Groq real)."""
+        capturado = {}
+
+        def abrir(requisicao, timeout):
+            capturado["body"] = json.loads(requisicao.data.decode("utf-8"))
+            return RespostaFalsa(json.dumps(ENVELOPE_VALIDO).encode("utf-8"))
+
+        self._cliente(abrir).gerar({})
+        sistema = " ".join(capturado["body"]["messages"][0]["content"].split())
+        self.assertIn("ausencia de nota nao significa ausencia de entrega", sistema)
+        self.assertIn("atividade pendente ou falta do aluno", sistema)
+        self.assertIn('diga apenas "atividade sem nota lancada"', sistema)
+        self.assertIn("nunca use pendente, atrasada, nao entregue ou ausente", sistema)
 
 
 if __name__ == "__main__":
