@@ -85,6 +85,14 @@ def insights_turma(turma_id):
     return professor_controller.insights_turma(turma_id)
 
 
+# Sugestao de atividade por IA: so devolve texto para o Professor revisar. A
+# atividade e criada depois, pelo POST /api/activities normal.
+@professor_blueprint.post("/turmas/<int:turma_id>/atividades/gerar")
+@professor_required
+def gerar_atividade(turma_id):
+    return professor_controller.gerar_atividade(turma_id)
+
+
 @professor_blueprint.delete("/notas/<int:nota_id>")
 @professor_required
 def excluir_nota(nota_id):

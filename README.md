@@ -48,7 +48,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 22 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 23 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -76,6 +76,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 20. Desempenho do aluno por etapa e consolidado
 21. Boletim da turma
 22. Insights acadêmicos explicáveis da turma, gerados por IA a partir do motor acadêmico
+23. Gerar atividade com IA: o Professor pede uma sugestão, revisa e só então salva
 
 ---
 
@@ -112,6 +113,14 @@ Os insights mantêm uma separação explícita: `services/academico/calculo.py` 
 valores oficiais; `services/ia/gerar_insights_turma.py` monta um payload mínimo; e
 `services/ia/client.py` envia esses resultados a um provedor externo compatível com chat
 completions. A resposta não é persistida e uma falha externa não afeta notas, boletim ou login.
+
+### Geração assistida de atividades (Marco 9B)
+
+No formulário de nova atividade, o botão **Gerar com IA** pede tema, objetivo, dificuldade, tipo e
+quantidade de questões. A IA devolve título, descrição, questões, gabarito e uma rubrica sugerida;
+o Professor edita ou remove o que quiser e confirma. A confirmação apenas preenche o formulário
+normal, e quem cria a atividade é o botão **Adicionar**, pelo mesmo fluxo e com as mesmas
+validações de sempre. **A IA nunca grava no banco.** Nenhum dado de aluno é enviado ao provedor.
 
 ### Configuração da IA
 

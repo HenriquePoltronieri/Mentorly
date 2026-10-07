@@ -2060,6 +2060,208 @@ def main():
                    and "Tente novamente" in indisponivel.get_json()["error"],
                    "M9-05: indisponibilidade externa retorna erro amigavel")
 
+        # ---------------------------------------------------------
+        print("\n[16] Marco 9B - geracao assistida de atividades (IA nunca grava)")
+
+        from services.ia.client import AIResponseError
+
+        class ClienteIaAtividade:
+            """Imita o AIClient: aplica o validador do caso, como o real faz."""
+            model = "modelo-smoke"
+            chamadas = 0
+            payload = None
+            erro = None
+
+            def gerar(self, payload, caso=None):
+                ClienteIaAtividade.chamadas += 1
+                ClienteIaAtividade.payload = payload
+                if ClienteIaAtividade.erro:
+                    raise ClienteIaAtividade.erro
+                pedido = payload["pedido"]
+                questoes = []
+                for i in range(pedido["quantidadeQuestoes"]):
+                    objetiva = pedido["tipoDasQuestoes"] == "objetiva" or (
+                        pedido["tipoDasQuestoes"] == "mista" and i % 2 == 0)
+                    questoes.append({
+                        "tipo": "objetiva" if objetiva else "discursiva",
+                        "enunciado": "Questao %d sobre %s" % (i + 1, pedido["tema"]),
+                        "alternativas": ["A) um", "B) dois", "C) tres", "D) quatro"]
+                        if objetiva else [],
+                        "respostaEsperada": "B" if objetiva else "Cita causas e impactos.",
+                        "explicacao": "Explicacao %d" % (i + 1),
+                    })
+                return caso.validar({
+                    "titulo": "Atividade sugerida: %s" % pedido["tema"],
+                    "descricao": "Leia com atencao e responda.",
+                    "objetivo": "Compreender o tema.",
+                    "questoes": questoes,
+                    "rubricaSugerida": [
+                        {"criterio": "Compreensao", "descricao": "Entende o conceito", "peso": 60},
+                        {"criterio": "Clareza", "descricao": "Escreve com clareza", "peso": 40},
+                    ],
+                })
+
+        def gerar_ia(cliente, turma_id, corpo):
+            return cliente.post(
+                "/api/professor/turmas/%d/atividades/gerar" % turma_id, corpo)
+
+        def total_atividades():
+            return query_one("SELECT COUNT(*) AS n FROM atividade")["n"]
+
+        etapa_fech = criar_etapa(coord_a, "E26 Fechada IA", 96, 6, 10)
+        crit_fech = criar_criterio(coord_a, etapa_fech["id"], "Provas", 100)
+        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_fech["id"]
+                            ).status_code == 200, "M9B-00: etapa de teste fechada")
+
+        pedido_ok = {
+            "etapaId": etapa_26["id"], "criterioId": crit_26["id"],
+            "tema": "Revolucao Industrial", "objetivo": "Compreender causas e impactos",
+            "dificuldade": "media", "quantidadeQuestoes": 4, "tipo": "mista",
+            "professorId": 999999, "coordenacaoId": 999999,
+        }
+        cliente_ia = ClienteIaAtividade()
+        with patch("services.ia.gerar_atividade.AIClient", return_value=cliente_ia):
+            antes = total_atividades()
+            lista_antes = len(professor_6.get("/api/activities?class_id=%d" % t26["id"]).get_json())
+            ok = gerar_ia(professor_6, t26["id"], pedido_ok)
+            corpo_ok = ok.get_json() or {}
+            sugestao = corpo_ok.get("sugestao", {})
+            checar(ok.status_code == 200 and corpo_ok.get("geradoPorIA") is True
+                   and len(sugestao.get("questoes", [])) == 4
+                   and sugestao.get("titulo", "").startswith("Atividade sugerida"),
+                   "M9B-01: Professor vinculado recebe sugestao estruturada com 4 questoes")
+            checar(corpo_ok["contexto"]["etapa"] == "E26 Contexto"
+                   and corpo_ok["contexto"]["criterio"] == "Provas",
+                   "M9B-02: contexto devolve etapa e criterio validados")
+            checar(total_atividades() == antes
+                   and len(professor_6.get("/api/activities?class_id=%d" % t26["id"]
+                                           ).get_json()) == lista_antes,
+                   "M9B-03: gerar sugestao NAO cria atividade no banco")
+            checar(sugestao["questoes"][0]["alternativas"][0] == "um"
+                   and sugestao["questoes"][0]["respostaEsperada"] == "B",
+                   "M9B-04: letra duplicada some das alternativas e o gabarito vira uma letra")
+
+            payload_ia = ClienteIaAtividade.payload
+            serializado = str(payload_ia).lower()
+            checar(payload_ia["etapa"] == "E26 Contexto"
+                   and payload_ia["criterioDeAvaliacao"] == "Provas"
+                   and payload_ia["pedido"]["tema"] == "Revolucao Industrial"
+                   and payload_ia["pedido"]["quantidadeQuestoes"] == 4,
+                   "M9B-05: payload leva turma, etapa, criterio e o pedido do Professor")
+            checar("@" not in serializado and "999999" not in serializado
+                   and "professor" not in serializado
+                   and "matricula" not in serializado
+                   and "alunos" not in serializado and "senha" not in serializado,
+                   "M9B-06: payload sem aluno, email, matricula, ids nem professor_id do corpo")
+
+            # --- autorizacao: nenhuma falha chega ao provedor
+            ClienteIaAtividade.chamadas = 0
+            checar(gerar_ia(professor_a2, t26["id"], pedido_ok).status_code == 404,
+                   "M9B-07: professor da escola sem vinculo com a turma recebe 404")
+            checar(gerar_ia(professor_b, t26["id"], pedido_ok).status_code == 404,
+                   "M9B-08: professor de outra escola recebe 404")
+            checar(gerar_ia(coord_a, t26["id"], pedido_ok).status_code == 403,
+                   "M9B-09: Coordenacao recebe 403 no endpoint do Professor")
+            checar(gerar_ia(Cliente(cliente_flask), t26["id"], pedido_ok
+                            ).status_code == 401, "M9B-10: sem token recebe 401")
+            checar(gerar_ia(professor_6, 99999999, pedido_ok).status_code == 404,
+                   "M9B-11: turma inexistente recebe 404")
+
+            # --- etapa e criterio: mesmas regras da criacao de atividade
+            def com(**mudancas):
+                corpo = dict(pedido_ok)
+                corpo.update(mudancas)
+                return corpo
+
+            r = gerar_ia(professor_6, t26["id"],
+                         com(etapaId=etapa_fech["id"], criterioId=crit_fech["id"]))
+            checar(r.status_code == 400 and "fechada" in r.get_json()["error"],
+                   "M9B-12: etapa fechada recebe 400")
+            r = gerar_ia(professor_6, t26["id"],
+                         com(etapaId=etapa_27["id"], criterioId=crit_27["id"]))
+            checar(r.status_code == 400 and "ano letivo" in r.get_json()["error"],
+                   "M9B-13: etapa de outro ano letivo recebe 400")
+            checar(gerar_ia(professor_6, t27["id"], pedido_ok).status_code == 400,
+                   "M9B-14: turma 2027 com etapa de 2026 recebe 400")
+            checar(gerar_ia(professor_6, t26["id"],
+                            com(etapaId=etapa_b_2029["id"], criterioId=crit_b_2029["id"])
+                            ).status_code == 404,
+                   "M9B-15: etapa e criterio de outra escola recebem 404")
+            checar(gerar_ia(professor_6, t26["id"],
+                            com(criterioId=crit_27["id"])).status_code == 404,
+                   "M9B-16: criterio que nao pertence a etapa recebe 404")
+            checar(gerar_ia(professor_6, t26["id"], com(criterioId=None)
+                            ).status_code == 400,
+                   "M9B-17: criterio sem etapa (ou etapa sem criterio) recebe 400")
+
+            # --- validacao do pedido
+            for rotulo, mudanca in (
+                ("tema vazio", {"tema": "   "}),
+                ("tema ausente", {"tema": None}),
+                ("tema gigante", {"tema": "x" * 201}),
+                ("quantidade zero", {"quantidadeQuestoes": 0}),
+                ("quantidade 11", {"quantidadeQuestoes": 11}),
+                ("quantidade texto", {"quantidadeQuestoes": "muitas"}),
+                ("quantidade booleana", {"quantidadeQuestoes": True}),
+                ("tipo invalido", {"tipo": "teste"}),
+                ("dificuldade invalida", {"dificuldade": "impossivel"}),
+                ("objetivo nao texto", {"objetivo": 5}),
+            ):
+                checar(gerar_ia(professor_6, t26["id"], com(**mudanca)
+                                ).status_code == 400,
+                       "M9B-18: %s recebe 400" % rotulo)
+            checar(ClienteIaAtividade.chamadas == 0,
+                   "M9B-19: nenhuma falha de autorizacao ou validacao chamou a Groq")
+
+            # --- tipos
+            for tipo in ("discursiva", "objetiva"):
+                r = gerar_ia(professor_6, t26["id"], com(tipo=tipo, quantidadeQuestoes=3))
+                tipos = {q["tipo"] for q in (r.get_json() or {}).get("sugestao", {}).get("questoes", [])}
+                checar(r.status_code == 200 and tipos == {tipo},
+                       "M9B-20: tipo %s gera so questoes %s" % (tipo, tipo))
+
+            # --- falhas do provedor: 503 amigavel, nada gravo, criacao manual segue
+            antes = total_atividades()
+            for rotulo, erro in (
+                ("provedor indisponivel", AIProviderError(MENSAGEM_INDISPONIVEL)),
+                ("contrato invalido", AIResponseError(MENSAGEM_INDISPONIVEL)),
+            ):
+                ClienteIaAtividade.erro = erro
+                r = gerar_ia(professor_6, t26["id"], pedido_ok)
+                checar(r.status_code == 503 and "Tente novamente" in r.get_json()["error"]
+                       and "manualmente" in r.get_json()["error"],
+                       "M9B-21: %s devolve 503 amigavel" % rotulo)
+            ClienteIaAtividade.erro = None
+            checar(total_atividades() == antes,
+                   "M9B-22: falha da IA nao deixa atividade parcial")
+            manual = nova_atividade(professor_6, t26["id"], etapa_26["id"],
+                                    crit_26["id"], "Atividade manual apos falha")
+            checar(manual.status_code == 201,
+                   "M9B-23: criacao manual continua funcionando com a IA indisponivel")
+
+            # --- confirmacao: so o fluxo normal grava, com o que o Professor editou
+            ok = gerar_ia(professor_6, t26["id"], pedido_ok).get_json()["sugestao"]
+            antes = total_atividades()
+            descricao_editada = "Revisada pelo Professor: " + ok["questoes"][0]["enunciado"]
+            criada = professor_6.post("/api/activities", {
+                "title": "Titulo editado pelo Professor", "description": descricao_editada,
+                "class_id": t26["id"], "etapa_id": etapa_26["id"],
+                "criterio_id": crit_26["id"], "nota_maxima": 8,
+            })
+            salva = criada.get_json() or {}
+            linha = query_one("SELECT titulo, descricao, nota_maxima, professor_id "
+                              "FROM atividade WHERE id = %s", (salva.get("id"),))
+            checar(criada.status_code == 201 and total_atividades() == antes + 1
+                   and linha["titulo"] == "Titulo editado pelo Professor"
+                   and linha["descricao"] == descricao_editada
+                   and float(linha["nota_maxima"]) == 8.0
+                   and linha["titulo"] != ok["titulo"]
+                   and linha["professor_id"] == prof6["id"],
+                   "M9B-24: atividade criada pelo fluxo normal guarda o que o Professor confirmou")
+            checar(query_one("SELECT COUNT(*) AS n FROM atividade WHERE titulo = %s",
+                             (ok["titulo"],))["n"] == 0,
+                   "M9B-25: o titulo bruto sugerido pela IA nao foi gravado")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

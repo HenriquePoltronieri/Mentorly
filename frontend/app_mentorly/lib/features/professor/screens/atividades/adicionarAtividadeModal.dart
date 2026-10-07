@@ -5,7 +5,9 @@ import '../../../coordenacao/models/turmaModel.dart';
 import '../../../coordenacao/services/criteriosService.dart';
 import '../../../coordenacao/services/etapasService.dart';
 import '../../models/atividadeModel.dart';
+import '../../models/sugestaoAtividadeModel.dart';
 import '../../services/atividadesService.dart';
+import 'gerarAtividadeIaDialog.dart';
 
 // Modal pra criar OU editar uma atividade.
 // Fluxo: tela -> AtividadesService -> ApiService -> /api/activities
@@ -56,6 +58,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
 
   bool _salvando = false;
   String? _mensagemErro;
+  bool _usouIa = false;
 
   bool get _editando => widget.atividade != null;
 
@@ -199,6 +202,32 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
       _erroEtapas == null &&
       _etapas.isNotEmpty;
 
+  // Marco 9B: a IA so SUGERE. O dialogo devolve o texto revisado, que apenas
+  // preenche titulo e descricao deste formulario; quem cria a atividade e o
+  // botao "Adicionar", pelo mesmo fluxo de sempre (etapa, criterio e valor
+  // continuam sendo escolhidos aqui).
+  Future<void> _gerarComIa() async {
+    final turma = _turmaSelecionada;
+    if (turma == null) return;
+    final sugestao = await showDialog<SugestaoAtividadeModel>(
+      context: context,
+      builder: (_) => GerarAtividadeIaDialog(
+        turmaId: turma.id,
+        etapaId: _etapaId,
+        criterioId: _criterioId,
+      ),
+    );
+    if (sugestao == null || !mounted) return;
+    setState(() {
+      _nomeController.text = sugestao.titulo;
+      _descricaoController.text = sugestao.descricaoFormatada(
+        incluirRubrica: sugestao.rubrica.isNotEmpty,
+      );
+      _usouIa = true;
+      _mensagemErro = null;
+    });
+  }
+
   Future<void> _salvar() async {
     final erro = _validar();
     if (erro != null) {
@@ -298,6 +327,23 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                 style: const TextStyle(fontSize: 18),
               ),
               const SizedBox(height: 16),
+              if (!_editando) ...[
+                OutlinedButton.icon(
+                  onPressed:
+                      _turmaSelecionada == null || _salvando ? null : _gerarComIa,
+                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                  label: const Text('Gerar com IA'),
+                ),
+                if (_usouIa)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Conteúdo gerado por IA. Revise antes de salvar e ajuste o valor máximo.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: _nomeController,
                 decoration: const InputDecoration(
@@ -308,6 +354,9 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               const SizedBox(height: 12),
               TextField(
                 controller: _descricaoController,
+                minLines: 1,
+                maxLines: 8,
+                keyboardType: TextInputType.multiline,
                 decoration: const InputDecoration(
                   labelText: 'Descrição',
                   hintText: 'Opcional',

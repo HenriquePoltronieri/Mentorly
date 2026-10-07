@@ -28,9 +28,15 @@ from services.professor.notas import (
     ListarNotasService,
 )
 from services.ia.client import AIError
+from services.ia.gerar_atividade import GerarAtividadeIaService
 from services.ia.gerar_insights_turma import (
     DadosInsuficientesError,
     GerarInsightsTurmaService,
+)
+
+MENSAGEM_ATIVIDADE_INDISPONIVEL = (
+    "Nao foi possivel gerar a atividade agora. Tente novamente em instantes "
+    "ou crie a atividade manualmente."
 )
 
 XLSX_MIME = (
@@ -170,6 +176,21 @@ class ProfessorController:
             return jsonify({"error": str(erro)}), 422
         except AIError as erro:
             return jsonify({"error": str(erro)}), 503
+        return jsonify(dados)
+
+    def gerar_atividade(self, turma_id):
+        """Sugestao de atividade por IA. NAO grava nada: so devolve o texto."""
+        try:
+            dados = GerarAtividadeIaService().execute(
+                turma_id, usuario_atual_id(), coordenacao_atual(),
+                request.get_json(silent=True),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except (ValueError, TypeError) as erro:
+            return jsonify({"error": str(erro)}), 400
+        except AIError:
+            return jsonify({"error": MENSAGEM_ATIVIDADE_INDISPONIVEL}), 503
         return jsonify(dados)
 
     # -----------------------------------------------------------------

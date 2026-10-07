@@ -279,9 +279,9 @@ Limites conhecidos: a saída do modelo é probabilística, então podem sobrar s
 notas e status oficiais são calculados pelo sistema. O plano gratuito da Groq limita o uso diário
 (200.000 tokens/dia na conta usada).
 
-#### Marco 9B — Geração assistida de atividades e questões — planejado
+#### Marco 9B — Geração assistida de atividades e questões — implementado
 
-Fluxo arquitetural previsto:
+Fluxo:
 
 ```text
 Professor
@@ -297,11 +297,49 @@ Professor
   → MySQL
 ```
 
-O contexto pode incluir tema, etapa, critério, dificuldade e quantidade/tipo de questões. A resposta
-pode conter título, enunciado, questões, gabarito/resposta esperada, orientações e rubrica.
+**Backend.** `POST /api/professor/turmas/<id>/atividades/gerar` (somente Professor) chama
+`GerarAtividadeIaService`, que nunca grava. Ele só chama a IA depois de validar, nesta ordem:
+vínculo Professor–turma e escola (404 para qualquer outra combinação), o pedido (tema, dificuldade,
+tipo, quantidade de 1 a 10) e, quando informados, etapa e critério com a **mesma função da criação
+de atividade** (`validar_etapa_e_criterio`): etapa da escola, do ano da turma, aberta, e critério
+pertencente à etapa. `professor_id` e `coordenacao_id` vêm do token, nunca do corpo.
 
-A IA **não chama diretamente** `Atividade.create`. O Professor precisa revisar o conteúdo antes de
-entrar no fluxo normal de criação.
+**Contexto enviado à Groq:** nome da turma, disciplina, ano letivo, nome da etapa, nome do critério
+e o pedido do Professor (tema, objetivo, dificuldade, quantidade, tipo, observações). **Nenhum dado
+de aluno ou de professor, e-mail, matrícula ou identificador.** O texto digitado pelo Professor é
+limpo de delimitadores antes de ir ao prompt e tratado como dado.
+
+**Reuso do `AIClient`.** O cliente não conhece nenhum recurso: `gerar(payload, caso)` recebe um
+`CasoDeUso` (prompt, instrução, validador do contrato e limite de saída). O padrão continua sendo
+o dos insights, então o 9A não mudou. O 9B define o seu em `services/ia/contrato_atividade.py`; o
+retry, o tratamento de erro e a mensagem amigável são os mesmos do 9A.
+
+**Contrato da resposta** (validado antes de chegar ao Flutter): `titulo`, `descricao`, `objetivo`,
+`questoes[]` (`tipo`, `enunciado`, `alternativas`, `respostaEsperada`, `explicacao`) e
+`rubricaSugerida[]` (`criterio`, `descricao`, `peso`). Exige a quantidade e o tipo pedidos, quatro
+alternativas e uma letra A–D de gabarito nas objetivas, e textos não vazios. Resposta fora do
+contrato é repetida uma vez e, se persistir, vira 503 com mensagem amigável.
+
+**Persistência e questões.** O Mentorly não tem tabela de questões, e o 9B **não cria uma**. A
+sugestão é só um rascunho na tela: ao confirmar, o texto revisado (objetivo, descrição, questões,
+alternativas, gabarito e explicação, e opcionalmente a rubrica) é preenchido no formulário normal e
+salvo no campo `descricao` da atividade, pelo `POST /api/activities` já existente. Nada da resposta
+bruta da IA é guardado. Escolha de menor impacto: uma modelagem de questões fica para quando o 9C
+precisar dela. A rubrica é só texto; **não cria critério oficial nem altera pesos**, e a nota
+máxima continua sendo decisão do Professor no formulário.
+
+**Falhas.** Sem chave, chave inválida, timeout, provedor recusando ou resposta inválida devolvem
+503 com a mensagem "…crie a atividade manualmente"; nenhuma atividade parcial é criada e o
+formulário continua utilizável.
+
+**Flutter.** `GerarAtividadeIaDialog` (pedido → revisão editável: título, descrição, objetivo,
+enunciados, alternativas, gabarito, explicação, remover questão) com o aviso "Conteúdo gerado por
+IA. Revise antes de salvar.". O botão fica desabilitado durante o pedido, o que evita duplo clique.
+
+**Limites conhecidos.** A saída é probabilística: foram vistos gabarito discutível, viés de
+posição (várias respostas "A") e questões que fogem do tema pedido. Por isso a revisão humana é
+parte do fluxo, e o aviso fica visível. Cada geração gasta mais tokens que um insight, e o plano
+gratuito da Groq limita o uso diário.
 
 #### Marco 9C — Correção assistida de respostas discursivas — planejado
 

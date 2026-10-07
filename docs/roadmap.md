@@ -113,25 +113,26 @@ Detalhes e resultados na seção do Marco 9A mais abaixo.
 
 # 2. Estado técnico validado
 
-Verificação mais recente (06/10/2026, com as correções de estabilidade do 9A):
+Verificação mais recente (06/10/2026, com o Marco 9B):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 97 arquivos, OK |
+| `py_compile` | 100 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 298 verificações, 0 falhas |
+| `smoke_api` | 335 verificações, 0 falhas |
 | `test_calculo` | 13 testes, OK |
 | `test_ia` | 22 testes, OK; cliente externo simulado, sem internet |
+| `test_ia_atividade` | 25 testes, OK; contrato, pedido, service e retry do 9B, sem internet |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
 | `test_migracao_professor_habilitado` | 8 verificações, 0 falhas |
 | `flutter analyze` | 0 warnings, 0 errors; 90 infos de estilo (`file_names`, `withOpacity` e afins) |
-| `flutter test` | 21 testes, todos passando |
+| `flutter test` | 30 testes, todos passando |
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o código local possui hoje **22 funcionalidades demonstráveis de
-MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os sub-marcos 9B, 9C e 9D não entram
+Por contagem conservadora, o código local possui hoje **23 funcionalidades demonstráveis de
+MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os sub-marcos 9C e 9D não entram
 nessa contagem enquanto não tiverem implementação e evidência.
 
 A infraestrutura e os Insights IA estão implementados, testados com cliente simulado e validados
@@ -241,7 +242,7 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 |---|---|
 | Marcos 1–8 — base acadêmica e administrativa ✅ | concluídos e publicados até 05/10 |
 | Marco 9A — Insights + infraestrutura IA ✅ | validado com Groq real em 06/10 |
-| Marco 9B — Geração de atividades/questões | 06/10 – 07/10 |
+| Marco 9B — Geração de atividades/questões ✅ | implementado e validado em 06/10 |
 | Marco 9C — Correção assistida com rubrica | 07/10 – 10/10 |
 | Marco 9D — Feedback/recuperação | 10/10 – 11/10 |
 | Validação completa da IA | 11/10 – 12/10 |
@@ -412,30 +413,13 @@ no banco.
 
 ### Marco 9B — Geração assistida de atividades e questões
 
-**Estado: ⏳ planejado**
+**Estado: ✅ implementado e validado com a Groq real (06/10/2026)**
 
-**Prioridade: alta**
+Entregue: o Professor informa tema, objetivo, dificuldade, tipo (discursivas, objetivas ou mista) e
+quantidade de questões (1 a 10), e opcionalmente etapa e critério para alinhar o conteúdo. A IA
+sugere título, descrição, objetivo, questões com gabarito e explicação, e uma rubrica sugerida.
 
-**Período: 06/10–07/10**
-
-Objetivo: permitir que o Professor informe:
-
-- tema;
-- disciplina ou contexto;
-- etapa;
-- critério;
-- nível de dificuldade;
-- quantidade e tipo de questões.
-
-A IA poderá sugerir:
-
-- título;
-- enunciados e questões;
-- resposta esperada ou gabarito;
-- orientações;
-- possível rubrica.
-
-Fluxo previsto:
+Fluxo implementado:
 
 ```text
 Professor
@@ -448,9 +432,32 @@ Professor
 → somente então salva a atividade
 ```
 
-**A IA sugere; o Professor decide o que será salvo.** Nenhuma atividade será criada ou publicada
-automaticamente. A prioridade é alta porque o fluxo oferece demonstração visual forte, utilidade
-direta, baixo risco acadêmico e reaproveita a infraestrutura do 9A.
+**A IA sugere; o Professor decide o que será salvo.** Nenhuma atividade é criada ou publicada
+automaticamente: a confirmação só preenche o formulário normal, e o botão **Adicionar** cria a
+atividade pelo `POST /api/activities` de sempre, com todas as validações.
+
+**Decisões.**
+
+- O `AIClient` do 9A foi reaproveitado; ganhou o conceito de `CasoDeUso` (prompt, instrução,
+  validador e limite de saída), sem alterar o comportamento do 9A.
+- Não existe tabela de questões e o 9B não criou uma: as questões revisadas viram texto no campo
+  `descricao`. Uma modelagem própria fica para o 9C, se ele precisar.
+- Nenhum dado de aluno vai para a Groq (só turma, disciplina, ano, etapa, critério e o pedido).
+- Rubrica e pontuação são só sugestão em texto; não criam critério oficial nem alteram pesos.
+
+**Validação (06/10/2026).**
+
+- Testes: `test_ia_atividade` (25), seção M9B do `smoke_api` (37 verificações: autorização,
+  etapa fechada, etapa de outro ano, critério de outra escola, pedido inválido, falhas do provedor,
+  "gerar não cria atividade" e "só o fluxo normal grava") e 9 testes Flutter.
+- Groq real: 3 chamadas (modelo `openai/gpt-oss-20b`), todas HTTP 200 em 1,8 a 2,8 s, com a
+  quantidade e o tipo pedidos e contrato válido; nenhuma atividade foi criada por elas.
+- E2E no Flutter: Atividades → turma → Adicionar atividade → Gerar com IA → tema "Revolução
+  Industrial", 4 questões → o Professor editou o título e um enunciado, removeu uma questão,
+  ajustou o valor para 8 e confirmou; o banco guardou exatamente esse texto, e nada da resposta
+  bruta. Com chave inválida, a tela mostrou a mensagem amigável e a criação manual seguiu normal.
+- Qualidade observada: contrato e quantidade respeitados, mas houve gabarito discutível, viés de
+  posição (várias respostas "A") e questões que desviam do tema. A revisão humana é parte do fluxo.
 
 ### Marco 9C — Correção assistida de respostas discursivas
 
@@ -569,7 +576,7 @@ resposta falsa ou template apresentado como se viesse do modelo.
 | Prioridade | Entrega |
 |---|---|
 | Muito alta | correção assistida do 9C |
-| Alta | geração de atividades e questões do 9B |
+| Alta | correções de qualidade do 9B, se o grupo julgar necessário |
 | Média | feedback e recuperação do 9D |
 
 Se houver atraso, a ordem de preservação será:
@@ -1377,7 +1384,7 @@ humano e motor acadêmico determinístico.
 ## Fase 13 — IA
 
 **Status: 🟡 em execução.** O Marco 9A está implementado e validado com a Groq real (06/10/2026).
-Os Marcos 9B, 9C e 9D estão planejados — ver a seção 4.
+O Marco 9B está implementado e validado; os Marcos 9C e 9D estão planejados — ver a seção 4.
 
 Somente depois do ciclo acadêmico estar confiável.
 
@@ -1404,7 +1411,7 @@ Possibilidades:
 O plano atual distribui essas possibilidades em quatro entregas:
 
 - **9A:** insights acadêmicos explicáveis;
-- **9B:** geração assistida de atividades e questões;
+- **9B:** geração assistida de atividades e questões (implementado);
 - **9C:** correção assistida de respostas discursivas com rubrica;
 - **9D:** feedback e recuperação personalizados.
 
@@ -1431,7 +1438,7 @@ pela IA precisam de revisão do Professor antes de qualquer persistência.
 | 12 | Gestão completa de professores | 🟡 | ✅ Marco 8 |
 | 13 | IA — validação externa dos Insights | 🔴 | ✅ Marco 9A validado com Groq real |
 | 14 | IA — correção assistida com rubrica | 🔴 | ⏳ Marco 9C |
-| 15 | IA — geração de atividades e questões | 🟠 | ⏳ Marco 9B |
+| 15 | IA — geração de atividades e questões | 🟠 | ✅ Marco 9B |
 | 16 | Testes completos | 🟠 | 🟡 parcial |
 | 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ⏳ pendente |
 | 18 | Recuperação de senha | 🟡 | ⏳ pendente fora do bloco atual |
