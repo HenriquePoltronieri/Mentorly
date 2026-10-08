@@ -2211,6 +2211,19 @@ def main():
                 checar(gerar_ia(professor_6, t26["id"], com(**mudanca)
                                 ).status_code == 400,
                        "M9B-18: %s recebe 400" % rotulo)
+            for rotulo, mudanca in (
+                ("tema lista", {"tema": ["x"]}),
+                ("objetivo objeto", {"objetivo": {"a": 1}}),
+                ("observacoes lista", {"observacoes": [1]}),
+                ("dificuldade lista", {"dificuldade": ["facil"]}),
+                ("tipo objeto", {"tipo": {"a": 1}}),
+                ("quantidade lista", {"quantidadeQuestoes": [3]}),
+                ("etapaId lista", {"etapaId": [1]}),
+                ("criterioId objeto", {"criterioId": {"a": 1}}),
+            ):
+                r = gerar_ia(professor_6, t26["id"], com(**mudanca))
+                checar(r.status_code == 400,
+                       "M9B-18b: tipo errado (%s) continua 400 de validacao, nao 500" % rotulo)
             checar(ClienteIaAtividade.chamadas == 0,
                    "M9B-19: nenhuma falha de autorizacao ou validacao chamou a Groq")
 
@@ -2394,6 +2407,19 @@ def main():
                 checar(corrigir_ia(professor_6, ativ_9c["id"], com(**mudanca)
                                    ).status_code == 400,
                        "M9C-13: %s recebe 400" % rotulo)
+            for rotulo, mudanca in (
+                ("questao objeto", {"questao": {"a": 1}}),
+                ("resposta esperada lista", {"respostaEsperada": ["x"]}),
+                ("resposta do aluno lista", {"respostaAluno": ["x"]}),
+                ("valor maximo lista", {"valorMaximo": [2]}),
+                ("valor maximo objeto", {"valorMaximo": {"a": 1}}),
+                ("rubrica item lista", {"rubrica": [{"item": ["x"]}]}),
+                ("rubrica peso lista", {"rubrica": [{"item": "a", "peso": [1]}]}),
+                ("rubrica item numero", {"rubrica": [5]}),
+            ):
+                r = corrigir_ia(professor_6, ativ_9c["id"], com(**mudanca))
+                checar(r.status_code == 400,
+                       "M9C-13b: tipo errado (%s) continua 400 de validacao, nao 500" % rotulo)
             checar(ClienteIaCorrecao.chamadas == 0,
                    "M9C-14: nenhuma falha de autorizacao, etapa ou entrada chamou a Groq")
 

@@ -197,7 +197,7 @@ class ProfessorController:
             )
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
-        except (ValueError, TypeError) as erro:
+        except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         except AIError:
             return jsonify({"error": MENSAGEM_ATIVIDADE_INDISPONIVEL}), 503
@@ -228,7 +228,7 @@ class ProfessorController:
             )
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
-        except (ValueError, TypeError) as erro:
+        except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         except AIError:
             return jsonify({"error": MENSAGEM_CORRECAO_INDISPONIVEL}), 503
