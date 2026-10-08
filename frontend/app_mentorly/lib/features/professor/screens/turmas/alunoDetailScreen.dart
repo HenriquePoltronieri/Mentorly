@@ -4,6 +4,7 @@ import '../../models/estatisticaAlunoModel.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../widgets/alunoGraficoWidget.dart';
 import '../../services/professorAlunoDetailService.dart';
+import 'feedbackIaDialog.dart';
 
 // tela de detalhe/estatisticas de um aluno especifico
 // recebe o aluno via Navigator.pushNamed(context, AppRoutes.alunoDetail, arguments: aluno)
@@ -66,6 +67,21 @@ class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
         setState(() => _carregando = false);
       }
     }
+  }
+
+  // Marco 9D: so leitura. O dialogo gera uma SUGESTAO sobre o resultado que o
+  // motor ja calculou para esta etapa; nada e salvo e nada muda aqui.
+  void _abrirFeedbackIa(EtapaDesempenhoModel etapa) {
+    final aluno = _aluno;
+    if (aluno == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => FeedbackIaDialog(
+        alunoId: aluno['id'] as int,
+        etapa: etapa,
+        alunoNome: aluno['nome']?.toString() ?? '',
+      ),
+    );
   }
 
   @override
@@ -157,6 +173,7 @@ class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
           ...estatistica.etapas.map((etapa) => _CardEtapa(
                 etapa: etapa,
                 ehAtual: etapa.etapaId == estatistica.etapaAtualId,
+                aoGerarFeedback: () => _abrirFeedbackIa(etapa),
               )),
         if (etapasCompletas.isNotEmpty) ...[
           const SizedBox(height: 24),
@@ -183,8 +200,18 @@ class _AlunoDetailScreenState extends State<AlunoDetailScreen> {
 class _CardEtapa extends StatelessWidget {
   final EtapaDesempenhoModel etapa;
   final bool ehAtual;
+  final VoidCallback aoGerarFeedback;
 
-  const _CardEtapa({required this.etapa, required this.ehAtual});
+  const _CardEtapa({
+    required this.etapa,
+    required this.ehAtual,
+    required this.aoGerarFeedback,
+  });
+
+  // Sem atividade avaliada (ou com a etapa mal configurada) nao ha o que
+  // interpretar: o botao fica desabilitado em vez de gerar um erro.
+  bool get _podeGerarFeedback =>
+      etapa.atividadesAvaliadas > 0 && etapa.situacao != 'configuracao_invalida';
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +301,20 @@ class _CardEtapa extends StatelessWidget {
                   ),
                 )),
           ],
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Tooltip(
+              message: _podeGerarFeedback
+                  ? ''
+                  : 'Disponível quando houver ao menos uma atividade avaliada nesta etapa',
+              child: TextButton.icon(
+                onPressed: _podeGerarFeedback ? aoGerarFeedback : null,
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                label: const Text('Gerar feedback com IA'),
+              ),
+            ),
+          ),
         ],
       ),
     );

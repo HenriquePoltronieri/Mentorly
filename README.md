@@ -48,7 +48,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 24 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 25 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -78,6 +78,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 22. Insights acadêmicos explicáveis da turma, gerados por IA a partir do motor acadêmico
 23. Gerar atividade com IA: o Professor pede uma sugestão, revisa e só então salva
 24. Corrigir resposta discursiva com IA: a IA sugere a avaliação, o Professor decide e lança a nota
+25. Feedback e plano de recuperação por IA para um aluno, a partir do resultado calculado pelo motor
 
 ---
 
@@ -137,6 +138,21 @@ sugerida** apenas preenche o campo de nota; o Professor pode mudar o valor, e a 
 quando ele clica em **Salvar notas**, pelo fluxo normal. **A IA nunca lança nota.** O nome do aluno
 e qualquer outro dado pessoal não são enviados ao provedor, e o percentual é calculado pelo
 Mentorly, não pela IA.
+
+### Feedback e recuperação personalizados (Marco 9D)
+
+```text
+Mentorly calcula → IA interpreta → Professor revisa
+```
+
+Na tela de desempenho de um aluno, cada etapa tem o botão **Gerar feedback com IA**. A IA recebe só
+o resultado que o motor acadêmico já calculou (nota, percentual, situação, desempenho por critério,
+atividades avaliadas e sem nota lançada) e devolve uma **sugestão pedagógica**: resumo, pontos
+consolidados, pontos de atenção com evidência, objetivos, ações, atividades e acompanhamento. O tipo
+de plano vem da situação oficial: **recuperação** (abaixo do mínimo), **continuidade** (adequado) ou
+**acompanhamento** (em andamento, com dados incompletos). É somente leitura: nada é salvo, nenhuma
+nota, situação, critério ou etapa muda, e nenhum dado pessoal do aluno é enviado ao provedor. A IA
+não prevê reprovação ou evasão, não cria rótulo de risco, não faz diagnóstico e não inventa números.
 
 ### Configuração da IA
 

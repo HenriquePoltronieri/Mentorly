@@ -30,11 +30,16 @@ from services.professor.notas import (
 from services.ia.client import AIError
 from services.ia.corrigir_resposta import CorrigirRespostaIaService
 from services.ia.gerar_atividade import GerarAtividadeIaService
+from services.ia.gerar_feedback import GerarFeedbackIaService
 from services.ia.gerar_insights_turma import (
     DadosInsuficientesError,
     GerarInsightsTurmaService,
 )
 
+MENSAGEM_FEEDBACK_INDISPONIVEL = (
+    "Nao foi possivel gerar o feedback agora. Tente novamente em instantes. "
+    "O desempenho do aluno continua disponivel normalmente."
+)
 MENSAGEM_CORRECAO_INDISPONIVEL = (
     "Nao foi possivel analisar a resposta agora. Tente novamente em instantes "
     "ou lance a nota manualmente."
@@ -196,6 +201,23 @@ class ProfessorController:
             return jsonify({"error": str(erro)}), 400
         except AIError:
             return jsonify({"error": MENSAGEM_ATIVIDADE_INDISPONIVEL}), 503
+        return jsonify(dados)
+
+    def feedback_aluno(self, aluno_id):
+        """Feedback e plano sugeridos por IA. So leitura: nada e gravado."""
+        try:
+            dados = GerarFeedbackIaService().execute(
+                aluno_id, usuario_atual_id(), coordenacao_atual(),
+                request.get_json(silent=True),
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except DadosInsuficientesError as erro:
+            return jsonify({"error": str(erro)}), 422
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        except AIError:
+            return jsonify({"error": MENSAGEM_FEEDBACK_INDISPONIVEL}), 503
         return jsonify(dados)
 
     def corrigir_resposta(self, atividade_id):

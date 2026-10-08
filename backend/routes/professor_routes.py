@@ -93,6 +93,14 @@ def gerar_atividade(turma_id):
     return professor_controller.gerar_atividade(turma_id)
 
 
+# Feedback e plano de recuperacao por IA: so leitura. Nada e gravado e nenhum
+# dado do aluno vai para o provedor.
+@professor_blueprint.post("/alunos/<int:aluno_id>/feedback-ia")
+@professor_required
+def feedback_aluno(aluno_id):
+    return professor_controller.feedback_aluno(aluno_id)
+
+
 # Correcao assistida por IA: so devolve uma sugestao de avaliacao. A nota e
 # lancada depois, pelo POST /api/atividades/<id>/notas normal.
 @professor_blueprint.post("/atividades/<int:atividade_id>/correcao-assistida")

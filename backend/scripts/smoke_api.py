@@ -14,6 +14,7 @@ Uso (a partir da pasta backend):
 """
 
 import io
+import json
 import os
 import sys
 from unittest.mock import patch
@@ -2436,6 +2437,202 @@ def main():
             checar(salvar.status_code == 201 and float(gravada["valor"]) == 7.0
                    and float(gravada["valor"]) != sug["notaSugerida"],
                    "M9C-20: Professor altera 6.0 para 7.0 e o banco recebe 7.0, a decisao humana")
+
+        # ---------------------------------------------------------
+        print("\n[18] Marco 9D - feedback e recuperacao (IA so interpreta; leitura)")
+
+        class ClienteIaFeedback:
+            """Imita o AIClient e aplica o validador do caso, como o real faz."""
+            model = "modelo-smoke"
+            chamadas = 0
+            payload = None
+            erro = None
+            resumo_extra = ""
+
+            def gerar(self, payload, caso=None):
+                ClienteIaFeedback.chamadas += 1
+                json.dumps(payload)  # como o AIClient real: Decimal do MySQL quebraria aqui
+                ClienteIaFeedback.payload = payload
+                if ClienteIaFeedback.erro:
+                    raise ClienteIaFeedback.erro
+                resumo = "Resumo do desempenho com base nos dados calculados."
+                if payload["tipoDePlano"] == "acompanhamento":
+                    resumo += " Os dados da etapa ainda estao incompletos."
+                return caso.validar({
+                    "resumo": resumo + ClienteIaFeedback.resumo_extra,
+                    "pontosConsolidados": ["Criterio com melhor desempenho."],
+                    "pontosAtencao": [{"descricao": "Criterio com menor desempenho.",
+                                       "evidencia": "Dado recebido do motor academico."}],
+                    "objetivosRecuperacao": ["Reforcar o criterio de menor desempenho."],
+                    "acoesSugeridas": [{"acao": "Atividade curta com correcao guiada.",
+                                        "motivo": "Criterio com desempenho mais baixo."}],
+                    "atividadesSugeridas": ["Exercicio focado no criterio."],
+                    "acompanhamento": "Observar as proximas atividades avaliadas.",
+                })
+
+        def feedback_ia(cliente, aluno_id, corpo):
+            return cliente.post("/api/professor/alunos/%d/feedback-ia" % aluno_id, corpo)
+
+        def instantaneo():
+            """Estado das tabelas academicas: 0 diferencas entre antes e depois."""
+            tabelas = ("nota", "atividade", "etapa", "criterio", "aluno", "turma",
+                       "professor_turma", "aluno_turma_historico")
+            return {t: query_all("SELECT * FROM %s ORDER BY id" % t if t != "professor_turma"
+                                 and t != "aluno_turma_historico" else "SELECT * FROM %s" % t)
+                    for t in tabelas}
+
+        etapa_fb = criar_etapa(coord_a, "E26 Feedback", 98, 6, 10)
+        crit_prova = criar_criterio(coord_a, etapa_fb["id"], "Provas", 60)
+        crit_trab = criar_criterio(coord_a, etapa_fb["id"], "Trabalhos", 40)
+        ativ_p = nova_atividade(professor_6, t26["id"], etapa_fb["id"], crit_prova["id"], "Prova FB").get_json()
+        ativ_t = nova_atividade(professor_6, t26["id"], etapa_fb["id"], crit_trab["id"], "Trabalho FB").get_json()
+
+        def aluno_novo(nome):
+            return coord_a.post("/api/coordenacao/turmas/%d/alunos" % t26["id"],
+                                {"nome": nome}).get_json()
+
+        al_baixo = aluno_novo("Aluno Feedback Baixo")
+        al_ok = aluno_novo("Aluno Feedback Adequado")
+        al_and = aluno_novo("Aluno Feedback Andamento")
+        al_zero = aluno_novo("Aluno Feedback Sem Notas")
+        lancar(professor_6, ativ_p["id"], al_baixo["id"], 4)
+        lancar(professor_6, ativ_t["id"], al_baixo["id"], 5)
+        lancar(professor_6, ativ_p["id"], al_ok["id"], 9)
+        lancar(professor_6, ativ_t["id"], al_ok["id"], 8)
+        lancar(professor_6, ativ_p["id"], al_and["id"], 7)   # trabalho sem nota lancada
+
+        # etapa com atividade graduada e FECHADA: o feedback continua permitido (leitura)
+        etapa_f = criar_etapa(coord_a, "E26 FB fechada", 99, 6, 10)
+        crit_f = criar_criterio(coord_a, etapa_f["id"], "Provas", 100)
+        ativ_f = nova_atividade(professor_6, t26["id"], etapa_f["id"], crit_f["id"], "Prova FB fechada").get_json()
+        lancar(professor_6, ativ_f["id"], al_ok["id"], 9)
+        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_f["id"]).status_code == 200,
+               "M9D-00: etapa de teste fechada")
+        # etapa sem pesos validos (soma 50): configuracao invalida
+        etapa_inv = criar_etapa(coord_a, "E26 FB pesos", 100, 6, 10)
+        criar_criterio(coord_a, etapa_inv["id"], "Provas", 50)
+
+        outro_aluno_a = coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_a["id"],
+                                     {"nome": "Aluno Outra Turma"}).get_json()
+        aluno_b = coord_b.post("/api/coordenacao/turmas/%d/alunos" % turma_b["id"],
+                               {"nome": "Aluno Escola B"}).get_json()
+
+        cliente_f = ClienteIaFeedback()
+        with patch("services.ia.gerar_feedback.AIClient", return_value=cliente_f):
+            antes = instantaneo()
+
+            r = feedback_ia(professor_6, al_baixo["id"], {"etapaId": etapa_fb["id"]})
+            corpo = r.get_json() or {}
+            oficial = corpo.get("contexto", {}).get("resultadoOficial", {})
+            checar(r.status_code == 200 and corpo.get("geradoPorIA") is True
+                   and corpo["contexto"]["tipoPlano"] == "recuperacao"
+                   and oficial.get("situacao") == "abaixo_do_minimo"
+                   and oficial.get("nota") == 4.4 and oficial.get("percentual") == 44.0,
+                   "M9D-01: abaixo do minimo gera plano de recuperacao com o resultado oficial do motor (4.4 / 44%)")
+            checar(ClienteIaFeedback.payload["tipoDePlano"] == "recuperacao"
+                   and ClienteIaFeedback.payload["resultado"]["nota"] == 4.4
+                   and {c["nome"]: c["desempenhoPercentual"]
+                        for c in ClienteIaFeedback.payload["criterios"]} == {"Provas": 40.0, "Trabalhos": 50.0},
+                   "M9D-02: payload leva o calculo do motor, com o desempenho por criterio")
+            serializado = str(ClienteIaFeedback.payload).lower()
+            checar("feedback baixo" not in serializado and "aluno feedback" not in serializado
+                   and "@" not in serializado and "matricula" not in serializado
+                   and str(al_baixo["id"]) not in ClienteIaFeedback.payload["etapa"]["nome"]
+                   and "'id'" not in serializado and "turma" not in serializado,
+                   "M9D-03: payload sem nome, e-mail, matricula, ids nem turma")
+
+            r = feedback_ia(professor_6, al_ok["id"], {"etapaId": etapa_fb["id"]})
+            corpo = r.get_json() or {}
+            checar(r.status_code == 200 and corpo["contexto"]["tipoPlano"] == "continuidade"
+                   and corpo["contexto"]["resultadoOficial"]["situacao"] == "adequado"
+                   and corpo["contexto"]["resultadoOficial"]["nota"] == 8.6,
+                   "M9D-04: adequado gera plano de continuidade (nao forca recuperacao)")
+
+            r = feedback_ia(professor_6, al_and["id"], {"etapaId": etapa_fb["id"]})
+            corpo = r.get_json() or {}
+            checar(r.status_code == 200 and corpo["contexto"]["tipoPlano"] == "acompanhamento"
+                   and corpo["contexto"]["resultadoOficial"]["situacao"] == "em_andamento"
+                   and corpo["contexto"]["resultadoOficial"]["nota"] is None
+                   and ClienteIaFeedback.payload["atividades"]["semNotaLancada"] == 1
+                   and "incompletos" in corpo["sugestao"]["resumo"],
+                   "M9D-05: em andamento nao conclui nada: acompanhamento, 1 atividade sem nota e aviso de dados incompletos")
+
+            r = feedback_ia(professor_6, al_ok["id"], {"etapaId": etapa_f["id"]})
+            checar(r.status_code == 200 and r.get_json()["contexto"]["fechada"] is True,
+                   "M9D-06: etapa fechada e permitida (somente leitura)")
+
+            # --- autorizacao: nenhuma falha chega ao provedor
+            ClienteIaFeedback.chamadas = 0
+            corpo_ok = {"etapaId": etapa_fb["id"]}
+            checar(feedback_ia(professor_a2, al_baixo["id"], corpo_ok).status_code == 404,
+                   "M9D-07: professor da escola sem vinculo com a turma recebe 404")
+            checar(feedback_ia(professor_b, al_baixo["id"], corpo_ok).status_code == 404,
+                   "M9D-08: professor de outra escola recebe 404")
+            checar(feedback_ia(professor_6, aluno_b["id"], corpo_ok).status_code == 404,
+                   "M9D-09: aluno de outra escola recebe 404")
+            checar(feedback_ia(professor_6, outro_aluno_a["id"], corpo_ok).status_code == 404,
+                   "M9D-10: aluno de turma nao vinculada ao professor recebe 404")
+            checar(feedback_ia(professor_6, 99999999, corpo_ok).status_code == 404,
+                   "M9D-11: aluno inexistente recebe 404")
+            checar(feedback_ia(coord_a, al_baixo["id"], corpo_ok).status_code == 403,
+                   "M9D-12: Coordenacao recebe 403 no endpoint do Professor")
+            checar(feedback_ia(Cliente(cliente_flask), al_baixo["id"], corpo_ok).status_code == 401,
+                   "M9D-13: sem token recebe 401")
+
+            # --- etapa
+            checar(feedback_ia(professor_6, al_baixo["id"], {}).status_code == 400,
+                   "M9D-14: sem etapa recebe 400 (nao usa etapa implicita)")
+            checar(feedback_ia(professor_6, al_baixo["id"], {"etapaId": "abc"}).status_code == 400,
+                   "M9D-15: etapa nao numerica recebe 400")
+            r = feedback_ia(professor_6, al_baixo["id"], {"etapaId": etapa_27["id"]})
+            checar(r.status_code == 400 and "ano letivo" in r.get_json()["error"],
+                   "M9D-16: etapa de outro ano letivo recebe 400")
+            checar(feedback_ia(professor_6, al_baixo["id"], {"etapaId": etapa_b}).status_code == 404,
+                   "M9D-17: etapa de outra escola recebe 404")
+            checar(feedback_ia(professor_6, al_baixo["id"], {"etapaId": 99999999}).status_code == 404,
+                   "M9D-18: etapa inexistente recebe 404")
+
+            # --- dados insuficientes: 422 sem chamar a Groq
+            r = feedback_ia(professor_6, al_zero["id"], corpo_ok)
+            checar(r.status_code == 422 and "atividade avaliada" in r.get_json()["error"],
+                   "M9D-19: aluno sem atividade avaliada recebe 422")
+            r = feedback_ia(professor_6, al_ok["id"], {"etapaId": etapa_inv["id"]})
+            checar(r.status_code == 422 and "pesos" in r.get_json()["error"].lower(),
+                   "M9D-20: etapa com configuracao invalida recebe 422")
+            checar(ClienteIaFeedback.chamadas == 0,
+                   "M9D-21: nenhuma falha de autorizacao, etapa ou dados chamou a Groq")
+
+            # --- contrato da IA: numero inventado e previsao viram 503
+            for rotulo, extra in (("numero inventado", " O resultado foi 72%."),
+                                  ("previsao de reprovacao", " O aluno sera reprovado."),
+                                  ("atividade pendente", " Ha atividade pendente.")):
+                ClienteIaFeedback.resumo_extra = extra
+                r = feedback_ia(professor_6, al_baixo["id"], corpo_ok)
+                checar(r.status_code == 503 and "Tente novamente" in r.get_json()["error"],
+                       "M9D-22: IA devolve %s -> 503 amigavel" % rotulo)
+            ClienteIaFeedback.resumo_extra = ""
+
+            # --- falhas do provedor
+            for rotulo, erro in (
+                ("provedor indisponivel", AIProviderError(MENSAGEM_INDISPONIVEL)),
+                ("resposta invalida", AIResponseError(MENSAGEM_INDISPONIVEL)),
+            ):
+                ClienteIaFeedback.erro = erro
+                r = feedback_ia(professor_6, al_baixo["id"], corpo_ok)
+                checar(r.status_code == 503 and "continua disponivel" in r.get_json()["error"],
+                       "M9D-23: %s devolve 503 amigavel" % rotulo)
+            ClienteIaFeedback.erro = None
+            ainda = professor_6.get("/api/professor/alunos/%d/estatisticas" % al_baixo["id"])
+            checar(ainda.status_code == 200 and any(
+                e["etapa_id"] == etapa_fb["id"] and e["nota_calculada"] == 4.4
+                for e in ainda.get_json()["etapas"]),
+                   "M9D-24: com a IA indisponivel, o desempenho do aluno segue funcionando e a nota e a mesma")
+
+            # --- leitura: nenhuma tabela academica muda
+            depois = instantaneo()
+            checar(depois == antes,
+                   "M9D-25: gerar feedback NAO altera nenhuma tabela academica (nota, atividade, etapa, "
+                   "criterio, aluno, turma, vinculos): estado identico antes e depois")
 
         print("\nLimpando os dados de teste...")
         limpar()

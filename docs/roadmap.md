@@ -113,28 +113,29 @@ Detalhes e resultados na seção do Marco 9A mais abaixo.
 
 # 2. Estado técnico validado
 
-Verificação mais recente (08/10/2026, com o Marco 9C):
+Verificação mais recente (08/10/2026, com o Marco 9D):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 103 arquivos, OK |
+| `py_compile` | 106 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 371 verificações, 0 falhas |
+| `smoke_api` | 400 verificações, 0 falhas |
 | `test_calculo` | 13 testes, OK |
 | `test_ia` | 22 testes, OK; cliente externo simulado, sem internet |
 | `test_ia_atividade` | 25 testes, OK; contrato, pedido, service e retry do 9B, sem internet |
 | `test_ia_correcao` | 38 testes, OK; contrato, percentual, service sem nota e retry do 9C, sem internet |
+| `test_ia_feedback` | 39 testes, OK; contrato, prompt, privacidade e service somente leitura do 9D, sem internet |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
 | `test_migracao_professor_habilitado` | 8 verificações, 0 falhas |
 | `flutter analyze` | 0 warnings, 0 errors; 90 infos de estilo (`file_names`, `withOpacity` e afins) |
-| `flutter test` | 41 testes, todos passando |
+| `flutter test` | 51 testes, todos passando |
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o código local possui hoje **24 funcionalidades demonstráveis de
-MVP** (lista em [funcionalidades.md](funcionalidades.md)). O sub-marco 9D não entra
-nessa contagem enquanto não tiver implementação e evidência.
+Por contagem conservadora, o código local possui hoje **25 funcionalidades demonstráveis de
+MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os quatro sub-marcos do bloco de IA
+(9A, 9B, 9C e 9D) estão implementados e validados.
 
 A infraestrutura e os Insights IA estão implementados, testados com cliente simulado e validados
 com a Groq real (06/10/2026): chamada real pelo endpoint do Mentorly, resultado exibido no
@@ -245,7 +246,7 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 | Marco 9A — Insights + infraestrutura IA ✅ | validado com Groq real em 06/10 |
 | Marco 9B — Geração de atividades/questões ✅ | implementado e validado em 06/10 |
 | Marco 9C — Correção assistida com rubrica ✅ | implementado e validado em 08/10 |
-| Marco 9D — Feedback/recuperação | 10/10 – 11/10 |
+| Marco 9D — Feedback/recuperação ✅ | implementado e validado em 08/10 |
 | Validação completa da IA | 11/10 – 12/10 |
 | E2E completo do sistema | 13/10 |
 | Correção de UX/bugs | 14/10 – 16/10 |
@@ -527,25 +528,48 @@ de nota; a nota é gravada quando o Professor clica em **Salvar notas**, pelo fl
 
 ### Marco 9D — Feedback e recuperação personalizados
 
-**Estado: ⏳ planejado**
+**Estado: ✅ implementado e validado com a Groq real (08/10/2026)**
 
-**Prioridade: média**
+Usa resultados acadêmicos que o Mentorly já calcula (critérios, atividades, percentuais, etapa,
+situação e completude). Na tela de desempenho do aluno, cada etapa tem **Gerar feedback com IA**.
 
-**Período: 10/10–11/10**
+Saída: resumo da situação, pontos consolidados, pontos de atenção com evidência, objetivos, ações
+sugeridas (com motivo), atividades sugeridas e acompanhamento. O tipo de plano é decidido pelo backend
+a partir da situação oficial: **recuperação** (abaixo do mínimo), **continuidade** (adequado, sem forçar
+recuperação) ou **acompanhamento** (em andamento: aviso de dados incompletos e no máximo 2 itens por
+lista).
 
-Usará resultados acadêmicos que o Mentorly já calcula, como critérios, atividades, percentuais,
-etapa, situação e completude.
+São sugestões pedagógicas. A IA não altera situação, nota, critério, etapa ou qualquer regra acadêmica.
 
-Saídas previstas:
+**Decisões.**
 
-- feedback individual apoiado em evidências registradas;
-- sugestão de conteúdo para revisão;
-- atividade de reforço sugerida;
-- critério a priorizar;
-- plano simples para acompanhar as próximas atividades.
+- **Somente leitura e sem migration:** nada é salvo (nem feedback, nem plano, nem retorno da IA).
+- **Etapa explícita**, validada contra o ano da turma do aluno. **Etapa fechada é permitida**, porque
+  nada é escrito.
+- **Nenhum dado pessoal do aluno vai para a Groq** (nem o primeiro nome): só o resultado já calculado.
+- **Sem previsão:** o validador do backend recusa reprovação, evasão, risco, diagnóstico, inferência
+  pessoal, "pendente/atrasada/não entregue" e qualquer número que não esteja no payload.
+- **Dados insuficientes** (sem atividade avaliada ou etapa mal configurada) devolvem 422 sem chamar a Groq.
+- O `AIClient` ganhou só um novo `CasoDeUso`.
 
-São sugestões pedagógicas. A IA não altera situação, recuperação oficial, nota ou qualquer regra
-acadêmica.
+**Validação (08/10/2026).**
+
+- Testes: `test_ia_feedback` (39), seção M9D do `smoke_api` (29 verificações: três situações,
+  segurança entre escolas, etapa, dados insuficientes, contrato, falhas e "gerar feedback não altera
+  nenhuma tabela acadêmica") e 10 testes Flutter. Nenhuma migration.
+- Groq real (`openai/gpt-oss-20b`), 3 casos: abaixo do mínimo (plano de recuperação), adequado
+  (continuidade) e em andamento (acompanhamento, com "verificar ou lançar a nota"). Latência de 1,7 a
+  2,8 s; nenhum número inventado, previsão ou inferência pessoal na resposta aceita.
+- E2E no Flutter: desempenho do aluno → Gerar feedback com IA → situação oficial exibida, sem chamada
+  ao abrir, botão desabilitado e **uma só requisição no duplo clique** → plano de recuperação exibido
+  → as tabelas acadêmicas ficaram idênticas. Com chave inválida, mensagem amigável, situação oficial
+  visível e desempenho/boletim normais.
+- Problemas encontrados só com a Groq real: `Decimal` do MySQL não serializava para JSON (corrigido,
+  com teste); o modelo devolvia `acompanhamento` vazio, passou a ser exigido no prompt; e escrevia
+  "Trabalho pendente" para atividade sem nota, barrado pelo validador e corrigido com o vocabulário
+  `atividadesSemNotaLancada` no payload e regra explícita no prompt.
+- Limites: texto em parte genérico; cada geração gasta tokens da cota da Groq; a IA não conhece a sala
+  de aula, então o plano é apoio e não decisão.
 
 ### Princípios gerais da IA
 
@@ -591,14 +615,14 @@ resposta falsa ou template apresentado como se viesse do modelo.
 |---|---|
 | Muito alta | revisão de qualidade da correção assistida do 9C, se o grupo julgar necessário |
 | Alta | correções de qualidade do 9B, se o grupo julgar necessário |
-| Média | feedback e recuperação do 9D |
+| Média | revisão de qualidade do feedback do 9D, se o grupo julgar necessário |
 
 Se houver atraso, a ordem de preservação será:
 
 1. Insights acadêmicos;
 2. Correção assistida;
 3. Geração de atividades e questões;
-4. Feedback e recuperação, que pode ser simplificado ou adiado.
+4. Feedback e recuperação (já implementado).
 
 ### Critério de MVP da IA
 
@@ -1398,7 +1422,7 @@ humano e motor acadêmico determinístico.
 ## Fase 13 — IA
 
 **Status: 🟡 em execução.** O Marco 9A está implementado e validado com a Groq real (06/10/2026).
-Os Marcos 9B e 9C estão implementados e validados; o Marco 9D está planejado — ver a seção 4.
+O bloco de IA (9A a 9D) está implementado e validado — ver a seção 4.
 
 Somente depois do ciclo acadêmico estar confiável.
 
@@ -1427,7 +1451,7 @@ O plano atual distribui essas possibilidades em quatro entregas:
 - **9A:** insights acadêmicos explicáveis;
 - **9B:** geração assistida de atividades e questões (implementado);
 - **9C:** correção assistida de respostas discursivas com rubrica (implementado);
-- **9D:** feedback e recuperação personalizados.
+- **9D:** feedback e recuperação personalizados (implementado).
 
 Continuam proibidas previsões opacas como "IA prevê reprovação". Conteúdo e pontuação gerados
 pela IA precisam de revisão do Professor antes de qualquer persistência.
@@ -1457,6 +1481,6 @@ pela IA precisam de revisão do Professor antes de qualquer persistência.
 | 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ⏳ pendente |
 | 18 | Recuperação de senha | 🟡 | ⏳ pendente fora do bloco atual |
 | 19 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
-| 20 | IA — feedback e recuperação | 🟡 | ⏳ Marco 9D; pode ser simplificado ou adiado |
+| 20 | IA — feedback e recuperação | 🟡 | ✅ Marco 9D |
 | 21 | Limpeza de legado | 🟡 | 🟡 parcial |
 | 22 | Produção/deploy | 🔵 | ⏳ pendente |

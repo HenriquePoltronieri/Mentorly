@@ -220,7 +220,7 @@ Nada é persistido por esse fluxo.
 **2. IA geradora com revisão humana**
 
 É o padrão usado na geração de atividades (9B) e na correção assistida (9C), e o previsto para
-feedback/recuperação (9D):
+feedback/recuperação (9D), com a diferença de que o 9D é só leitura e nada é salvo:
 
 ```text
 Professor solicita
@@ -407,19 +407,70 @@ a justificativa. Não existe tabela de questão, de resposta de aluno ou de corr
 sugestão e fica visível. A nota sugerida vale para a resposta corrigida: se a atividade tiver várias
 questões, o Professor decide o total. Cada correção gasta tokens da cota da Groq.
 
-#### Marco 9D — Feedback e recuperação personalizados — planejado
+#### Marco 9D — Feedback e recuperação personalizados — implementado
 
 ```text
-dados acadêmicos já calculados
-  → Service específico
-  → AIClient
-  → feedback / plano sugerido
-  → Professor
+Professor escolhe a etapa
+  → motor acadêmico (calcular_desempenho_etapa)
+  → GerarFeedbackIaService
+  → payload sem identificador pessoal
+  → AIClient (CasoDeUso de feedback)
+  → sugestão pedagógica
+  → Professor revisa
 ```
 
-A entrada pode usar critérios, atividades, desempenho, completude, etapa e situação oficial. A saída
-pode apresentar pontos fortes, pontos de atenção, feedback individual e sugestões de recuperação.
-Nenhuma dessas sugestões altera nota ou status acadêmico.
+**Backend.** `POST /api/professor/alunos/<id>/feedback-ia` com `{"etapaId": N}` (somente Professor).
+`GerarFeedbackIaService` é **somente leitura**: não importa nem chama nenhuma escrita de nota,
+atividade, etapa ou critério, e o teste da API confirma que as tabelas ficam idênticas antes e
+depois. A ordem é: o aluno precisa estar em turma vinculada ao Professor, da escola do token (404
+para outra turma, outra escola ou aluno inexistente, reaproveitando `aluno_acessivel`); a etapa é
+**explícita** (nunca "a etapa atual" implícita), da escola e do mesmo ano letivo da turma do aluno;
+o resultado oficial vem do motor; sem configuração válida ou sem nenhuma atividade avaliada, a
+resposta é 422 e a Groq não é chamada.
+
+**Fonte dos dados.** Tudo vem do motor: nota, percentual, situação, completude, desempenho por
+critério, atividades avaliadas e sem nota lançada, nota mínima e máxima da etapa. A IA não recalcula.
+Quando o motor devolve `Decimal` (MySQL), o payload é convertido para tipos JSON.
+
+**Contexto enviado à Groq:** tipo de plano, etapa (nome e escala), resultado (nota, percentual,
+situação, completude), critérios (nome, peso, desempenho, atividades avaliadas e sem nota lançada) e
+contagem de atividades. **Nenhum nome, e-mail, matrícula, id, turma ou dado de outra escola**: o
+nome do aluno aparece só na tela. O primeiro nome não é necessário, então não é enviado.
+
+**Etapa fechada é permitida.** Como o fluxo é só leitura, olhar o desempenho de uma etapa encerrada
+é um uso legítimo (diferente de lançar nota, que o backend bloqueia).
+
+**Três situações, decididas pelo backend** a partir da situação oficial: `abaixo_do_minimo` gera
+plano de **recuperação**; `adequado` gera plano de **continuidade** (consolidação e aprofundamento,
+sem forçar recuperação); `em_andamento` gera plano de **acompanhamento**: a resposta precisa dizer
+que os dados estão incompletos e recomenda no máximo 2 itens por lista.
+
+**Contrato da resposta:** `resumo`, `pontosConsolidados`, `pontosAtencao` (`descricao`,
+`evidencia`), `objetivosRecuperacao`, `acoesSugeridas` (`acao`, `motivo`), `atividadesSugeridas` e
+`acompanhamento`. Além do formato, o validador impõe regras que o prompt sozinho não garantiu:
+
+- todo número citado como desempenho precisa existir no payload (quantidades pequenas como "2
+  atividades" são livres só nas sugestões; percentuais e decimais continuam exigindo origem);
+- termos de previsão (reprovação, evasão, risco), diagnóstico, inferência pessoal (família,
+  esforço, comportamento), "pendente/atrasada/não entregue" e "nova nota/para passar" invalidam a
+  resposta, que é repetida uma vez e, persistindo, vira 503 amigável;
+- listas longas são cortadas ao limite, em vez de derrubar a resposta.
+
+**Atividade sem nota lançada** nunca vira "pendente", "atrasada" ou "não entregue": o payload traz
+`atividadesSemNotaLancada` por critério, e o prompt manda sugerir apenas verificar ou lançar a nota.
+
+**Flutter.** Cada card de etapa na tela de desempenho do aluno tem **Gerar feedback com IA**, que
+abre o `FeedbackIaDialog`: mostra a situação oficial do motor, o aviso "Sugestões geradas por IA com
+base nos dados acadêmicos disponíveis. Revise antes de utilizar." e só chama a IA no clique, com o
+botão desabilitado durante o pedido. Em falha, mostra mensagem amigável e o desempenho do aluno
+continua disponível.
+
+**Persistência.** Nada é gravado: nem feedback, nem plano, nem prompt, nem a resposta da Groq. Não
+há migration.
+
+**Limites conhecidos.** O texto é genérico em parte (por exemplo, "participar de sessões de estudo
+em grupo") e a IA não conhece a sala de aula; é apoio, não decisão. Cada geração gasta tokens da cota
+da Groq.
 
 #### Human in the loop
 

@@ -1,6 +1,6 @@
 # Funcionalidades
 
-O Mentorly tem hoje **24 funcionalidades demonstráveis**, contadas de forma conservadora: cada
+O Mentorly tem hoje **25 funcionalidades demonstráveis**, contadas de forma conservadora: cada
 linha abaixo tem tela no aplicativo, endpoint na API e regra no backend. Todas passam pelas
 camadas explicadas em [architecture.md](architecture.md).
 
@@ -39,6 +39,7 @@ um Service (exceção documentada na arquitetura).
 | 21 | Boletim da turma | `boletimTurmaScreen` (Professor) | `BoletimTurmaService` | `GET /api/professor/turmas/<id>/boletim` | `montar_boletim_turma` | `calculo.py`, `Aluno` |
 | 22 | Insights acadêmicos explicáveis da etapa atual | `insightsTurmaScreen` | `InsightsIaService` | `POST /api/professor/turmas/<id>/insights` | `GerarInsightsTurmaService`, `AIClient` | `calculo.py`, `Aluno`, `Turma` |
 | 23 | Gerar atividade com IA, revisar e salvar pelo fluxo normal | `gerarAtividadeIaDialog` (dentro de `adicionarAtividadeModal`) | `GeracaoAtividadeIaService` | `POST /api/professor/turmas/<id>/atividades/gerar` | `GerarAtividadeIaService`, `AIClient` | `Turma`, `Etapa`, `Criterio` (a criação usa `Atividade`) |
+| 25 | Feedback e plano de recuperação por IA para um aluno em uma etapa (somente leitura) | `feedbackIaDialog` (dentro de `alunoDetailScreen`) | `FeedbackIaService` | `POST /api/professor/alunos/<id>/feedback-ia` | `GerarFeedbackIaService`, `AIClient` | `calculo.py`, `Aluno`, `Etapa` (nenhuma escrita) |
 | 24 | Corrigir resposta discursiva com IA: sugestão revisada pelo Professor, nota lançada pelo fluxo normal | `corrigirRespostaIaDialog` (dentro de `atividadeNotasScreen`) | `CorrecaoAssistidaIaService` | `POST /api/professor/atividades/<id>/correcao-assistida` | `CorrigirRespostaIaService`, `AIClient` | `Atividade`, `Etapa` (a nota é gravada por `LancarNotasService`, não pela IA) |
 
 O Professor também edita e exclui aluno nas turmas dele (`PUT`/`DELETE /api/professor/alunos/<id>`,
@@ -88,7 +89,8 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
   fica na própria tela de atividades; em **Adicionar atividade**, o botão **Gerar com IA** (23)
   preenche o formulário com uma sugestão revisada, e quem salva continua sendo o **Adicionar**; na
   tela de notas, o botão ✨ de cada aluno abre a **correção assistida** (24), que só preenche o
-  campo de nota, e quem grava continua sendo o **Salvar notas**.
+  campo de nota, e quem grava continua sendo o **Salvar notas**; na tela de desempenho do aluno,
+  cada etapa tem **Gerar feedback com IA** (25), somente leitura.
 
 ## Situação dos testes
 
@@ -97,15 +99,16 @@ Os testes automáticos abaixo passam no estado atual do repositório (06/10/2026
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
-| `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor e isolamento/acesso/falha da IA | 371 verificações, 0 falhas |
+| `python scripts/smoke_api.py` | API de ponta a ponta, incluindo gestão de Professor e isolamento/acesso/falha da IA | 400 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, sem banco | 13 testes, OK |
 | `python scripts/test_ia.py` | Payload mínimo, limite, autorização e cliente externo com respostas simuladas | 22 testes, OK |
+| `python scripts/test_ia_feedback.py` | Contrato do feedback (números do payload, termos proibidos, em andamento), regressão do prompt, payload sem dado pessoal, service somente leitura, três situações e falhas | 39 testes, OK |
 | `python scripts/test_ia_correcao.py` | Contrato da correção (nota sem clamp, evidência, rubrica), percentual calculado pelo backend, pedido, service que não lança nota, retry e falhas | 38 testes, OK |
 | `python scripts/test_ia_atividade.py` | Contrato da atividade gerada, validação do pedido, service sem dados de aluno e sem gravar, retry e falhas | 25 testes, OK |
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado: preserva alunos/turmas, cria os vínculos iniciais e é idempotente | 8 verificações, 0 falhas |
 | `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |
-| `flutter test` | Fluxos anteriores, insights, geração de atividade e correção assistida (model, revisão, duplo toque, usar nota sugerida e erro) | 41 testes, OK |
+| `flutter test` | Fluxos anteriores, insights, geração de atividade, correção assistida e feedback (model, duplo toque, três planos, erro) | 51 testes, OK |
 | `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors; 90 infos de estilo |
 
 Esses testes cobrem a API e a lógica, não a interface inteira. O teste manual de ponta a ponta,
