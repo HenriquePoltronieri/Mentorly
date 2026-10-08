@@ -48,7 +48,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 23 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 24 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -77,6 +77,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 21. Boletim da turma
 22. Insights acadêmicos explicáveis da turma, gerados por IA a partir do motor acadêmico
 23. Gerar atividade com IA: o Professor pede uma sugestão, revisa e só então salva
+24. Corrigir resposta discursiva com IA: a IA sugere a avaliação, o Professor decide e lança a nota
 
 ---
 
@@ -121,6 +122,21 @@ quantidade de questões. A IA devolve título, descrição, questões, gabarito 
 o Professor edita ou remove o que quiser e confirma. A confirmação apenas preenche o formulário
 normal, e quem cria a atividade é o botão **Adicionar**, pelo mesmo fluxo e com as mesmas
 validações de sempre. **A IA nunca grava no banco.** Nenhum dado de aluno é enviado ao provedor.
+
+### Correção assistida de respostas (Marco 9C)
+
+```text
+Resposta do aluno → IA sugere avaliação → Professor revisa → fluxo normal de Nota
+```
+
+Na tela de notas de uma atividade, o botão ✨ ao lado do campo de nota abre a **correção
+assistida**. O Professor cola a questão, a resposta esperada e a resposta do aluno (e, se quiser,
+uma rubrica), e a IA devolve uma **sugestão**: nota, justificativa, avaliação por critério com
+evidências, pontos positivos, pontos a melhorar e um feedback para o aluno. O botão **Usar nota
+sugerida** apenas preenche o campo de nota; o Professor pode mudar o valor, e a nota só é gravada
+quando ele clica em **Salvar notas**, pelo fluxo normal. **A IA nunca lança nota.** O nome do aluno
+e qualquer outro dado pessoal não são enviados ao provedor, e o percentual é calculado pelo
+Mentorly, não pela IA.
 
 ### Configuração da IA
 

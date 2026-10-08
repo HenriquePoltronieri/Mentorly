@@ -28,12 +28,17 @@ from services.professor.notas import (
     ListarNotasService,
 )
 from services.ia.client import AIError
+from services.ia.corrigir_resposta import CorrigirRespostaIaService
 from services.ia.gerar_atividade import GerarAtividadeIaService
 from services.ia.gerar_insights_turma import (
     DadosInsuficientesError,
     GerarInsightsTurmaService,
 )
 
+MENSAGEM_CORRECAO_INDISPONIVEL = (
+    "Nao foi possivel analisar a resposta agora. Tente novamente em instantes "
+    "ou lance a nota manualmente."
+)
 MENSAGEM_ATIVIDADE_INDISPONIVEL = (
     "Nao foi possivel gerar a atividade agora. Tente novamente em instantes "
     "ou crie a atividade manualmente."
@@ -191,6 +196,20 @@ class ProfessorController:
             return jsonify({"error": str(erro)}), 400
         except AIError:
             return jsonify({"error": MENSAGEM_ATIVIDADE_INDISPONIVEL}), 503
+        return jsonify(dados)
+
+    def corrigir_resposta(self, atividade_id):
+        """Sugestao de avaliacao por IA. NAO lanca nota: so devolve a sugestao."""
+        try:
+            dados = CorrigirRespostaIaService().execute(
+                atividade_id, usuario_atual_id(), request.get_json(silent=True)
+            )
+        except LookupError as erro:
+            return jsonify({"error": str(erro)}), 404
+        except (ValueError, TypeError) as erro:
+            return jsonify({"error": str(erro)}), 400
+        except AIError:
+            return jsonify({"error": MENSAGEM_CORRECAO_INDISPONIVEL}), 503
         return jsonify(dados)
 
     # -----------------------------------------------------------------

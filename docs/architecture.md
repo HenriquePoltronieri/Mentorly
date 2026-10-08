@@ -219,7 +219,8 @@ Nada é persistido por esse fluxo.
 
 **2. IA geradora com revisão humana**
 
-É o padrão planejado para geração de atividades, correção assistida e feedback/recuperação:
+É o padrão usado na geração de atividades (9B) e na correção assistida (9C), e o previsto para
+feedback/recuperação (9D):
 
 ```text
 Professor solicita
@@ -341,10 +342,9 @@ posição (várias respostas "A") e questões que fogem do tema pedido. Por isso
 parte do fluxo, e o aviso fica visível. Cada geração gasta mais tokens que um insight, e o plano
 gratuito da Groq limita o uso diário.
 
-#### Marco 9C — Correção assistida de respostas discursivas — planejado
+#### Marco 9C — Correção assistida de respostas discursivas — implementado
 
-Essa é a funcionalidade de IA de maior impacto prevista para a demonstração. Como os alunos ainda
-não acessam o Mentorly, na primeira versão o Professor cola ou digita a resposta do aluno.
+Como os alunos ainda não acessam o Mentorly, o Professor cola ou digita a resposta do aluno.
 
 ```text
 Professor
@@ -362,37 +362,50 @@ Professor
   → MySQL
 ```
 
-O retorno pode conter:
+**Backend.** `POST /api/professor/atividades/<id>/correcao-assistida` (somente Professor) chama
+`CorrigirRespostaIaService`, que **nunca grava nem altera nota** (nem importa `Nota`). A ordem é:
+a atividade precisa ser de uma turma do Professor, reaproveitando `_atividade_do_professor` do
+lançamento de notas (404 para qualquer outra combinação, inclusive outra escola); **etapa fechada
+bloqueia o fluxo com mensagem clara, sem gastar chamada de IA**, pela mesma regra que já bloqueia
+lançar nota; o valor máximo da resposta precisa ser maior que zero e não passar do valor da
+atividade; questão, resposta esperada e resposta do aluno são obrigatórias; a rubrica é opcional
+(até 6 itens). `professor_id`, `coordenacao_id`, turma e aluno nunca vêm do corpo.
 
-- avaliação por critério;
-- evidências encontradas na resposta;
-- pontos atendidos;
-- pontos faltantes;
-- pontuação sugerida;
-- feedback pedagógico.
+**Contexto enviado à Groq:** título da atividade, nome do critério oficial, questão, resposta
+esperada, resposta do aluno, valor máximo e a rubrica. **Nome do aluno, e-mail, matrícula,
+identificadores e dados de outra escola não são enviados**; o nome aparece só na tela do Flutter.
+O texto colado é limpo de delimitadores e tratado como dado; o prompt manda ignorar pedidos
+escritos dentro da resposta do aluno (tentativa de manipulação).
 
-Exemplo conceitual:
+**Contrato da resposta** (validado antes de chegar ao Flutter): `notaSugerida`, `avaliacao[]`
+(`criterio`, `resultado`, `evidencia`, `faltou`), `pontosPositivos`, `pontosMelhorar`,
+`justificativa` e `feedbackAluno`. O validador **recusa, sem corrigir em silêncio**, nota negativa,
+acima do valor máximo, texto, `NaN` ou infinito; exige evidência em toda avaliação; exige que a
+evidência de um item atendido reproduza pelo menos três palavras seguidas escritas pelo aluno (e
+que qualquer trecho entre aspas exista na resposta); e, havendo rubrica, exige um item de avaliação
+por item da rubrica. Resposta fora do contrato é repetida uma vez e, persistindo, vira 503 com
+mensagem amigável.
 
-```text
-Contexto histórico:      22 / 30
-Mudanças tecnológicas:   35 / 40
-Impactos sociais:        18 / 30
+**Quem calcula o quê.** `percentual = notaSugerida / valorMaximo * 100` é calculado pelo backend; o
+percentual que o modelo eventualmente mande é ignorado. A nota oficial é a que o Professor digitar
+e salvar.
 
-Sugestão total:          75 / 100
-```
+**Reuso do `AIClient`.** Ganhou apenas um novo `CasoDeUso` (prompt, validador e limite de saída);
+transporte, retry e mensagens de erro são os mesmos do 9A e 9B.
 
-`75/100` é somente uma **sugestão**. O valor não vira nota antes da confirmação do Professor.
+**Flutter.** Na `atividadeNotasScreen`, cada aluno tem o botão ✨, que abre o
+`CorrigirRespostaIaDialog` (entrada → sugestão, com o aviso "A avaliação gerada por IA é apenas uma
+sugestão. Revise antes de lançar a nota."). **Usar nota sugerida** devolve só o número, que
+preenche o campo de nota daquele aluno; nada é salvo. O Professor pode alterar o valor e só grava
+ao clicar em **Salvar notas** (`POST /api/atividades/<id>/notas`, o fluxo de sempre). O botão
+fica desabilitado durante o pedido e, se a IA falhar, os textos digitados permanecem nos campos.
 
-Regra estrutural:
+**Persistência.** Nada é gravado: nem prompt, nem resposta do aluno, nem a resposta da Groq, nem
+a justificativa. Não existe tabela de questão, de resposta de aluno ou de correção.
 
-```text
-AIClient
-  NÃO
-→ Nota.lancar
-```
-
-A rubrica definida pelo Professor é a referência principal da análise. A IA não deve substituir
-critérios já definidos por critérios inventados.
+**Limites conhecidos.** A IA avalia apenas o texto colado e pode errar; por isso o resultado é
+sugestão e fica visível. A nota sugerida vale para a resposta corrigida: se a atividade tiver várias
+questões, o Professor decide o total. Cada correção gasta tokens da cota da Groq.
 
 #### Marco 9D — Feedback e recuperação personalizados — planejado
 
@@ -688,23 +701,22 @@ requisição e não entra no fluxo do motor acadêmico.
 Esse fluxo está **implementado**, testado com cliente externo simulado e **validado com a Groq real**
 em 06/10/2026 (ver Marco 9A acima). A chamada real depende de `AI_API_KEY` no ambiente local.
 
-## Exemplo 6 — Correção assistida de resposta discursiva (planejado)
+## Exemplo 6 — Correção assistida de resposta discursiva (implementado)
 
-Os componentes abaixo ainda são **planejados**; os nomes representam a direção arquitetural e não
-devem ser lidos como arquivos já existentes.
+O fluxo abaixo está implementado no Marco 9C.
 
 ```text
-correcaoAssistidaScreen.dart                 (planejado)
-  → CorrecaoIaService Dart                   (planejado)
-  → POST /api/professor/.../corrigir         (planejado)
-  → ProfessorController                      (planejado)
-  → CorrigirRespostaIaService                (planejado)
+corrigirRespostaIaDialog.dart (em atividadeNotasScreen)
+  → CorrecaoAssistidaIaService (Dart)
+  → POST /api/professor/atividades/<id>/correcao-assistida
+  → ProfessorController
+  → CorrigirRespostaIaService
   → AIClient                                 (reutilizado)
-  → modelo externo
+  → Groq
   → sugestão estruturada
-  → Flutter
-  → Professor revisa e confirma
-  → endpoint normal de notas
+  → Flutter mostra a sugestão
+  → Professor revisa, usa a sugestão (só preenche o campo) e pode alterar
+  → "Salvar notas": endpoint normal de notas
   → LancarNotasService
   → Nota
   → MySQL

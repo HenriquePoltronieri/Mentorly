@@ -93,6 +93,14 @@ def gerar_atividade(turma_id):
     return professor_controller.gerar_atividade(turma_id)
 
 
+# Correcao assistida por IA: so devolve uma sugestao de avaliacao. A nota e
+# lancada depois, pelo POST /api/atividades/<id>/notas normal.
+@professor_blueprint.post("/atividades/<int:atividade_id>/correcao-assistida")
+@professor_required
+def corrigir_resposta(atividade_id):
+    return professor_controller.corrigir_resposta(atividade_id)
+
+
 @professor_blueprint.delete("/notas/<int:nota_id>")
 @professor_required
 def excluir_nota(nota_id):

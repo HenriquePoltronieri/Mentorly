@@ -21,7 +21,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app as app_module
-from database.connection import execute, query_all, query_one
+from database.connection import execute, insert, query_all, query_one
 
 SUFIXO = "smoke-api@mentorly.local"
 
@@ -2261,6 +2261,181 @@ def main():
             checar(query_one("SELECT COUNT(*) AS n FROM atividade WHERE titulo = %s",
                              (ok["titulo"],))["n"] == 0,
                    "M9B-25: o titulo bruto sugerido pela IA nao foi gravado")
+
+        # ---------------------------------------------------------
+        print("\n[17] Marco 9C - correcao assistida (IA sugere, Professor lanca)")
+
+        class ClienteIaCorrecao:
+            """Imita o AIClient e aplica o validador do caso, como o real faz."""
+            model = "modelo-smoke"
+            chamadas = 0
+            payload = None
+            nota = 1.5
+            erro = None
+
+            def gerar(self, payload, caso=None):
+                ClienteIaCorrecao.chamadas += 1
+                ClienteIaCorrecao.payload = payload
+                if ClienteIaCorrecao.erro:
+                    raise ClienteIaCorrecao.erro
+                trecho = " ".join(payload["respostaAluno"].split()[:4])
+                nome = payload["rubrica"][0]["item"] if payload["rubrica"] else "Compreensao"
+                return caso.validar({
+                    "notaSugerida": ClienteIaCorrecao.nota,
+                    "percentual": 999,
+                    "avaliacao": [{
+                        "criterio": nome, "resultado": "atendido_parcialmente",
+                        "evidencia": 'O aluno escreve "%s".' % trecho,
+                        "faltou": "Nao aprofunda.",
+                    }],
+                    "pontosPositivos": ["Cita o tema."],
+                    "pontosMelhorar": ["Aprofundar."],
+                    "justificativa": "Atende parte do esperado.",
+                    "feedbackAluno": "Bom comeco; aprofunde a explicacao.",
+                })
+
+        def corrigir_ia(cliente, atividade_id, corpo):
+            return cliente.post(
+                "/api/professor/atividades/%d/correcao-assistida" % atividade_id, corpo)
+
+        def notas_da_atividade(atividade_id):
+            return query_all("SELECT aluno_id, valor FROM nota WHERE atividade_id = %s "
+                             "ORDER BY aluno_id", (atividade_id,))
+
+        ativ_9c = nova_atividade(professor_6, t26["id"], etapa_26["id"],
+                                 crit_26["id"], "Prova 9C").get_json()
+        al_controle = coord_a.post("/api/coordenacao/turmas/%d/alunos" % t26["id"],
+                                   {"nome": "Aluno Controle 9C"}).get_json()
+        checar(lancar(professor_6, ativ_9c["id"], al_26["id"], 4).status_code == 201,
+               "M9C-00: nota 4 ja lancada para um aluno (nao pode mudar)")
+        etapa_c9 = criar_etapa(coord_a, "E26 C9 a fechar", 97, 6, 10)
+        crit_c9 = criar_criterio(coord_a, etapa_c9["id"], "Provas", 100)
+        ativ_fech = nova_atividade(professor_6, t26["id"], etapa_c9["id"],
+                                   crit_c9["id"], "Prova 9C fechada").get_json()
+        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_c9["id"]
+                            ).status_code == 200, "M9C-00b: etapa da outra atividade fechada")
+        row_b = query_one("SELECT coordenacao_id FROM turma WHERE id = %s", (turma_b["id"],))
+        id_ativ_b = insert(
+            "INSERT INTO atividade (coordenacao_id, turma_id, professor_id, etapa_id, "
+            "criterio_id, titulo, nota_maxima) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (row_b["coordenacao_id"], turma_b["id"], prof_b["id"], etapa_b, criterio_b,
+             "Prova da escola B", 10))
+
+        pedido_c = {
+            "questao": "Explique como a Revolucao Industrial mudou o trabalho.",
+            "respostaEsperada": "Mecanizacao, fabricas e urbanizacao.",
+            "respostaAluno": "A industrializacao aumentou a producao e levou gente do campo para a cidade.",
+            "valorMaximo": 2,
+            "rubrica": [{"item": "Compreensao do conceito", "peso": 100}],
+            "alunoId": 123456, "professorId": 654321, "coordenacaoId": 777, "turmaId": 888,
+        }
+        cliente_c = ClienteIaCorrecao()
+        with patch("services.ia.corrigir_resposta.AIClient", return_value=cliente_c):
+            antes = notas_da_atividade(ativ_9c["id"])
+            ok = corrigir_ia(professor_6, ativ_9c["id"], pedido_c)
+            corpo = ok.get_json() or {}
+            sug = corpo.get("sugestao", {})
+            checar(ok.status_code == 200 and corpo.get("geradoPorIA") is True
+                   and sug.get("notaSugerida") == 1.5 and len(sug.get("avaliacao", [])) == 1
+                   and sug.get("feedbackAluno"),
+                   "M9C-01: Professor vinculado recebe sugestao estruturada")
+            checar(sug.get("percentual") == 75.0 and sug.get("valorMaximo") == 2.0,
+                   "M9C-02: valorMaximo 2 e nota 1.5 geram percentual 75 (calculado no backend, nao os 999 da IA)")
+            checar(notas_da_atividade(ativ_9c["id"]) == antes
+                   and len(antes) == 1 and float(antes[0]["valor"]) == 4.0,
+                   "M9C-03: analisar NAO cria nem altera nota")
+            serializado = str(ClienteIaCorrecao.payload).lower()
+            checar("aluno risco" not in serializado and "123456" not in serializado
+                   and "654321" not in serializado and "777" not in serializado
+                   and "888" not in serializado and "@" not in serializado
+                   and "matricula" not in serializado,
+                   "M9C-04: payload sem nome, ids, e-mail ou matricula; ids do corpo sao ignorados")
+            checar(ClienteIaCorrecao.payload["valorMaximo"] == 2.0
+                   and ClienteIaCorrecao.payload["criterioOficial"] == {"nome": "Provas"},
+                   "M9C-05: contexto vem da atividade (criterio oficial) e o valor da rubrica/pedido")
+
+            # --- autorizacao: nenhuma falha chega ao provedor
+            ClienteIaCorrecao.chamadas = 0
+            checar(corrigir_ia(professor_a2, ativ_9c["id"], pedido_c).status_code == 404,
+                   "M9C-06: professor da escola sem vinculo com a turma recebe 404")
+            checar(corrigir_ia(professor_b, ativ_9c["id"], pedido_c).status_code == 404,
+                   "M9C-07: professor de outra escola recebe 404")
+            checar(corrigir_ia(professor_6, id_ativ_b, pedido_c).status_code == 404,
+                   "M9C-08: atividade de outra escola recebe 404")
+            checar(corrigir_ia(coord_a, ativ_9c["id"], pedido_c).status_code == 403,
+                   "M9C-09: Coordenacao recebe 403 no endpoint do Professor")
+            checar(corrigir_ia(Cliente(cliente_flask), ativ_9c["id"], pedido_c
+                               ).status_code == 401, "M9C-10: sem token recebe 401")
+            checar(corrigir_ia(professor_6, 99999999, pedido_c).status_code == 404,
+                   "M9C-11: atividade inexistente recebe 404")
+            r = corrigir_ia(professor_6, ativ_fech["id"], pedido_c)
+            checar(r.status_code == 400 and "fechada" in r.get_json()["error"],
+                   "M9C-12: etapa fechada bloqueia a correcao com mensagem clara")
+
+            def com(**mudancas):
+                corpo_ = dict(pedido_c)
+                corpo_.update(mudancas)
+                return corpo_
+
+            for rotulo, mudanca in (
+                ("questao vazia", {"questao": "  "}),
+                ("resposta esperada vazia", {"respostaEsperada": ""}),
+                ("resposta do aluno vazia", {"respostaAluno": None}),
+                ("valor maximo zero", {"valorMaximo": 0}),
+                ("valor maximo negativo", {"valorMaximo": -2}),
+                ("valor maximo texto", {"valorMaximo": "dois"}),
+                ("valor maximo booleano", {"valorMaximo": True}),
+                ("valor maximo acima da atividade", {"valorMaximo": 11}),
+                ("rubrica nao lista", {"rubrica": "x"}),
+                ("rubrica item sem nome", {"rubrica": [{"peso": 10}]}),
+                ("rubrica peso invalido", {"rubrica": [{"item": "a", "peso": 500}]}),
+            ):
+                checar(corrigir_ia(professor_6, ativ_9c["id"], com(**mudanca)
+                                   ).status_code == 400,
+                       "M9C-13: %s recebe 400" % rotulo)
+            checar(ClienteIaCorrecao.chamadas == 0,
+                   "M9C-14: nenhuma falha de autorizacao, etapa ou entrada chamou a Groq")
+
+            # --- contrato da IA: nota fora da faixa vira 503, nunca clamp
+            for rotulo, nota in (("nota negativa", -1), ("nota acima do maximo", 3),
+                                 ("nota texto", "1,5"), ("nota NaN", float("nan"))):
+                ClienteIaCorrecao.nota = nota
+                r = corrigir_ia(professor_6, ativ_9c["id"], pedido_c)
+                checar(r.status_code == 503 and "manualmente" in r.get_json()["error"],
+                       "M9C-15: IA devolve %s -> 503 amigavel (sem corrigir em silencio)" % rotulo)
+            ClienteIaCorrecao.nota = 1.5
+
+            # --- falhas do provedor
+            for rotulo, erro in (
+                ("provedor indisponivel", AIProviderError(MENSAGEM_INDISPONIVEL)),
+                ("resposta invalida", AIResponseError(MENSAGEM_INDISPONIVEL)),
+            ):
+                ClienteIaCorrecao.erro = erro
+                r = corrigir_ia(professor_6, ativ_9c["id"], pedido_c)
+                checar(r.status_code == 503 and "Tente novamente" in r.get_json()["error"],
+                       "M9C-16: %s devolve 503 amigavel" % rotulo)
+            ClienteIaCorrecao.erro = None
+            checar(notas_da_atividade(ativ_9c["id"]) == antes,
+                   "M9C-17: falhas da IA nao mexem em nenhuma nota")
+            checar(lancar(professor_6, ativ_9c["id"], al_26["id"], 5).status_code == 201,
+                   "M9C-18: lancar nota manualmente continua funcionando com a IA indisponivel")
+            lancar(professor_6, ativ_9c["id"], al_26["id"], 4)
+
+            # --- controle humano: IA sugere 6, Professor decide 7, banco recebe 7
+            ClienteIaCorrecao.nota = 6.0
+            r = corrigir_ia(professor_6, ativ_9c["id"], com(valorMaximo=10))
+            sug = (r.get_json() or {}).get("sugestao", {})
+            sem_nota = query_one("SELECT COUNT(*) AS n FROM nota WHERE atividade_id = %s "
+                                 "AND aluno_id = %s", (ativ_9c["id"], al_controle["id"]))["n"]
+            checar(r.status_code == 200 and sug.get("notaSugerida") == 6.0
+                   and sug.get("percentual") == 60.0 and sem_nota == 0,
+                   "M9C-19: IA sugere 6.0 (60%) e o aluno continua sem nota no banco")
+            salvar = lancar(professor_6, ativ_9c["id"], al_controle["id"], 7.0)
+            gravada = query_one("SELECT valor FROM nota WHERE atividade_id = %s AND aluno_id = %s",
+                                (ativ_9c["id"], al_controle["id"]))
+            checar(salvar.status_code == 201 and float(gravada["valor"]) == 7.0
+                   and float(gravada["valor"]) != sug["notaSugerida"],
+                   "M9C-20: Professor altera 6.0 para 7.0 e o banco recebe 7.0, a decisao humana")
 
         print("\nLimpando os dados de teste...")
         limpar()

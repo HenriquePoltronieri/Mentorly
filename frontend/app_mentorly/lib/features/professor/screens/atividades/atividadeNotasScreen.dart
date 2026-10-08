@@ -6,6 +6,7 @@ import '../../models/atividadeModel.dart';
 import '../../models/notaModel.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../services/professorAlunosService.dart';
+import 'corrigirRespostaIaDialog.dart';
 import 'lancarNotasModal.dart';
 
 // tela onde o professor lanca as notas dos alunos numa atividade especifica
@@ -152,6 +153,35 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     } finally {
       if (mounted) setState(() => _excluindoNotaDe.remove(alunoId));
     }
+  }
+
+  // Marco 9C: a IA so SUGERE. O dialogo devolve o numero e este metodo apenas
+  // o coloca no campo de nota do aluno. Nada e salvo aqui: o Professor ainda
+  // pode mudar o valor e so grava ao clicar em "Salvar notas" (mesmo fluxo de
+  // sempre, POST /api/atividades/<id>/notas).
+  Future<void> _corrigirComIa(Map<String, dynamic> aluno) async {
+    final atividade = _atividade;
+    if (atividade == null || atividade.notaMaxima == null) return;
+
+    final nota = await showDialog<double>(
+      context: context,
+      builder: (_) => CorrigirRespostaIaDialog(
+        atividadeId: atividade.id,
+        valorMaximoAtividade: atividade.notaMaxima!,
+        alunoNome: aluno['nome']?.toString() ?? '',
+      ),
+    );
+    if (nota == null || !mounted) return;
+
+    _controladoresNota[aluno['id'].toString()]?.text = _formatarValor(nota);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Nota sugerida preenchida para "${aluno['nome']}". '
+          'Ainda não foi salva: revise e clique em "Salvar notas".',
+        ),
+      ),
+    );
   }
 
   Future<void> _salvarTodas() async {
@@ -330,6 +360,13 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                IconButton(
+                  tooltip: 'Corrigir resposta com IA',
+                  icon: const Icon(Icons.auto_awesome_outlined, size: 20),
+                  onPressed: excluindo || _atividade?.notaMaxima == null
+                      ? null
+                      : () => _corrigirComIa(aluno),
+                ),
                 SizedBox(
                   width: 70,
                   child: TextField(
