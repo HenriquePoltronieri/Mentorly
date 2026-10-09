@@ -157,6 +157,8 @@ class ConfigController:
             ExcluirEtapaService().execute(etapa_id, coordenacao_atual())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
         return "", 204
 
     def fechar_etapa(self, etapa_id):
@@ -233,4 +235,6 @@ class ConfigController:
             ExcluirCriterioService().execute(criterio_id, coordenacao_atual())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
         return "", 204

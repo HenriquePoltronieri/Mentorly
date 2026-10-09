@@ -2782,6 +2782,148 @@ def main():
                and notas_da_atividade(ativ_com["id"]) == antes,
                "I02-17: etapa fechada: nada mudou")
 
+        # ---------------------------------------------------------
+        print("\n[I-03] Etapa fechada congela a configuracao")
+        etapa_i3 = criar_etapa(coord_a, "E I03", 102, 6, 10)
+        crit_prova = criar_criterio(coord_a, etapa_i3["id"], "Provas", 60)
+        crit_trab = criar_criterio(coord_a, etapa_i3["id"], "Trabalhos", 40)
+        etapa_i3_aberta = criar_etapa(coord_a, "E I03 aberta", 103, 6, 10)
+        crit_i3_aberta = criar_criterio(coord_a, etapa_i3_aberta["id"], "Provas", 100)
+
+        def config_da_etapa(etapa_id):
+            """Estado exato da etapa e dos criterios dela, direto do banco."""
+            return (
+                query_one("SELECT * FROM etapa WHERE id = %s", (etapa_id,)),
+                query_all("SELECT * FROM criterio WHERE etapa_id = %s ORDER BY id",
+                          (etapa_id,)),
+            )
+
+        ep = "/api/config/etapas/%d" % etapa_i3["id"]
+
+        # 1. etapa aberta pode ser editada
+        r = coord_a.put("/api/config/etapas/%d" % etapa_i3_aberta["id"],
+                        {"nome": "E I03 aberta v2", "ativa": True})
+        checar(r.status_code == 200 and r.get_json()["nome"] == "E I03 aberta v2",
+               "I03-01: etapa ABERTA pode ser editada")
+        checar(coord_a.post("/api/config/etapas/%d/notas" % etapa_i3_aberta["id"],
+                            {"nota_minima": 5, "nota_maxima": 10}).status_code == 200
+               and coord_a.put("/api/config/criterios/%d" % crit_i3_aberta["id"],
+                               {"peso": 100}).status_code == 200,
+               "I03-02: etapa ABERTA aceita notas minima/maxima e edicao de criterio")
+
+        # fecha a etapa e guarda o estado exato
+        checar(coord_a.post(ep + "/fechar").status_code == 200,
+               "I03-03: coordenacao fecha a etapa")
+        antes_i3 = config_da_etapa(etapa_i3["id"])
+
+        def bloqueada(resposta):
+            return (resposta.status_code == 400
+                    and "fechada" in resposta.get_json()["error"].lower())
+
+        checar(bloqueada(coord_a.put(ep, {"nome": "Renomeada"})),
+               "I03-04: etapa fechada: editar nome -> 400 amigavel")
+        checar(bloqueada(coord_a.put(ep, {"ordem": 150})),
+               "I03-05: etapa fechada: alterar ordem -> 400")
+        checar(bloqueada(coord_a.put(ep, {"data_inicio": "2026-02-01",
+                                          "data_fim": "2026-04-30"})),
+               "I03-06: etapa fechada: alterar datas -> 400")
+        checar(bloqueada(coord_a.put(ep, {"ativa": False})),
+               "I03-07: etapa fechada: alterar 'ativa' -> 400")
+        checar(bloqueada(coord_a.post(ep + "/notas", {"nota_maxima": 100,
+                                                      "nota_minima": 6})),
+               "I03-08: etapa fechada: alterar nota_maxima -> 400")
+        checar(bloqueada(coord_a.post(ep + "/notas", {"nota_minima": 9.5,
+                                                      "nota_maxima": 10})),
+               "I03-09: etapa fechada: alterar nota_minima -> 400")
+        checar(bloqueada(coord_a.post("/api/config/etapas", {
+            "nome": "Reconfig", "ordem": 102, "ano_letivo": ANO})),
+               "I03-10: etapa fechada: reconfigurar pela mesma ordem/ano (upsert) -> 400")
+        checar(bloqueada(coord_a.delete(ep)),
+               "I03-11: etapa fechada: excluir a etapa -> 400")
+        checar(bloqueada(coord_a.post("/api/config/criterios/etapa/%d" % etapa_i3["id"],
+                                      {"nome": "Novo", "peso": 10})),
+               "I03-12: etapa fechada: criar criterio -> 400")
+        checar(bloqueada(coord_a.post("/api/config/criterios/etapa/%d" % etapa_i3["id"],
+                                      {"nome": "Provas", "peso": 90})),
+               "I03-13: etapa fechada: criar criterio com nome existente (upsert) -> 400")
+        checar(bloqueada(coord_a.put("/api/config/criterios/%d" % crit_prova["id"],
+                                     {"peso": 10})),
+               "I03-14: etapa fechada: editar criterio -> 400")
+        checar(bloqueada(coord_a.delete("/api/config/criterios/%d" % crit_trab["id"])),
+               "I03-15: etapa fechada: excluir criterio -> 400")
+
+        # 8. nada mudou
+        checar(config_da_etapa(etapa_i3["id"]) == antes_i3,
+               "I03-16: nenhuma configuracao mudou (etapa e criterios identicos, "
+               "inclusive updated_at, depois de todas as tentativas)")
+
+        # leitura continua liberada
+        checar(coord_a.get(ep).status_code == 200
+               and coord_a.get("/api/config/criterios/etapa/%d" % etapa_i3["id"]
+                               ).status_code == 200,
+               "I03-17: etapa fechada continua legivel (GET etapa e criterios)")
+
+        # 11. cross-school: 404 (nao revela que esta fechada)
+        for rotulo, resposta in (
+            ("editar etapa", coord_b.put(ep, {"nome": "x"})),
+            ("alterar notas", coord_b.post(ep + "/notas",
+                                           {"nota_minima": 1, "nota_maxima": 2})),
+            ("excluir etapa", coord_b.delete(ep)),
+            ("criar criterio", coord_b.post(
+                "/api/config/criterios/etapa/%d" % etapa_i3["id"],
+                {"nome": "x", "peso": 1})),
+            ("editar criterio", coord_b.put(
+                "/api/config/criterios/%d" % crit_prova["id"], {"peso": 1})),
+            ("excluir criterio", coord_b.delete(
+                "/api/config/criterios/%d" % crit_prova["id"])),
+        ):
+            checar(resposta.status_code == 404,
+                   "I03-18: escola B, %s em etapa fechada da escola A -> 404 (nao 400)" % rotulo)
+
+        # 12. professor continua sem permissao
+        checar(professor_a.put(ep, {"nome": "x"}).status_code == 403
+               and professor_a.post(ep + "/notas", {"nota_minima": 1,
+                                                    "nota_maxima": 2}).status_code == 403
+               and professor_a.post("/api/config/criterios/etapa/%d" % etapa_i3["id"],
+                                    {"nome": "x", "peso": 1}).status_code == 403
+               and professor_a.put("/api/config/criterios/%d" % crit_prova["id"],
+                                   {"peso": 1}).status_code == 403
+               and professor_a.delete("/api/config/criterios/%d" % crit_prova["id"]
+                                      ).status_code == 403,
+               "I03-19: professor continua recebendo 403 na configuracao da etapa")
+        checar(config_da_etapa(etapa_i3["id"]) == antes_i3,
+               "I03-20: nada mudou depois das tentativas cross-school e do professor")
+
+        # 9 e 10. reabrir restaura a edicao
+        checar(coord_a.post(ep + "/reabrir").status_code == 200
+               and coord_a.get(ep).get_json()["fechada"] is False,
+               "I03-21: coordenacao reabre a etapa")
+        r = coord_a.put(ep, {"nome": "E I03 reaberta"})
+        checar(r.status_code == 200 and r.get_json()["nome"] == "E I03 reaberta",
+               "I03-22: apos reabrir, editar a etapa volta a funcionar")
+        checar(coord_a.post(ep + "/notas", {"nota_minima": 7, "nota_maxima": 10}
+                            ).status_code == 200
+               and float(query_one("SELECT nota_minima FROM etapa WHERE id = %s",
+                                   (etapa_i3["id"],))["nota_minima"]) == 7.0,
+               "I03-23: apos reabrir, alterar notas minima/maxima volta a funcionar")
+        r = coord_a.post("/api/config/criterios/etapa/%d" % etapa_i3["id"],
+                         {"nome": "Extra", "peso": 5})
+        checar(r.status_code == 201, "I03-24: apos reabrir, criar criterio volta a funcionar")
+        checar(coord_a.put("/api/config/criterios/%d" % crit_prova["id"],
+                           {"peso": 55}).status_code == 200,
+               "I03-25: apos reabrir, editar criterio volta a funcionar")
+        checar(coord_a.delete("/api/config/criterios/%d" % r.get_json()["id"]
+                              ).status_code == 204,
+               "I03-26: apos reabrir, excluir criterio volta a funcionar")
+        # 13. fechar de novo e conferir que congela de novo
+        checar(coord_a.post(ep + "/fechar").status_code == 200
+               and bloqueada(coord_a.put(ep, {"nome": "outra vez"})),
+               "I03-27: fechar de novo congela de novo")
+        checar(coord_a.post(ep + "/fechar").status_code == 400
+               and coord_a.post(ep + "/reabrir").status_code == 200
+               and coord_a.post(ep + "/reabrir").status_code == 400,
+               "I03-28: fechar/reabrir mantem as regras de estado (fechar fechada e reabrir aberta -> 400)")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

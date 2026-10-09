@@ -1,5 +1,13 @@
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
+from services.config.etapas import exigir_etapa_aberta
+
+
+def _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id):
+    """O criterio ja foi achado na escola; so entao se olha a etapa dele."""
+    etapa = Etapa.find_by_id(criterio["etapa_id"], coordenacao_id)
+    if etapa:
+        exigir_etapa_aberta(etapa)
 
 
 class ListarCriteriosService:
@@ -28,8 +36,10 @@ class SalvarCriterioService:
     """
 
     def execute(self, etapa_id, coordenacao_id, nome, peso=0, nota_maxima=10):
-        if not Etapa.find_by_id(etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
             raise LookupError("Etapa nao encontrada")
+        exigir_etapa_aberta(etapa)
 
         nome = (nome or "").strip()
         if not nome:
@@ -45,8 +55,10 @@ class SalvarCriterioService:
 class AtualizarCriterioService:
     def execute(self, criterio_id, coordenacao_id, nome=None, peso=None,
                 nota_maxima=None):
-        if not Criterio.find_by_id(criterio_id, coordenacao_id):
+        criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
+        if not criterio:
             raise LookupError("Criterio nao encontrado")
+        _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
         if nome is not None and not nome.strip():
             raise ValueError("O nome do criterio nao pode ficar vazio")
         Criterio.update(criterio_id, coordenacao_id, nome, peso, nota_maxima)
@@ -55,6 +67,8 @@ class AtualizarCriterioService:
 
 class ExcluirCriterioService:
     def execute(self, criterio_id, coordenacao_id):
-        if not Criterio.find_by_id(criterio_id, coordenacao_id):
+        criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
+        if not criterio:
             raise LookupError("Criterio nao encontrado")
+        _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
         Criterio.delete(criterio_id, coordenacao_id)

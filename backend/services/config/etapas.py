@@ -7,6 +7,24 @@ from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
 from services.config.anos_letivos import resolver_ano_letivo
 
 
+MENSAGEM_ETAPA_FECHADA = (
+    "A etapa esta fechada e sua configuracao nao pode ser alterada. "
+    "Peca a coordenacao para reabri-la."
+)
+
+
+def exigir_etapa_aberta(etapa):
+    """Etapa fechada congela a configuracao: o resultado ja dado como definitivo
+    nao pode mudar por peso, nota minima/maxima, ordem ou criterio.
+
+    Chamada DEPOIS de achar a etapa dentro da escola (404 para quem nao tem
+    acesso), para nao revelar o estado de uma etapa alheia. A reabertura e o
+    caminho oficial para voltar a editar.
+    """
+    if etapa.get("fechada"):
+        raise ValueError(MENSAGEM_ETAPA_FECHADA)
+
+
 class ListarEtapasService:
     """Etapas configuradas pela escola.
 
@@ -90,6 +108,11 @@ class SalvarEtapaService:
                 % ano_letivo
             )
 
+        existente = Etapa.find_by_ordem(coordenacao_id, ano_letivo, ordem)
+        if existente:
+            # O upsert reconfigura a etapa que ja existe naquela ordem/ano.
+            exigir_etapa_aberta(existente)
+
         etapa_id = Etapa.upsert(
             coordenacao_id, nome, ordem, ano_letivo, data_inicio, data_fim, ativa
         )
@@ -99,8 +122,10 @@ class SalvarEtapaService:
 class AtualizarEtapaService:
     def execute(self, etapa_id, coordenacao_id, nome=None, ordem=None,
                 data_inicio=None, data_fim=None, ativa=None):
-        if not Etapa.find_by_id(etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
             raise LookupError("Etapa nao encontrada")
+        exigir_etapa_aberta(etapa)
         if nome is not None and not nome.strip():
             raise ValueError("O nome da etapa nao pode ficar vazio")
         Etapa.update(
@@ -117,8 +142,10 @@ class DefinirNotasEtapaService:
     """
 
     def execute(self, etapa_id, coordenacao_id, nota_minima, nota_maxima):
-        if not Etapa.find_by_id(etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
             raise LookupError("Etapa nao encontrada")
+        exigir_etapa_aberta(etapa)
 
         try:
             nota_minima = float(str(nota_minima).replace(",", "."))
@@ -137,8 +164,10 @@ class DefinirNotasEtapaService:
 
 class ExcluirEtapaService:
     def execute(self, etapa_id, coordenacao_id):
-        if not Etapa.find_by_id(etapa_id, coordenacao_id):
+        etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+        if not etapa:
             raise LookupError("Etapa nao encontrada")
+        exigir_etapa_aberta(etapa)
         Etapa.delete(etapa_id, coordenacao_id)
 
 
