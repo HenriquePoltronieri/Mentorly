@@ -1,6 +1,22 @@
 from models.turma_model import Turma
+from services import entrada
 from services.config.anos_letivos import resolver_ano_letivo, validar_ano
 from services.conflito import excluir_ou_conflito
+
+
+def _descricao(valor):
+    """Descricao opcional: so confere tipo e tamanho; o conteudo e preservado."""
+    if valor is None:
+        return None
+    entrada.texto(valor, "A descricao", entrada.LIMITE_DESCRICAO, aparar=False)
+    return valor
+
+
+def _opcional(valor, rotulo, limite):
+    """Texto opcional que continua None quando nao veio (None nao altera)."""
+    if valor is None:
+        return None
+    return entrada.texto(valor, rotulo, limite)
 
 
 def listar_turmas(coordenacao_id, ano_letivo=None):
@@ -22,7 +38,10 @@ def buscar_turma(turma_id, coordenacao_id):
 
 def criar_turma(coordenacao_id, nome, descricao=None, disciplina=None,
                 turno=None, ano_letivo=None):
-    nome = (nome or "").strip()
+    nome = entrada.texto(nome, "O nome da turma", entrada.LIMITE_NOME_TURMA)
+    descricao = _descricao(descricao)
+    disciplina = _opcional(disciplina, "A disciplina", entrada.LIMITE_DISCIPLINA)
+    turno = _opcional(turno, "O turno", entrada.LIMITE_TURNO)
     if not nome:
         raise ValueError("O nome da turma e obrigatorio")
 
@@ -47,8 +66,11 @@ def atualizar_turma(turma_id, coordenacao_id, nome=None, descricao=None,
     if not atual:
         raise LookupError("Turma nao encontrada")
 
+    descricao = _descricao(descricao)
+    disciplina = _opcional(disciplina, "A disciplina", entrada.LIMITE_DISCIPLINA)
+    turno = _opcional(turno, "O turno", entrada.LIMITE_TURNO)
     if nome is not None:
-        nome = nome.strip()
+        nome = entrada.texto(nome, "O nome da turma", entrada.LIMITE_NOME_TURMA)
         if not nome:
             raise ValueError("O nome da turma nao pode ficar vazio")
         duplicada = Turma.find_by_nome(nome, coordenacao_id)

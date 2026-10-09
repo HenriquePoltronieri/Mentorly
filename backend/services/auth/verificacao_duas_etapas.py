@@ -1,5 +1,6 @@
 from auth.jwt_utils import gerar_codigo_verificacao
 from models.codigo_model import CodigoVerificacao
+from services import entrada
 from services.email_service import enviar_codigo_verificacao, modo_dev
 
 
@@ -7,7 +8,7 @@ class EnviarCodigoService:
     """Gera e envia o codigo de verificacao em duas etapas."""
 
     def execute(self, email):
-        email = (email or "").strip().lower()
+        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
         if not email:
             raise ValueError("Informe o email")
 
@@ -26,7 +27,8 @@ class EnviarCodigoService:
 
 class ConfirmarCodigoService:
     def execute(self, email, codigo):
-        email = (email or "").strip().lower()
+        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
+        codigo = entrada.texto(codigo, "O codigo", entrada.LIMITE_CODIGO)
         if not email or not codigo:
             raise ValueError("Informe o email e o codigo")
         return {"valido": CodigoVerificacao.validar(email, codigo)}

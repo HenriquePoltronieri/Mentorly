@@ -2,6 +2,7 @@ from werkzeug.security import generate_password_hash
 
 from auth.jwt_utils import TIPO_COORDENACAO, gerar_token
 from models.coordenacao_model import Coordenacao
+from services import entrada
 
 
 class CadastroCoordenacaoService:
@@ -12,8 +13,12 @@ class CadastroCoordenacaoService:
     """
 
     def execute(self, nome, email, senha, telefone=None):
-        nome = (nome or "").strip()
-        email = (email or "").strip().lower()
+        nome = entrada.texto(nome, "O nome", entrada.LIMITE_NOME)
+        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
+        senha = entrada.senha(senha)
+        telefone = entrada.texto(
+            telefone, "O telefone", entrada.LIMITE_TELEFONE
+        ) or None
 
         if not nome:
             raise ValueError("O nome e obrigatorio")

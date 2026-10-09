@@ -15,6 +15,7 @@ from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from repositories.consultas import relatorio_turmas_atividades
 from services.conflito import ConflitoDeIntegridade
+from services.entrada import EntradaInvalida
 from services.turmas import (
     atualizar_turma, buscar_turma, criar_turma, excluir_turma, listar_turmas,
 )
@@ -69,6 +70,8 @@ class ClassController:
         except LookupError as erro:
             # Ano letivo que esta escola nao tem (inclusive o de outra escola).
             return jsonify({"error": str(erro)}), 404
+        except EntradaInvalida as erro:
+            return jsonify({"error": str(erro)}), 400
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 409
 

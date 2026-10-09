@@ -3052,6 +3052,291 @@ def main():
                           (aluno_t["id"],)) == hist_antes,
                "I04-21: nada mudou depois das tentativas cross-school e do professor")
 
+        # ---------------------------------------------------------
+        print("\n[M-01] Entradas malformadas: 400 em vez de 500")
+        cid_a = query_one("SELECT id FROM coordenacao WHERE email = %s",
+                          ("a." + SUFIXO,))["id"]
+
+        def enviar(cliente, metodo, url, texto_json):
+            """Corpo cru (o Cliente do teste converte [] em {} e esconderia o caso)."""
+            return getattr(cliente._cliente, metodo)(
+                url, data=texto_json, content_type="application/json",
+                headers=cliente._cabecalhos(),
+            )
+
+        def estado_da_escola():
+            """Foto exata de tudo que as requisicoes ruins poderiam gravar."""
+            return {
+                tabela: query_all(sql, (cid_a,))
+                for tabela, sql in (
+                    ("turma", "SELECT * FROM turma WHERE coordenacao_id = %s ORDER BY id"),
+                    ("etapa", "SELECT * FROM etapa WHERE coordenacao_id = %s ORDER BY id"),
+                    ("criterio", "SELECT * FROM criterio WHERE coordenacao_id = %s ORDER BY id"),
+                    ("atividade", "SELECT * FROM atividade WHERE coordenacao_id = %s ORDER BY id"),
+                    ("professor", "SELECT * FROM professor WHERE coordenacao_id = %s ORDER BY id"),
+                    ("aluno", "SELECT al.* FROM aluno al INNER JOIN turma t ON t.id = al.turma_id "
+                              "WHERE t.coordenacao_id = %s ORDER BY al.id"),
+                    ("nota", "SELECT n.* FROM nota n INNER JOIN atividade a ON a.id = n.atividade_id "
+                             "WHERE a.coordenacao_id = %s ORDER BY n.id"),
+                )
+            }
+
+        def e400(resposta):
+            corpo = resposta.get_json(silent=True)
+            return resposta.status_code == 400 and bool(corpo and corpo.get("error"))
+
+        etapa_m1 = criar_etapa(coord_a, "E M01", 107, 6, 10)
+        etapa_m1b = criar_etapa(coord_a, "E M01 b", 108, 6, 10)
+        crit_m1 = criar_criterio(coord_a, etapa_m1["id"], "Provas", 60)
+        crit_m1b = criar_criterio(coord_a, etapa_m1["id"], "Trabalhos", 40)
+        ativ_m1 = criar_atividade(prof_i2, turma_orig["id"], etapa_m1["id"],
+                                  crit_m1["id"], 10, "M01 base")
+        lancar(prof_i2, ativ_m1["id"], alunos_i2[0]["id"], 7)
+        aluno_m1 = alunos_i2[0]["id"]
+        turma_o = turma_orig["id"]
+        antes_m1 = estado_da_escola()
+
+        # 1-3. corpo que nao e objeto -> 400 amigavel
+        alvos_corpo = (
+            (coord_a, "post", "/api/classes"),
+            (coord_a, "post", "/api/config/etapas"),
+            (coord_a, "post", "/api/coordenacao/professores"),
+            (coord_a, "post", "/api/coordenacao/turmas/%d/alunos" % turma_o),
+            (prof_i2, "put", "/api/activities/%d" % ativ_m1["id"]),
+            (prof_i2, "post", "/api/atividades/%d/notas" % ativ_m1["id"]),
+            (Cliente(cliente_flask), "post", "/api/auth/login-coordenacao"),
+        )
+        for rotulo, texto_json in (("array vazio", "[]"), ("array com itens", "[1, 2]"),
+                                   ("string", '"texto"'), ("numero", "5"), ("booleano", "true")):
+            falhou = [url for cli, metodo, url in alvos_corpo
+                      if not e400(enviar(cli, metodo, url, texto_json))]
+            checar(not falhou,
+                   "M01-01: corpo JSON %s -> 400 amigavel nos %d endpoints testados%s"
+                   % (rotulo, len(alvos_corpo), "" if not falhou else " (falhou: %s)" % falhou))
+        r = enviar(prof_i2, "post", "/api/professor/turmas/%d/atividades/gerar" % turma_o, "[]")
+        checar(e400(r), "M01-02: corpo array tambem e recusado nas rotas de IA (400, sem chamar o provedor)")
+
+        # 4-6. tipo errado em campos de texto -> 400 (nunca 500, nunca 409 de duplicidade)
+        base_ativ = {"class_id": turma_o, "etapa_id": etapa_m1["id"],
+                     "criterio_id": crit_m1["id"], "nota_maxima": 10}
+        checar(e400(prof_i2.post("/api/activities", {**base_ativ, "title": {"a": 1}})),
+               "M01-03: titulo como objeto -> 400")
+        checar(e400(prof_i2.post("/api/activities", {**base_ativ, "title": ["a"]})),
+               "M01-04: titulo como lista -> 400")
+        checar(e400(prof_i2.post("/api/activities", {**base_ativ, "title": 123})),
+               "M01-05: titulo como numero -> 400")
+        checar(e400(prof_i2.put("/api/activities/%d" % ativ_m1["id"], {"title": {"a": 1}})),
+               "M01-06: editar atividade com titulo objeto -> 400")
+        checar(e400(prof_i2.post("/api/activities", {**base_ativ, "title": "ok",
+                                                      "description": {"x": 1}})),
+               "M01-07: descricao como objeto -> 400 (antes: TypeError do driver)")
+        checar(e400(coord_a.post("/api/coordenacao/professores",
+                                 {"nome": ["Ana"], "email": "lista.%s" % SUFIXO})),
+               "M01-08: professor com nome como lista -> 400 (nao 409)")
+        checar(e400(coord_a.post("/api/classes", {"name": ["x"], "ano_letivo": ANO})),
+               "M01-09: turma com nome como lista -> 400 (nao 409)")
+        checar(e400(coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_o,
+                                 {"nome": ["Ana", "Lima"]})),
+               "M01-10: aluno com nome como lista -> 400")
+        checar(e400(coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_o,
+                                 {"nome": "Caio Dias Neto", "matricula": {"a": 1}})),
+               "M01-11: aluno com matricula como objeto -> 400")
+        checar(e400(coord_a.put("/api/coordenacao/alunos/%d" % aluno_m1, {"matricula": {"a": 1}})),
+               "M01-12: editar aluno com matricula objeto -> 400")
+        checar(e400(coord_a.put("/api/coordenacao/alunos/%d" % aluno_m1, {"matricula": 123})),
+               "M01-13: editar aluno com matricula numerica -> 400")
+        checar(e400(coord_a.post("/api/config/etapas", {"nome": 123, "ordem": 120, "ano_letivo": ANO})),
+               "M01-14: etapa com nome numerico -> 400")
+        checar(e400(coord_a.post("/api/config/criterios/etapa/%d" % etapa_m1["id"],
+                                 {"nome": {"a": 1}, "peso": 1})),
+               "M01-15: criterio com nome objeto -> 400")
+        checar(e400(Cliente(cliente_flask).post("/api/auth/cadastro-coordenacao",
+                                                {"nome": "X", "email": 123, "senha": "123456"})),
+               "M01-16: cadastro de coordenacao com e-mail numerico -> 400")
+        checar(e400(Cliente(cliente_flask).post("/api/auth/cadastro-coordenacao",
+                                                {"nome": "X", "email": "m01@x.com", "senha": 123456})),
+               "M01-17: cadastro de coordenacao com senha numerica -> 400")
+        checar(e400(Cliente(cliente_flask).post("/api/auth/login-coordenacao",
+                                                {"email": ["a@b.c"], "senha": "123456"})),
+               "M01-18: login com e-mail como lista -> 400")
+        checar(e400(coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+                                 {"turma_ids": 5})),
+               "M01-19: vincular com turma_ids numerico -> 400")
+        checar(e400(coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+                                 {"turma_ids": [turma_o, {"a": 1}]})),
+               "M01-20: vincular com item invalido em turma_ids -> 400")
+
+        # 7-9. NaN / Infinity / valores fora do DECIMAL
+        url_notas = "/api/atividades/%d/notas" % ativ_m1["id"]
+        for lit in ("NaN", "Infinity", "-Infinity", '"nan"', '"inf"', "1e999", "1000", "99999999"):
+            r = enviar(prof_i2, "post", url_notas,
+                       '{"aluno_id": %d, "valor": %s}' % (aluno_m1, lit))
+            checar(e400(r), "M01-21: nota %s -> 400" % lit)
+        checar(e400(enviar(prof_i2, "post", url_notas, '{"aluno_id": Infinity, "valor": 5}')),
+               "M01-22: aluno_id Infinity -> 400")
+        checar(e400(enviar(prof_i2, "post", url_notas, '{"notas": [1, 2]}')),
+               "M01-23: notas como lista de numeros -> 400")
+        checar(e400(enviar(prof_i2, "post", url_notas, '{"notas": "x"}')),
+               "M01-24: notas como texto -> 400")
+        checar(e400(prof_i2.post(url_notas, {"aluno_id": aluno_m1, "valor": 5, "observacao": {"a": 1}})),
+               "M01-25: observacao como objeto -> 400")
+        for lit in ("NaN", "Infinity", "-Infinity", '"nan"', "1000", "1e10"):
+            r = enviar(prof_i2, "post", "/api/activities",
+                       '{"title": "x", "class_id": %d, "etapa_id": %d, "criterio_id": %d, '
+                       '"nota_maxima": %s}' % (turma_o, etapa_m1["id"], crit_m1["id"], lit))
+            checar(e400(r), "M01-26: atividade com nota_maxima %s -> 400" % lit)
+        checar(e400(enviar(prof_i2, "put", "/api/activities/%d" % ativ_m1["id"], '{"nota_maxima": NaN}')),
+               "M01-27: editar atividade com nota_maxima NaN -> 400")
+        ep_m1 = "/api/config/etapas/%d" % etapa_m1["id"]
+        for corpo, rotulo in (('{"nota_minima": NaN, "nota_maxima": 10}', "nota minima NaN"),
+                              ('{"nota_minima": 6, "nota_maxima": NaN}', "nota maxima NaN"),
+                              ('{"nota_minima": 6, "nota_maxima": Infinity}', "nota maxima Infinity"),
+                              ('{"nota_minima": -Infinity, "nota_maxima": 10}', "nota minima -Infinity"),
+                              ('{"nota_minima": 6, "nota_maxima": 1000}', "nota maxima 1000 (acima do DECIMAL)"),
+                              ('{"nota_minima": "abc", "nota_maxima": 10}', "nota minima 'abc'")):
+            checar(e400(enviar(coord_a, "post", ep_m1 + "/notas", corpo)),
+                   "M01-28: etapa com %s -> 400" % rotulo)
+
+        # 10-12. peso de criterio: 0 a 100
+        url_crit = "/api/config/criterios/etapa/%d" % etapa_m1["id"]
+        for peso, rotulo in ((-1, "-1"), (-50, "-50"), (101, "101"), (500, "500"), (1000, "1000"),
+                             ("abc", "'abc'"), ([1], "lista"), ({"a": 1}, "objeto"), (True, "booleano")):
+            checar(e400(coord_a.post(url_crit, {"nome": "PesoRuim", "peso": peso})),
+                   "M01-30: criterio com peso %s -> 400" % rotulo)
+            checar(e400(coord_a.put("/api/config/criterios/%d" % crit_m1b["id"], {"peso": peso})),
+                   "M01-31: editar criterio com peso %s -> 400" % rotulo)
+        for lit in ("NaN", "Infinity", "-Infinity"):
+            checar(e400(enviar(coord_a, "post", url_crit, '{"nome": "PesoRuim", "peso": %s}' % lit)),
+                   "M01-32: criterio com peso %s -> 400" % lit)
+        checar(e400(coord_a.post(url_crit, {"nome": "NotaRuim", "peso": 1, "nota_maxima": 1000})),
+               "M01-33: criterio com nota_maxima 1000 -> 400")
+
+        # 13-14. datas
+        for corpo, rotulo in (({"data_inicio": "xx"}, "data de inicio 'xx'"),
+                              ({"data_fim": "2026-13-45"}, "data de fim impossivel"),
+                              ({"data_inicio": 123}, "data de inicio numerica"),
+                              ({"data_inicio": "2026-12-01", "data_fim": "2026-01-01"},
+                               "inicio depois do fim")):
+            checar(e400(coord_a.put(ep_m1, corpo)),
+                   "M01-34: editar etapa com %s -> 400" % rotulo)
+            checar(e400(coord_a.post("/api/config/etapas", {"nome": "D", "ordem": 121,
+                                                            "ano_letivo": ANO, **corpo})),
+                   "M01-35: criar etapa com %s -> 400" % rotulo)
+        # 15. duplicidade esperada: 409 amigavel, nunca 500
+        r = coord_a.put(ep_m1, {"ordem": etapa_m1b["ordem"]})
+        checar(r.status_code == 409 and r.get_json()["error"]
+               == "Ja existe uma etapa com esta ordem neste ano letivo.",
+               "M01-39: ordem de etapa duplicada -> 409 amigavel (antes: IntegrityError 1062, 500)")
+        r = coord_a.put("/api/config/criterios/%d" % crit_m1b["id"], {"nome": "Provas"})
+        checar(r.status_code == 409 and "criterio" in r.get_json()["error"].lower(),
+               "M01-41: renomear criterio para um nome ja usado na etapa -> 409 amigavel")
+        for ordem, rotulo in (("abc", "'abc'"), (0, "0"), (-3, "-3"), (1001, "1001"),
+                              (10 ** 12, "1000000000000"), ({"a": 1}, "objeto"), (True, "booleano")):
+            checar(e400(coord_a.put(ep_m1, {"ordem": ordem})),
+                   "M01-42: etapa com ordem %s -> 400" % rotulo)
+        checar(e400(enviar(coord_a, "put", ep_m1, '{"ordem": Infinity}'))
+               and e400(enviar(coord_a, "post", "/api/config/etapas",
+                               '{"nome": "O", "ordem": Infinity, "ano_letivo": 2026}')),
+               "M01-43: ordem Infinity -> 400 (editar e criar)")
+
+        # 16. textos acima do limite da coluna
+        longos = (
+            ("turma: nome com 121 caracteres", coord_a.post("/api/classes", {"name": "t" * 121, "ano_letivo": ANO})),
+            ("turma: disciplina com 101", coord_a.post("/api/classes", {"name": "Disc M01", "disciplina": "d" * 101, "ano_letivo": ANO})),
+            ("turma: turno com 31", coord_a.post("/api/classes", {"name": "Turno M01", "turno": "t" * 31, "ano_letivo": ANO})),
+            ("atividade: titulo com 201", prof_i2.post("/api/activities", {**base_ativ, "title": "x" * 201})),
+            ("atividade: descricao com 16001", prof_i2.post("/api/activities", {**base_ativ, "title": "ok", "description": "d" * 16001})),
+            ("aluno: nome com 151", coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_o, {"nome": "Ana " + "s" * 150})),
+            ("aluno: matricula com 51", coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_o, {"nome": "Caio Dias Neto", "matricula": "m" * 51})),
+            ("aluno: email com 151", coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_o, {"nome": "Caio Dias Neto", "email": "e" * 145 + "@x.com"})),
+            ("nota: observacao com 256", prof_i2.post(url_notas, {"aluno_id": aluno_m1, "valor": 5, "observacao": "o" * 256})),
+            ("etapa: nome com 81", coord_a.post("/api/config/etapas", {"nome": "e" * 81, "ordem": 122, "ano_letivo": ANO})),
+            ("criterio: nome com 81", coord_a.post(url_crit, {"nome": "c" * 81, "peso": 1})),
+            ("professor: nome com 151", coord_a.post("/api/coordenacao/professores", {"nome": "p" * 151, "email": "longo.%s" % SUFIXO})),
+            ("professor: disciplina com 101", coord_a.post("/api/coordenacao/professores", {"nome": "Prof Longo", "email": "longo2.%s" % SUFIXO, "disciplina": "d" * 101})),
+            ("coordenacao: nome com 151", Cliente(cliente_flask).post("/api/auth/cadastro-coordenacao", {"nome": "n" * 151, "email": "longo.coord.%s" % SUFIXO, "senha": "123456"})),
+        )
+        for rotulo, resposta in longos:
+            checar(e400(resposta), "M01-44: %s -> 400" % rotulo)
+
+        # 17. nada foi gravado, nem parcialmente
+        checar(estado_da_escola() == antes_m1,
+               "M01-45: nenhuma das requisicoes invalidas gravou nada (turma, etapa, criterio, "
+               "atividade, aluno, nota e professor identicos, linha a linha)")
+
+        # os limites exatos e entradas validas continuam funcionando
+        checar(coord_a.put(ep_m1, {"data_inicio": "2026-03-01", "data_fim": "2026-05-31"}).status_code == 200,
+               "M01-36: datas validas continuam funcionando (200)")
+        checar(e400(coord_a.put(ep_m1, {"data_fim": "2026-02-01"})),
+               "M01-37: mudar so a data de fim para antes do inicio ja gravado -> 400")
+        checar(e400(coord_a.put(ep_m1, {"data_inicio": "2026-09-01"})),
+               "M01-38: mudar so a data de inicio para depois do fim ja gravado -> 400")
+
+        checar(coord_a.put(ep_m1, {"ordem": etapa_m1["ordem"]}).status_code == 200,
+               "M01-40: reenviar a propria ordem continua funcionando")
+        checar(coord_a.post(url_crit, {"nome": "Peso zero", "peso": 0}).status_code == 201
+               and coord_a.post(url_crit, {"nome": "Peso cem", "peso": 100}).status_code == 201
+               and coord_a.post(url_crit, {"nome": "Peso virgula", "peso": "33,5"}).status_code == 201,
+               "M01-46: pesos 0, 100 e '33,5' continuam validos")
+        checar(coord_a.post(ep_m1 + "/notas", {"nota_minima": 5.5, "nota_maxima": "10,0"}).status_code == 200
+               and coord_a.post(ep_m1 + "/notas", {"nota_minima": 60, "nota_maxima": 100}).status_code == 200,
+               "M01-47: notas minima/maxima validas (inclusive com virgula) continuam funcionando")
+        r = prof_i2.post("/api/activities", {**base_ativ, "title": "M01 valida", "nota_maxima": "12,5",
+                                              "due_date": "2026-11-20", "description": "d" * 16000})
+        checar(r.status_code == 201 and r.get_json()["nota_maxima"] == 12.5,
+               "M01-48: atividade valida (valor com virgula, data, descricao no limite) continua funcionando")
+        checar(prof_i2.post(url_notas, {"aluno_id": aluno_m1, "valor": "8,5", "observacao": "o" * 255}).status_code == 201,
+               "M01-49: nota valida (virgula, observacao no limite) continua funcionando")
+        checar(coord_a.post("/api/config/etapas", {"nome": "Datas", "ordem": 123, "ano_letivo": ANO,
+                                                    "data_inicio": "2026-02-01", "data_fim": "2026-04-30"}
+                            ).status_code == 201,
+               "M01-50: etapa com datas validas continua funcionando")
+
+        # --- handler de erro 500: resposta generica, log preservado
+        import logging
+        registros = []
+
+        class _Captura(logging.Handler):
+            def emit(self, registro):
+                registros.append(registro)
+
+        app_erro = app_module.create_app()
+        app_erro.config["TESTING"] = False
+        app_erro.config["PROPAGATE_EXCEPTIONS"] = False
+        app_erro.add_url_rule("/api/_teste_erro", "teste_erro", lambda: 1 / 0)
+
+        def _erro_de_banco():
+            import pymysql
+            raise pymysql.err.DataError(1406, "Data too long for column 'nome' at row 1")
+
+        app_erro.add_url_rule("/api/_teste_erro_banco", "teste_erro_banco", _erro_de_banco)
+        captura = _Captura()
+        # So a captura: o handler padrao imprimiria os tracebacks esperados.
+        from flask.logging import default_handler
+        app_erro.logger.removeHandler(default_handler)
+        app_erro.logger.addHandler(captura)
+        with app_erro.test_client() as cliente_erro:
+            r = cliente_erro.get("/api/_teste_erro")
+            checar(r.status_code == 500 and r.get_json() == {"error": "Erro interno do servidor."},
+                   "M01-51: erro interno devolve JSON generico (nao HTML)")
+            r2 = cliente_erro.get("/api/_teste_erro_banco")
+            texto_resposta = r2.get_data(as_text=True)
+            checar(r2.status_code == 500 and "Data too long" not in texto_resposta
+                   and "1406" not in texto_resposta and "ZeroDivision" not in r.get_data(as_text=True),
+                   "M01-52: a resposta nao expoe erro do banco, excecao nem stack")
+            checar(any(reg.exc_info and isinstance(reg.exc_info[1], ZeroDivisionError)
+                       for reg in registros)
+                   and any(reg.exc_info and "Data too long" in str(reg.exc_info[1])
+                           for reg in registros),
+                   "M01-53: a excecao original continua registrada no log (diagnostico preservado)")
+            checar(cliente_erro.get("/api/rota-que-nao-existe").status_code == 404
+                   and cliente_erro.delete("/api/auth/login-coordenacao").status_code == 405,
+                   "M01-54: erros conhecidos (404, 405) nao viram 500")
+            checar(cliente_erro.post("/api/auth/login-coordenacao", json=[1]).status_code == 400
+                   and cliente_erro.post("/api/classes").status_code == 401,
+                   "M01-55: 400 e 401 seguem como antes")
+        app_erro.logger.removeHandler(captura)
+
         print("\nLimpando os dados de teste...")
         limpar()
 

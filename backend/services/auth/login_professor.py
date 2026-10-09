@@ -2,6 +2,7 @@ from werkzeug.security import check_password_hash
 
 from auth.jwt_utils import TIPO_PROFESSOR, gerar_token
 from models.professor_model import Professor
+from services import entrada
 
 
 class LoginProfessorService:
@@ -12,7 +13,8 @@ class LoginProfessorService:
     """
 
     def execute(self, email, senha):
-        email = (email or "").strip().lower()
+        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
+        senha = entrada.senha(senha)
         if not email or not senha:
             raise ValueError("Informe email e senha")
 

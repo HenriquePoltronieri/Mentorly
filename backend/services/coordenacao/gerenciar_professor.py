@@ -11,6 +11,7 @@ from auth.jwt_utils import gerar_token_convite
 from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
+from services import entrada
 from services.email_service import enviar_convite_professor, modo_dev
 
 
@@ -43,12 +44,14 @@ class EditarProfessorService:
         professor = _professor_da_escola(coordenacao_id, professor_id)
         campos = {}
         if nome is not None:
-            nome = str(nome).strip()
+            nome = entrada.texto(nome, "O nome do professor", entrada.LIMITE_NOME)
             if not nome:
                 raise ValueError("O nome do professor e obrigatorio")
             campos["nome"] = nome
         if email is not None:
-            email = str(email).strip().lower()
+            email = entrada.texto(
+                email, "O email do professor", entrada.LIMITE_EMAIL
+            ).lower()
             if not email:
                 raise ValueError("O email do professor e obrigatorio")
             existente = Professor.find_by_email(email)
@@ -56,7 +59,9 @@ class EditarProfessorService:
                 raise ValueError("Este email ja esta em uso por outro professor")
             campos["email"] = email
         if disciplina is not None:
-            campos["disciplina"] = str(disciplina).strip() or None
+            campos["disciplina"] = entrada.texto(
+                disciplina, "A disciplina", entrada.LIMITE_DISCIPLINA
+            ) or None
 
         if not campos:
             raise ValueError("Informe ao menos um dado para editar")

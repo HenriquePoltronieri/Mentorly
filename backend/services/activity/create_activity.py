@@ -3,6 +3,7 @@ from datetime import datetime
 from models.atividade_model import Atividade
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
+from services import entrada
 from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
@@ -40,7 +41,10 @@ class CreateActivityService:
     def execute(self, coordenacao_id, professor_id, turma_id, titulo,
                 descricao=None, data_entrega=None, etapa_id=None,
                 criterio_id=None, nota_maxima=None):
-        titulo = (titulo or "").strip()
+        titulo = entrada.texto(titulo, "O titulo", entrada.LIMITE_TITULO)
+        if descricao is not None:
+            entrada.texto(descricao, "A descricao", entrada.LIMITE_DESCRICAO,
+                          aparar=False)
         if not titulo:
             raise ValueError("O titulo da atividade e obrigatorio")
         if not turma_id:

@@ -1,7 +1,27 @@
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
 from services.config.etapas import exigir_etapa_aberta
-from services.conflito import excluir_ou_conflito
+from services import entrada
+from services.conflito import (
+    ConflitoDeIntegridade,
+    excluir_ou_conflito,
+    gravar_ou_conflito,
+)
+
+
+MENSAGEM_NOME_DUPLICADO = "Ja existe um criterio com este nome nesta etapa."
+
+
+def _peso(bruto):
+    """Peso e uma porcentagem: de 0 a 100."""
+    return entrada.numero_na_faixa(bruto, "O peso do criterio", 0, 100)
+
+
+def _nota_maxima(bruto):
+    return entrada.numero_na_faixa(
+        bruto, "A nota maxima do criterio", 0, entrada.MAXIMO_DECIMAL,
+        minimo_exclusivo=True,
+    )
 
 
 def _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id):
@@ -42,13 +62,18 @@ class SalvarCriterioService:
             raise LookupError("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
 
-        nome = (nome or "").strip()
+        nome = entrada.texto(
+            nome, "O nome do criterio", entrada.LIMITE_NOME_CRITERIO
+        )
         if not nome:
             raise ValueError("O nome do criterio e obrigatorio")
+        peso = _peso(peso) if peso not in (None, "") else 0
+        nota_maxima = (
+            _nota_maxima(nota_maxima) if nota_maxima not in (None, "") else 10
+        )
 
         criterio_id = Criterio.upsert(
-            coordenacao_id, etapa_id, nome, peso or 0,
-            nota_maxima if nota_maxima is not None else 10,
+            coordenacao_id, etapa_id, nome, peso, nota_maxima,
         )
         return Criterio.to_dict(Criterio.find_by_id(criterio_id, coordenacao_id))
 
@@ -60,9 +85,25 @@ class AtualizarCriterioService:
         if not criterio:
             raise LookupError("Criterio nao encontrado")
         _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
-        if nome is not None and not nome.strip():
-            raise ValueError("O nome do criterio nao pode ficar vazio")
-        Criterio.update(criterio_id, coordenacao_id, nome, peso, nota_maxima)
+        if nome is not None:
+            nome = entrada.texto(
+                nome, "O nome do criterio", entrada.LIMITE_NOME_CRITERIO
+            )
+            if not nome:
+                raise ValueError("O nome do criterio nao pode ficar vazio")
+            igual = Criterio.find_by_nome(criterio["etapa_id"], nome)
+            if igual and igual["id"] != criterio_id:
+                raise ConflitoDeIntegridade(MENSAGEM_NOME_DUPLICADO)
+        if peso is not None:
+            peso = _peso(peso)
+        if nota_maxima is not None:
+            nota_maxima = _nota_maxima(nota_maxima)
+        gravar_ou_conflito(
+            lambda: Criterio.update(
+                criterio_id, coordenacao_id, nome, peso, nota_maxima
+            ),
+            MENSAGEM_NOME_DUPLICADO,
+        )
         return Criterio.to_dict(Criterio.find_by_id(criterio_id, coordenacao_id))
 
 

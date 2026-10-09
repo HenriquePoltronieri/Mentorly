@@ -1,6 +1,7 @@
 from models.professor_model import Professor
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
+from services import entrada
 
 
 class VincularTurmasService:
@@ -20,13 +21,15 @@ class VincularTurmasService:
 
         if turma_ids is None:
             raise ValueError("Informe as turmas")
+        if not isinstance(turma_ids, list):
+            raise entrada.EntradaInvalida("Lista de turmas invalida")
 
         ids_limpos = []
         for turma_id in turma_ids:
             try:
-                turma_id = int(turma_id)
-            except (TypeError, ValueError):
-                raise ValueError("Lista de turmas invalida")
+                turma_id = entrada.inteiro(turma_id, "Turma")
+            except ValueError:
+                raise entrada.EntradaInvalida("Lista de turmas invalida")
             if not Turma.find_by_id(turma_id, coordenacao_id):
                 raise LookupError("Turma %s nao pertence a esta escola" % turma_id)
             if turma_id not in ids_limpos:

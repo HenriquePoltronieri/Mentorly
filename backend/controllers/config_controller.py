@@ -136,6 +136,8 @@ class ConfigController:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
+        except ConflitoDeIntegridade as erro:
+            return jsonify({"error": str(erro)}), 409
         return jsonify(etapa)
 
     def definir_notas(self, etapa_id):
@@ -231,6 +233,8 @@ class ConfigController:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
+        except ConflitoDeIntegridade as erro:
+            return jsonify({"error": str(erro)}), 409
         return jsonify(criterio)
 
     def excluir_criterio(self, criterio_id):

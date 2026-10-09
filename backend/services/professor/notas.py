@@ -3,6 +3,7 @@ from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
+from services import entrada
 
 
 def _atividade_do_professor(atividade_id, professor_id):
@@ -15,6 +16,13 @@ def _atividade_do_professor(atividade_id, professor_id):
     ):
         raise LookupError("Atividade nao encontrada")
     return atividade
+
+
+def _inteiro_do_aluno(bruto):
+    try:
+        return entrada.inteiro(bruto, "Aluno")
+    except entrada.EntradaInvalida:
+        raise ValueError("Aluno invalido")
 
 
 class ListarNotasService:
@@ -53,6 +61,12 @@ class LancarNotasService:
         brutas = payload.get("notas")
         if brutas is None:
             brutas = [payload]
+        if not isinstance(brutas, list) or not all(
+            isinstance(item, dict) for item in brutas
+        ):
+            raise entrada.EntradaInvalida(
+                "As notas precisam ser uma lista de objetos com aluno e valor"
+            )
 
         # Quem pode receber nota nesta atividade: os alunos da turma DELA.
         # Sem esta lista, trocar o aluno_id na requisicao lancava nota em
@@ -78,10 +92,7 @@ class LancarNotasService:
                 # Campo em branco na tela = nota ainda nao lancada, ignora.
                 continue
 
-            try:
-                aluno_id = int(aluno_id)
-            except (TypeError, ValueError):
-                raise ValueError("Aluno invalido")
+            aluno_id = _inteiro_do_aluno(aluno_id)
 
             # 404 e nao 403: confirmar que o aluno existe em outra turma ja
             # seria vazar dado de outra turma (ou de outra escola).
@@ -89,8 +100,8 @@ class LancarNotasService:
                 raise LookupError("Aluno nao encontrado nesta turma")
 
             try:
-                valor = float(str(valor).replace(",", "."))
-            except ValueError:
+                valor = entrada.numero_finito(valor, "A nota")
+            except entrada.EntradaInvalida:
                 raise ValueError("Nota invalida para o aluno %s" % aluno_id)
 
             if valor < 0:
@@ -107,10 +118,14 @@ class LancarNotasService:
                     "A nota nao pode passar de %s" % _limpo(nota_maxima)
                 )
 
+            observacao = item.get("observacao")
+            if observacao is not None:
+                entrada.texto(observacao, "A observacao", entrada.LIMITE_OBSERVACAO)
+
             lancamentos.append({
                 "aluno_id": aluno_id,
                 "valor": valor,
-                "observacao": item.get("observacao"),
+                "observacao": observacao,
             })
 
         if lancamentos:

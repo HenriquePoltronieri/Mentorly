@@ -18,6 +18,7 @@ from services.activity.get_activities import GetActivitiesService
 from services.activity.get_activity import GetActivityService
 from repositories.consultas import buscar_atividades
 from services.activity.update_activity import UpdateActivityService
+from services.entrada import inteiro
 
 
 def _professor_id_ou_none():
@@ -70,7 +71,7 @@ class ActivityController:
             atividade = CreateActivityService().execute(
                 coordenacao_atual(),
                 usuario_atual_id(),
-                int(turma_id),
+                inteiro(turma_id, "A turma"),
                 titulo,
                 dados.get("description") or dados.get("descricao"),
                 dados.get("due_date") or dados.get("data_entrega"),
@@ -96,7 +97,7 @@ class ActivityController:
                 usuario_atual_id(),
                 dados.get("title") or dados.get("titulo"),
                 dados.get("description") or dados.get("descricao"),
-                int(turma_id) if turma_id else None,
+                inteiro(turma_id, "A turma") if turma_id else None,
                 dados.get("due_date") or dados.get("data_entrega"),
                 dados.get("etapa_id"),
                 dados.get("criterio_id"),

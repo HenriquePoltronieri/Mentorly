@@ -5,7 +5,40 @@ from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
 from services.config.anos_letivos import resolver_ano_letivo
-from services.conflito import excluir_ou_conflito
+from services import entrada
+from services.conflito import (
+    ConflitoDeIntegridade,
+    excluir_ou_conflito,
+    gravar_ou_conflito,
+)
+
+
+MENSAGEM_ORDEM_DUPLICADA = "Ja existe uma etapa com esta ordem neste ano letivo."
+
+
+def _ordem(bruto, obrigatoria):
+    """Ordem da etapa: inteiro de 1 a ORDEM_MAXIMA."""
+    try:
+        ordem = entrada.inteiro(bruto, "A ordem da etapa")
+    except entrada.EntradaInvalida:
+        raise ValueError(
+            "A ordem da etapa e obrigatoria" if obrigatoria
+            else "A ordem da etapa precisa ser um numero inteiro"
+        )
+    if ordem < 1:
+        raise ValueError("A ordem da etapa precisa ser 1 ou maior")
+    if ordem > entrada.ORDEM_MAXIMA:
+        raise ValueError(
+            "A ordem da etapa precisa ser no maximo %d" % entrada.ORDEM_MAXIMA
+        )
+    return ordem
+
+
+def _exigir_datas_em_ordem(data_inicio, data_fim):
+    if data_inicio and data_fim and data_inicio > data_fim:
+        raise entrada.EntradaInvalida(
+            "A data de inicio nao pode ser depois da data de fim"
+        )
 
 
 MENSAGEM_ETAPA_FECHADA = (
@@ -83,16 +116,14 @@ class SalvarEtapaService:
 
     def execute(self, coordenacao_id, nome, ordem, ano_letivo=None,
                 data_inicio=None, data_fim=None, ativa=True):
-        nome = (nome or "").strip()
+        nome = entrada.texto(nome, "O nome da etapa", entrada.LIMITE_NOME_ETAPA)
         if not nome:
             raise ValueError("O nome da etapa e obrigatorio")
 
-        try:
-            ordem = int(ordem)
-        except (TypeError, ValueError):
-            raise ValueError("A ordem da etapa e obrigatoria")
-        if ordem < 1:
-            raise ValueError("A ordem da etapa precisa ser 1 ou maior")
+        ordem = _ordem(ordem, obrigatoria=True)
+        data_inicio = entrada.data_iso(data_inicio, "A data de inicio")
+        data_fim = entrada.data_iso(data_fim, "A data de fim")
+        _exigir_datas_em_ordem(data_inicio, data_fim)
 
         # O ano vem do cadastro da escola: sem ano informado, o ano atual
         # (nunca o do relogio); ano que a escola nao tem vira 404. Reconfigurar
@@ -127,10 +158,30 @@ class AtualizarEtapaService:
         if not etapa:
             raise LookupError("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
-        if nome is not None and not nome.strip():
-            raise ValueError("O nome da etapa nao pode ficar vazio")
-        Etapa.update(
-            etapa_id, coordenacao_id, nome, ordem, data_inicio, data_fim, ativa
+        if nome is not None:
+            nome = entrada.texto(nome, "O nome da etapa", entrada.LIMITE_NOME_ETAPA)
+            if not nome:
+                raise ValueError("O nome da etapa nao pode ficar vazio")
+        if ordem is not None:
+            ordem = _ordem(ordem, obrigatoria=False)
+            duplicada = Etapa.find_by_ordem(
+                coordenacao_id, etapa["ano_letivo"], ordem
+            )
+            if duplicada and duplicada["id"] != etapa_id:
+                raise ConflitoDeIntegridade(MENSAGEM_ORDEM_DUPLICADA)
+        data_inicio = entrada.data_iso(data_inicio, "A data de inicio")
+        data_fim = entrada.data_iso(data_fim, "A data de fim")
+        # Com so uma das datas no pedido, vale a outra que ja esta gravada.
+        _exigir_datas_em_ordem(
+            data_inicio or etapa.get("data_inicio"),
+            data_fim or etapa.get("data_fim"),
+        )
+        gravar_ou_conflito(
+            lambda: Etapa.update(
+                etapa_id, coordenacao_id, nome, ordem, data_inicio, data_fim,
+                ativa,
+            ),
+            MENSAGEM_ORDEM_DUPLICADA,
         )
         return Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
 
@@ -149,13 +200,15 @@ class DefinirNotasEtapaService:
         exigir_etapa_aberta(etapa)
 
         try:
-            nota_minima = float(str(nota_minima).replace(",", "."))
-            nota_maxima = float(str(nota_maxima).replace(",", "."))
-        except (TypeError, ValueError):
+            nota_minima = entrada.numero_finito(nota_minima, "A nota minima")
+            nota_maxima = entrada.numero_finito(nota_maxima, "A nota maxima")
+        except entrada.EntradaInvalida:
             raise ValueError("Informe numeros validos para as notas")
 
         if nota_minima < 0 or nota_maxima < 0:
             raise ValueError("As notas nao podem ser negativas")
+        if nota_minima > entrada.MAXIMO_DECIMAL or nota_maxima > entrada.MAXIMO_DECIMAL:
+            raise ValueError("As notas nao podem passar de 999,99")
         if nota_minima >= nota_maxima:
             raise ValueError("A nota minima precisa ser menor que a maxima")
 

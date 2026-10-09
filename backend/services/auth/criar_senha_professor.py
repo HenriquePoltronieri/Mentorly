@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash
 
 from auth.jwt_utils import TIPO_PROFESSOR, gerar_token
 from models.professor_model import Professor
+from services import entrada
 
 
 class CriarSenhaProfessorService:
@@ -14,7 +15,9 @@ class CriarSenhaProfessorService:
     """
 
     def execute(self, email, senha, token):
-        email = (email or "").strip().lower()
+        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
+        senha = entrada.senha(senha)
+        token = entrada.texto(token, "O convite", entrada.LIMITE_CODIGO)
 
         if not senha or len(senha) < 6:
             raise ValueError("A senha precisa ter ao menos 6 caracteres")

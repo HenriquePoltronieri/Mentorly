@@ -3,6 +3,7 @@ from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
+from services import entrada
 from services.activity.create_activity import parse_data
 from services.activity.validacao import (
     validar_ano_da_etapa,
@@ -46,8 +47,11 @@ class UpdateActivityService:
                 "coordenacao para reabri-la antes de editar."
             )
 
+        if descricao is not None:
+            entrada.texto(descricao, "A descricao", entrada.LIMITE_DESCRICAO,
+                          aparar=False)
         if titulo is not None:
-            titulo = titulo.strip()
+            titulo = entrada.texto(titulo, "O titulo", entrada.LIMITE_TITULO)
             if not titulo:
                 raise ValueError("O titulo nao pode ficar vazio")
 

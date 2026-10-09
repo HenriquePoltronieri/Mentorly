@@ -11,6 +11,7 @@ Professor).
 """
 
 from models.aluno_model import Aluno
+from services import entrada
 from services.aluno.acesso_turma import aluno_acessivel
 from services.planilha.validacao import validar_email, validar_nome_completo
 
@@ -29,6 +30,13 @@ class AtualizarAlunoService:
                 raise ValueError(erro)
 
         if matricula is not None:
+            if not isinstance(matricula, str):
+                raise ValueError("matricula invalida")
+            if len(matricula.strip()) > entrada.LIMITE_MATRICULA:
+                raise ValueError(
+                    "matricula muito longa (maximo %d caracteres)"
+                    % entrada.LIMITE_MATRICULA
+                )
             matricula = matricula.strip() or None
             if matricula:
                 existente = Aluno.find_by_matricula(aluno["turma_id"], matricula)

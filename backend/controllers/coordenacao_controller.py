@@ -8,6 +8,7 @@ que aceite a escola como parametro.
 from flask import Response, jsonify, request
 
 from auth.decorators import coordenacao_atual
+from services.entrada import EntradaInvalida
 from models.turma_model import Turma
 from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
@@ -48,6 +49,8 @@ class CoordenacaoController:
                 dados.get("email"),
                 dados.get("disciplina"),
             )
+        except EntradaInvalida as erro:
+            return jsonify({"error": str(erro)}), 400
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 409
         return jsonify(professor), 201
@@ -61,6 +64,8 @@ class CoordenacaoController:
             )
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except EntradaInvalida as erro:
+            return jsonify({"error": str(erro)}), 400
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 409
         return jsonify(professor)

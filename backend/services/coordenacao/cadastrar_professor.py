@@ -4,6 +4,7 @@ from auth.jwt_utils import gerar_token_convite
 from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
+from services import entrada
 from services.email_service import enviar_convite_professor, modo_dev
 
 
@@ -16,8 +17,13 @@ class CadastrarProfessorService:
     """
 
     def execute(self, coordenacao_id, nome, email, disciplina=None):
-        nome = (nome or "").strip()
-        email = (email or "").strip().lower()
+        nome = entrada.texto(nome, "O nome do professor", entrada.LIMITE_NOME)
+        email = entrada.texto(
+            email, "O email do professor", entrada.LIMITE_EMAIL
+        ).lower()
+        disciplina = entrada.texto(
+            disciplina, "A disciplina", entrada.LIMITE_DISCIPLINA
+        ) or None
 
         if not nome:
             raise ValueError("O nome do professor e obrigatorio")

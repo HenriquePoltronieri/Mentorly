@@ -14,6 +14,7 @@ confirmaria que aquele id existe em algum lugar do sistema.
 
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
+from services import entrada
 
 
 def validar_nota_maxima(bruto, obrigatorio=True):
@@ -27,15 +28,12 @@ def validar_nota_maxima(bruto, obrigatorio=True):
             raise ValueError("Informe quanto a atividade vale")
         return None
 
-    try:
-        valor = float(str(bruto).replace(",", "."))
-    except (TypeError, ValueError):
-        raise ValueError("O valor da atividade precisa ser um numero")
-
-    if valor <= 0:
-        raise ValueError("O valor da atividade precisa ser maior que zero")
-
-    return valor
+    # Finito, acima de zero e dentro do DECIMAL(5,2): NaN/Infinity e valor
+    # enorme nunca chegam ao driver.
+    return entrada.numero_na_faixa(
+        bruto, "O valor da atividade", 0, entrada.MAXIMO_DECIMAL,
+        minimo_exclusivo=True,
+    )
 
 
 def validar_ano_da_etapa(etapa, ano_turma):
@@ -84,7 +82,7 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
     try:
         etapa_id = int(etapa_id)
         criterio_id = int(criterio_id)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("Etapa ou criterio invalido")
 
     etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
