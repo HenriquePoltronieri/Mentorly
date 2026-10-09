@@ -180,6 +180,27 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
       itemCount: _atividades.length,
       itemBuilder: (context, index) {
         final atividade = _atividades[index];
+        final estreita = MediaQuery.sizeOf(context).width < _larguraEstreita;
+        final acoes = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Editar',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _abrirEditarAtividade(atividade),
+            ),
+            IconButton(
+              tooltip: 'Lançar notas',
+              icon: const Icon(Icons.grading_outlined),
+              onPressed: () => _abrirLancarNotas(atividade),
+            ),
+            IconButton(
+              tooltip: 'Excluir',
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () => _excluirAtividade(atividade),
+            ),
+          ],
+        );
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
@@ -189,7 +210,26 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(_montarSubtitulo(atividade)),
+                if (_montarSubtitulo(atividade).isNotEmpty)
+                  Text(
+                    _montarSubtitulo(atividade),
+                    key: ValueKey('atividade-resumo-${atividade.id}'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                // So a lista mostra uma previa: a descricao completa continua
+                // no model e no formulario de edicao. Atividade gerada pela IA
+                // (9B) pode ter varias questoes, gabarito e rubrica no texto.
+                if (atividade.descricao.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      _previaDaDescricao(atividade.descricao),
+                      key: ValueKey('atividade-previa-${atividade.id}'),
+                      maxLines: _linhasDaPrevia,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 if (!atividade.configuracaoCompleta)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -199,29 +239,14 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
                       style: TextStyle(fontSize: 12, color: Colors.orange[800]),
                     ),
                   ),
+                // Em tela estreita os tres botoes ao lado do texto deixavam o
+                // titulo numa coluna de ~100 px (card enorme): vao para baixo.
+                if (estreita)
+                  Align(alignment: Alignment.centerRight, child: acoes),
               ],
             ),
             isThreeLine: !atividade.configuracaoCompleta,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Editar',
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => _abrirEditarAtividade(atividade),
-                ),
-                IconButton(
-                  tooltip: 'Lançar notas',
-                  icon: const Icon(Icons.grading_outlined),
-                  onPressed: () => _abrirLancarNotas(atividade),
-                ),
-                IconButton(
-                  tooltip: 'Excluir',
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () => _excluirAtividade(atividade),
-                ),
-              ],
-            ),
+            trailing: estreita ? null : acoes,
             // Tocar na atividade leva ao lancamento de notas, que era a
             // tela orfa do app - nenhuma rota apontava para ela.
             onTap: () => _abrirLancarNotas(atividade),
@@ -231,7 +256,16 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     );
   }
 
+  // Linhas da previa da descricao na lista.
+  static const int _linhasDaPrevia = 2;
+
+  // Abaixo desta largura os botoes saem do lado do texto (ver itemBuilder).
+  static const double _larguraEstreita = 480;
+
   // "1º Bimestre • Prova • Vale 20 pontos • Entrega: 2026-09-15"
+  //
+  // So o essencial: a descricao tem a propria linha (previa limitada) logo
+  // abaixo, para nao empurrar a data de entrega para fora da tela.
   //
   // Atividade legada (criada antes de etapa/criterio/valor virarem
   // obrigatorios) simplesmente omite o que nao tem, em vez de mostrar
@@ -244,14 +278,24 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     if (atividade.notaMaxima != null) {
       partes.add('Vale ${_formatarValor(atividade.notaMaxima!)} pontos');
     }
-    if (atividade.descricao.isNotEmpty) partes.add(atividade.descricao);
     if (atividade.dataEntrega.isNotEmpty) {
       final data = atividade.dataEntrega.contains('T')
           ? atividade.dataEntrega.split('T').first
           : atividade.dataEntrega;
       partes.add('Entrega: $data');
     }
-    return partes.isEmpty ? 'Sem descrição' : partes.join(' • ');
+    if (partes.isEmpty) {
+      return atividade.descricao.trim().isEmpty ? 'Sem descrição' : '';
+    }
+    return partes.join(' • ');
+  }
+
+  // Previa para a lista: quebras de linha viram espaco e o texto e cortado em
+  // um tamanho que cabe nas linhas da previa (o ellipsis cuida do resto).
+  // Nada disso altera a descricao guardada.
+  static String _previaDaDescricao(String descricao) {
+    final compacta = descricao.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return compacta.length <= 240 ? compacta : compacta.substring(0, 240);
   }
 
   // 20.0 vira "20"; 13.5 continua "13.5".
