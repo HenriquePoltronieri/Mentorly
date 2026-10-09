@@ -9,6 +9,7 @@ atividades.
 from flask import jsonify, request
 
 from auth.decorators import coordenacao_atual
+from services.conflito import ConflitoDeIntegridade
 from services.config.anos_letivos import (
     AnoLetivoConflito,
     AtualizarAnoLetivoService,
@@ -159,6 +160,8 @@ class ConfigController:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
+        except ConflitoDeIntegridade as erro:
+            return jsonify({"error": str(erro)}), 409
         return "", 204
 
     def fechar_etapa(self, etapa_id):
@@ -237,4 +240,6 @@ class ConfigController:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
+        except ConflitoDeIntegridade as erro:
+            return jsonify({"error": str(erro)}), 409
         return "", 204

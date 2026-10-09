@@ -2924,6 +2924,134 @@ def main():
                and coord_a.post(ep + "/reabrir").status_code == 400,
                "I03-28: fechar/reabrir mantem as regras de estado (fechar fechada e reabrir aberta -> 400)")
 
+        # ---------------------------------------------------------
+        print("\n[I-04] Exclusao barrada por FK vira 409 (nao 500)")
+
+        def limpa(resposta):
+            """Sem erro bruto: nada de SQL, constraint ou texto do driver."""
+            texto = resposta.get_data(as_text=True).lower()
+            return not any(t in texto for t in (
+                "integrityerror", "constraint", "foreign key", "1451", "fk_",
+                "`", "delete from", "traceback", "pymysql",
+            ))
+
+        def linha(sql, parametros):
+            return query_one(sql, parametros)
+
+        def linhas(sql, parametros):
+            return query_all(sql, parametros)
+
+        # --- criterio ---------------------------------------------------
+        etapa_i4 = criar_etapa(coord_a, "E I04", 104, 6, 10)
+        crit_livre = criar_criterio(coord_a, etapa_i4["id"], "Livre", 10)
+        crit_usado = criar_criterio(coord_a, etapa_i4["id"], "Usado", 90)
+        ativ_i4 = criar_atividade(prof_i2, turma_orig["id"], etapa_i4["id"],
+                                  crit_usado["id"], 10, "I04 atividade vinculada")
+
+        r = coord_a.delete("/api/config/criterios/%d" % crit_livre["id"])
+        checar(r.status_code == 204, "I04-01: excluir criterio SEM dependencia continua funcionando (204)")
+        checar(linha("SELECT id FROM criterio WHERE id = %s", (crit_livre["id"],)) is None,
+               "I04-02: o criterio sem dependencia foi mesmo excluido")
+
+        crit_antes = linha("SELECT * FROM criterio WHERE id = %s", (crit_usado["id"],))
+        ativ_antes = linha("SELECT * FROM atividade WHERE id = %s", (ativ_i4["id"],))
+        r = coord_a.delete("/api/config/criterios/%d" % crit_usado["id"])
+        checar(r.status_code == 409 and r.get_json()["error"]
+               == "Este criterio possui dados vinculados e nao pode ser excluido.",
+               "I04-03: excluir criterio COM atividade -> 409 com mensagem de negocio")
+        checar(limpa(r), "I04-04: a resposta do criterio nao traz SQL, constraint nem erro bruto")
+        checar(linha("SELECT * FROM criterio WHERE id = %s", (crit_usado["id"],)) == crit_antes,
+               "I04-05: o criterio permanece intacto no banco depois do 409")
+        checar(linha("SELECT * FROM atividade WHERE id = %s", (ativ_i4["id"],)) == ativ_antes,
+               "I04-06: a atividade vinculada permanece intacta")
+
+        # --- etapa ------------------------------------------------------
+        etapa_vazia = criar_etapa(coord_a, "E I04 vazia", 105, 6, 10)
+        criar_criterio(coord_a, etapa_vazia["id"], "Provas", 100)
+        r = coord_a.delete("/api/config/etapas/%d" % etapa_vazia["id"])
+        checar(r.status_code == 204
+               and linha("SELECT id FROM etapa WHERE id = %s", (etapa_vazia["id"],)) is None,
+               "I04-07: excluir etapa SEM atividades (so com criterios) continua funcionando (204)")
+
+        etapa_antes = linha("SELECT * FROM etapa WHERE id = %s", (etapa_i4["id"],))
+        crits_antes = linhas("SELECT * FROM criterio WHERE etapa_id = %s ORDER BY id",
+                             (etapa_i4["id"],))
+        r = coord_a.delete("/api/config/etapas/%d" % etapa_i4["id"])
+        checar(r.status_code == 409 and r.get_json()["error"]
+               == "Esta etapa possui dados vinculados e nao pode ser excluida.",
+               "I04-08: excluir etapa ABERTA com atividade -> 409 com mensagem de negocio")
+        checar(limpa(r), "I04-09: a resposta da etapa nao traz SQL, constraint nem erro bruto")
+        checar(linha("SELECT * FROM etapa WHERE id = %s", (etapa_i4["id"],)) == etapa_antes
+               and linhas("SELECT * FROM criterio WHERE etapa_id = %s ORDER BY id",
+                          (etapa_i4["id"],)) == crits_antes
+               and linha("SELECT * FROM atividade WHERE id = %s", (ativ_i4["id"],)) == ativ_antes,
+               "I04-10: etapa, criterios e atividade permanecem intactos depois do 409")
+
+        # etapa FECHADA continua 400 (I-03), nao vira 409
+        etapa_fech_i4 = criar_etapa(coord_a, "E I04 fechada", 106, 6, 10)
+        crit_fech_i4 = criar_criterio(coord_a, etapa_fech_i4["id"], "Provas", 100)
+        criar_atividade(prof_i2, turma_orig["id"], etapa_fech_i4["id"],
+                        crit_fech_i4["id"], 10, "I04 em etapa fechada")
+        coord_a.post("/api/config/etapas/%d/fechar" % etapa_fech_i4["id"])
+        r = coord_a.delete("/api/config/etapas/%d" % etapa_fech_i4["id"])
+        checar(r.status_code == 400 and "fechada" in r.get_json()["error"].lower(),
+               "I04-11: etapa FECHADA (com dependencia) continua 400 por etapa fechada, nao 409")
+        r = coord_a.delete("/api/config/criterios/%d" % crit_fech_i4["id"])
+        checar(r.status_code == 400 and "fechada" in r.get_json()["error"].lower(),
+               "I04-12: criterio de etapa fechada continua 400 por etapa fechada, nao 409")
+
+        # --- turma ------------------------------------------------------
+        turma_livre = coord_a.post("/api/classes", {"name": "I04 livre"}).get_json()
+        coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_livre["id"],
+                     {"nome": "Aluno Sem Transferencia"})
+        r = coord_a.delete("/api/classes/%d" % turma_livre["id"])
+        checar(r.status_code == 204
+               and linha("SELECT id FROM turma WHERE id = %s", (turma_livre["id"],)) is None,
+               "I04-13: excluir turma SEM historico de transferencia (mesmo com aluno) continua funcionando (204)")
+
+        turma_t1 = coord_a.post("/api/classes", {"name": "I04 origem"}).get_json()
+        turma_t2 = coord_a.post("/api/classes", {"name": "I04 destino"}).get_json()
+        aluno_t = coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_t1["id"],
+                               {"nome": "Aluno Transferido Teste"}).get_json()
+        tr = coord_a.post("/api/coordenacao/alunos/%d/transferir" % aluno_t["id"],
+                          {"turma_id": turma_t2["id"], "motivo": "teste I-04"})
+        checar(tr.status_code == 200, "I04-14: preparo: aluno transferido da origem para o destino")
+        hist_antes = linhas("SELECT * FROM aluno_turma_historico WHERE aluno_id = %s ORDER BY id",
+                            (aluno_t["id"],))
+        aluno_antes = linha("SELECT * FROM aluno WHERE id = %s", (aluno_t["id"],))
+        turma_antes = linha("SELECT * FROM turma WHERE id = %s", (turma_t1["id"],))
+        r = coord_a.delete("/api/classes/%d" % turma_t1["id"])
+        checar(r.status_code == 409 and r.get_json()["error"]
+               == "Esta turma possui dados historicos vinculados e nao pode ser excluida.",
+               "I04-15: excluir turma de origem de aluno transferido -> 409 com mensagem de negocio")
+        checar(limpa(r), "I04-16: a resposta da turma nao traz SQL, constraint nem erro bruto")
+        checar(linhas("SELECT * FROM aluno_turma_historico WHERE aluno_id = %s ORDER BY id",
+                      (aluno_t["id"],)) == hist_antes and len(hist_antes) == 2,
+               "I04-17: o historico do aluno (2 vinculos) permanece intacto")
+        checar(linha("SELECT * FROM aluno WHERE id = %s", (aluno_t["id"],)) == aluno_antes
+               and linha("SELECT * FROM turma WHERE id = %s", (turma_t1["id"],)) == turma_antes,
+               "I04-18: o aluno e a turma de origem permanecem intactos")
+
+        # --- cross-school e professor ----------------------------------
+        alvos = (
+            ("criterio", "/api/config/criterios/%d" % crit_usado["id"]),
+            ("etapa", "/api/config/etapas/%d" % etapa_i4["id"]),
+            ("turma", "/api/classes/%d" % turma_t1["id"]),
+        )
+        for rotulo, url in alvos:
+            r = coord_b.delete(url)
+            checar(r.status_code == 404 and limpa(r),
+                   "I04-19: escola B excluindo %s da escola A -> 404 (nao revela dependencias)" % rotulo)
+            r = professor_a.delete(url)
+            checar(r.status_code == 403,
+                   "I04-20: professor excluindo %s -> 403" % rotulo)
+        checar(linha("SELECT * FROM criterio WHERE id = %s", (crit_usado["id"],)) == crit_antes
+               and linha("SELECT * FROM etapa WHERE id = %s", (etapa_i4["id"],)) == etapa_antes
+               and linha("SELECT * FROM turma WHERE id = %s", (turma_t1["id"],)) == turma_antes
+               and linhas("SELECT * FROM aluno_turma_historico WHERE aluno_id = %s ORDER BY id",
+                          (aluno_t["id"],)) == hist_antes,
+               "I04-21: nada mudou depois das tentativas cross-school e do professor")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

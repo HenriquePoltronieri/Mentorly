@@ -1,6 +1,7 @@
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
 from services.config.etapas import exigir_etapa_aberta
+from services.conflito import excluir_ou_conflito
 
 
 def _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id):
@@ -71,4 +72,7 @@ class ExcluirCriterioService:
         if not criterio:
             raise LookupError("Criterio nao encontrado")
         _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
-        Criterio.delete(criterio_id, coordenacao_id)
+        excluir_ou_conflito(
+            lambda: Criterio.delete(criterio_id, coordenacao_id),
+            "Este criterio possui dados vinculados e nao pode ser excluido.",
+        )

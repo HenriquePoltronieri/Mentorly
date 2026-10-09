@@ -5,6 +5,7 @@ from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
 from services.config.anos_letivos import resolver_ano_letivo
+from services.conflito import excluir_ou_conflito
 
 
 MENSAGEM_ETAPA_FECHADA = (
@@ -168,7 +169,10 @@ class ExcluirEtapaService:
         if not etapa:
             raise LookupError("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
-        Etapa.delete(etapa_id, coordenacao_id)
+        excluir_ou_conflito(
+            lambda: Etapa.delete(etapa_id, coordenacao_id),
+            "Esta etapa possui dados vinculados e nao pode ser excluida.",
+        )
 
 
 def _contar_alunos_incompletos(etapa):

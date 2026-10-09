@@ -1,5 +1,6 @@
 from models.turma_model import Turma
 from services.config.anos_letivos import resolver_ano_letivo, validar_ano
+from services.conflito import excluir_ou_conflito
 
 
 def listar_turmas(coordenacao_id, ano_letivo=None):
@@ -80,4 +81,7 @@ def excluir_turma(turma_id, coordenacao_id):
     """O schema cascateia os alunos, atividades e notas da turma excluida."""
     if not Turma.find_by_id(turma_id, coordenacao_id):
         raise LookupError("Turma nao encontrada")
-    Turma.delete(turma_id, coordenacao_id)
+    excluir_ou_conflito(
+        lambda: Turma.delete(turma_id, coordenacao_id),
+        "Esta turma possui dados historicos vinculados e nao pode ser excluida.",
+    )
