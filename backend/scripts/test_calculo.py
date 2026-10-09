@@ -114,6 +114,85 @@ class CalculoTest(unittest.TestCase):
         self.assertFalse(resultado["fechada"])
 
 
+class FronteiraDaNotaMinimaTest(unittest.TestCase):
+    """Auditoria I-01: a comparacao com o minimo nao pode depender de ruido de float.
+
+    Caso real: criterio A (peso 40) com 12,5 de 100 e criterio B (peso 60) com
+    30 de 40. O valor exato e 0,4*0,125 + 0,6*0,75 = 0,5, ou seja, nota 5,0 em
+    uma etapa 0-10; em float a soma sai 4,999999999999999.
+    """
+
+    def setUp(self):
+        self.etapa = {
+            "id": 1, "coordenacao_id": 1, "nome": "Etapa 1", "ordem": 1,
+            "nota_minima": 5, "nota_maxima": 10,
+        }
+        self.criterios = [
+            {"id": 1, "nome": "A", "peso": 40},
+            {"id": 2, "nome": "B", "peso": 60},
+        ]
+        self.atividades = {
+            1: [{"id": 1, "nota_maxima": 100}],
+            2: [{"id": 2, "nota_maxima": 40}],
+        }
+        self.notas = {1: 12.5, 2: 30}
+        for alvo, metodo, resposta in (
+            (calculo.Criterio, "find_all_by_etapa", lambda *args: self.criterios),
+            (calculo.Atividade, "find_por_criterio", lambda t, e, c: self.atividades[c]),
+            (calculo.Nota, "valores_por_atividade", lambda a, ids: {
+                i: self.notas[i] for i in ids if i in self.notas
+            }),
+        ):
+            mock = patch.object(alvo, metodo, side_effect=resposta)
+            mock.start()
+            self.addCleanup(mock.stop)
+
+    def _calcular(self):
+        return calculo.calcular_desempenho_etapa(1, 1, self.etapa)
+
+    def test_o_caso_de_fronteira_realmente_tem_ruido_de_float(self):
+        # Guarda do proprio teste: sem este ruido, os demais nao provam nada.
+        soma = sum(
+            (obtido / possivel) * (peso / 100) * 100
+            for peso, obtido, possivel in ((40, 12.5, 100), (60, 30, 40))
+        )
+        self.assertLess((soma / 100) * 10, 5)
+
+    def test_exatamente_no_minimo_e_adequado(self):
+        resultado = self._calcular()
+        self.assertEqual(resultado["nota_calculada"], 5.0)
+        self.assertEqual(resultado["situacao"], "adequado")
+
+    def test_ligeiramente_abaixo_alem_da_tolerancia_e_abaixo_do_minimo(self):
+        for minimo in (5.01, 5.000001):
+            self.etapa["nota_minima"] = minimo
+            self.assertEqual(self._calcular()["situacao"], "abaixo_do_minimo", minimo)
+
+    def test_ligeiramente_acima_e_adequado(self):
+        for minimo in (4.99, 4.999999):
+            self.etapa["nota_minima"] = minimo
+            self.assertEqual(self._calcular()["situacao"], "adequado", minimo)
+
+    def test_casos_normais_continuam_iguais(self):
+        self.notas = {1: 100, 2: 40}
+        self.assertEqual(self._calcular()["situacao"], "adequado")
+        self.notas = {1: 0, 2: 0}
+        resultado = self._calcular()
+        self.assertEqual(resultado["situacao"], "abaixo_do_minimo")
+        self.assertEqual(resultado["nota_calculada"], 0)
+
+    def test_ausencia_de_nota_continua_em_andamento(self):
+        self.notas = {1: 12.5}
+        resultado = self._calcular()
+        self.assertEqual(resultado["situacao"], "em_andamento")
+        self.assertIsNone(resultado["nota_calculada"])
+        self.assertFalse(resultado["completo"])
+
+    def test_configuracao_invalida_nao_muda(self):
+        self.criterios[1]["peso"] = 50
+        self.assertEqual(self._calcular()["situacao"], "configuracao_invalida")
+
+
 class ConsolidadoGeralTest(unittest.TestCase):
     def _etapa(self, situacao, percentual, fechada=True, completo=True):
         return {

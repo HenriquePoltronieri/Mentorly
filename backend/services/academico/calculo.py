@@ -24,6 +24,13 @@ from models.utils import numero
 
 TOLERANCIA_PESO = 0.01
 
+# Folga numerica da comparacao "nota >= minimo". A nota e calculada em ponto
+# flutuante, entao um resultado matematicamente igual ao minimo pode sair como
+# 4,999999999999999. O erro de float aqui fica em ~1e-13; 1e-9 o cobre com
+# folga e continua muito abaixo de qualquer diferenca real (as notas e os
+# minimos tem duas casas decimais).
+TOLERANCIA_NOTA = 1e-9
+
 
 def resumo_pesos(criterios):
     """Soma os pesos ATIVOS (peso > 0) e diz se a etapa pode ser calculada.
@@ -161,7 +168,11 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
     nota_minima = float(etapa["nota_minima"])
     nota_calculada = soma_contribuicao * nota_maxima
 
-    situacao = "adequado" if nota_calculada >= nota_minima else "abaixo_do_minimo"
+    situacao = (
+        "adequado"
+        if nota_calculada >= nota_minima - TOLERANCIA_NOTA
+        else "abaixo_do_minimo"
+    )
 
     base.update({
         "completo": True,
