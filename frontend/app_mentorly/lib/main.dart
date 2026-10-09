@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app/routes.dart';
+import 'app/sessaoInvalida.dart';
 import 'app/theme.dart';
 import 'core/services/apiService.dart';
 
@@ -10,6 +11,7 @@ Future<void> main() async {
   // inicial pelo papel do usuario em vez de sempre cair na selecao de perfil.
   final api = ApiService();
   await api.carregarSessao();
+  registrarTratamentoDeSessao(api);
 
   runApp(MyApp(rotaInicial: _rotaInicial(api)));
 }
@@ -74,6 +76,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mentorly',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: appTheme,
       initialRoute: rotaInicial,
       routes: AppRoutes.routes,

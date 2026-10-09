@@ -1964,6 +1964,12 @@ def main():
                "M8-17: JWT emitido antes da desativacao perde acesso")
         checar(professor8.get("/api/classes").status_code == 403,
                "M8-17b: JWT antigo tambem perde acesso a leitura compartilhada")
+        for url in ("/api/professor/turmas", "/api/classes"):
+            corpo403 = professor8.get(url).get_json()
+            checar(corpo403.get("code") == "professor_desativado",
+                   "M5F-01: 403 do professor desativado traz code=professor_desativado (%s)" % url)
+        checar("code" not in (coord_a.post("/api/activities", {"title": "x"}).get_json()),
+               "M5F-02: 403 comum (papel errado) NAO traz esse code")
         checar(coord_a.post(
             "/api/coordenacao/professores/%d/reenviar-convite" % prof8["id"]
         ).status_code == 400, "M8-18: professor desativado nao recebe convite")

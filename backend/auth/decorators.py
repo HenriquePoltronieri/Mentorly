@@ -62,6 +62,18 @@ def _professor_habilitado(usuario):
     return bool(professor and professor.get("habilitado", True))
 
 
+def _professor_desativado():
+    """403 do professor desativado, com `code` para o app distinguir este caso.
+
+    Os outros 403 (papel/permissao) nao levam `code` e nao encerram a sessao no
+    app; este, sim, porque o token deixou de valer para aquele professor.
+    """
+    return jsonify({
+        "error": "Professor desativado",
+        "code": "professor_desativado",
+    }), 403
+
+
 def auth_required(funcao):
     """Exige um token valido, de qualquer papel."""
 
@@ -71,7 +83,7 @@ def auth_required(funcao):
         if usuario is None:
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if not _professor_habilitado(usuario):
-            return jsonify({"error": "Professor desativado"}), 403
+            return _professor_desativado()
         return funcao(*args, **kwargs)
 
     return wrapper
@@ -118,7 +130,7 @@ def professor_required(funcao):
         # O JWT pode ter sido emitido antes de uma desativacao. A guarda e a
         # mesma de @auth_required, pois ambos precisam bloquear o token.
         if not _professor_habilitado(usuario):
-            return jsonify({"error": "Professor desativado"}), 403
+            return _professor_desativado()
         return funcao(*args, **kwargs)
 
     return wrapper

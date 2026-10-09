@@ -9,11 +9,24 @@ class ApiException implements Exception {
   final int statusCode;
   final String mensagem;
 
-  ApiException(this.statusCode, this.mensagem);
+  // Campo opcional "code" da resposta de erro: identifica casos que o status
+  // sozinho nao distingue (ex.: 403 de professor desativado x 403 de papel).
+  final String? codigo;
+
+  ApiException(this.statusCode, this.mensagem, {this.codigo});
 
   @override
   String toString() => 'ApiException($statusCode): $mensagem';
 }
+
+// Por que a sessao foi encerrada pelo ApiService (nao pelo usuario).
+enum MotivoSessaoEncerrada { expirada, professorDesativado }
+
+// Chamado UMA vez quando uma chamada autenticada mostra que a sessao deixou de
+// valer. Quem registra (app/sessaoInvalida.dart) cuida da tela; o ApiService
+// nao conhece navegacao. [tipoUsuario] e o papel que estava logado.
+typedef AoEncerrarSessao = void Function(
+    MotivoSessaoEncerrada motivo, String? tipoUsuario);
 
 // Servico central que fala com o backend Flask
 // Singleton para compartilhar o token entre todos os services
@@ -30,6 +43,16 @@ class ApiService {
   static const String baseUrl = 'http://localhost:5000/api';
 
   static const Duration _timeout = Duration(seconds: 15);
+
+  static const String mensagemSessaoExpirada =
+      'Sua sessão expirou. Entre novamente.';
+  static const String mensagemProfessorDesativado =
+      'Seu acesso foi desativado. Entre novamente ou procure a coordenação.';
+
+  // Codigo que o backend manda no 403 do professor desativado.
+  static const String codigoProfessorDesativado = 'professor_desativado';
+
+  AoEncerrarSessao? aoEncerrarSessao;
 
   static const String _chaveToken = 'mentorly.token';
   static const String _chaveUsuario = 'mentorly.usuario';
@@ -108,16 +131,18 @@ class ApiService {
   // ---------------------------------------------------------------------
 
   Future<dynamic> get(String endpoint) async {
+    final tokenUsado = token;
     final response = await http
         .get(
           Uri.parse('$baseUrl$endpoint'),
           headers: _headers,
         )
         .timeout(_timeout);
-    return _tratarResposta(response);
+    return _tratarResposta(response, endpoint, tokenUsado);
   }
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
+    final tokenUsado = token;
     final response = await http
         .post(
           Uri.parse('$baseUrl$endpoint'),
@@ -125,10 +150,11 @@ class ApiService {
           body: jsonEncode(body),
         )
         .timeout(_timeout);
-    return _tratarResposta(response);
+    return _tratarResposta(response, endpoint, tokenUsado);
   }
 
   Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
+    final tokenUsado = token;
     final response = await http
         .put(
           Uri.parse('$baseUrl$endpoint'),
@@ -136,17 +162,18 @@ class ApiService {
           body: jsonEncode(body),
         )
         .timeout(_timeout);
-    return _tratarResposta(response);
+    return _tratarResposta(response, endpoint, tokenUsado);
   }
 
   Future<dynamic> delete(String endpoint) async {
+    final tokenUsado = token;
     final response = await http
         .delete(
           Uri.parse('$baseUrl$endpoint'),
           headers: _headers,
         )
         .timeout(_timeout);
-    return _tratarResposta(response);
+    return _tratarResposta(response, endpoint, tokenUsado);
   }
 
   // Upload de planilha (multipart). O campo do arquivo se chama "arquivo",
@@ -156,6 +183,7 @@ class ApiService {
     required List<int> bytes,
     required String nomeArquivo,
   }) async {
+    final tokenUsado = token;
     final requisicao = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl$endpoint'),
@@ -169,16 +197,68 @@ class ApiService {
 
     final streamed = await requisicao.send().timeout(_timeout);
     final response = await http.Response.fromStream(streamed);
-    final corpo = _tratarResposta(response);
+    final corpo = _tratarResposta(response, endpoint, tokenUsado);
     return (corpo as Map).cast<String, dynamic>();
   }
 
-  dynamic _tratarResposta(http.Response response) {
+  dynamic _tratarResposta(
+      http.Response response, String endpoint, String? tokenUsado) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
       return jsonDecode(response.body);
     }
-    throw ApiException(response.statusCode, _extrairMensagem(response));
+
+    final codigo = _extrairCodigo(response);
+    var mensagem = _extrairMensagem(response);
+
+    // Sessao invalida: so em chamada AUTENTICADA (enviada com token, fora de
+    // /auth/*: um 401 de login com senha errada e uma resposta normal) e so se
+    // o token usado ainda e o da sessao atual. Respostas atrasadas de antes de
+    // um logout, ou varias chamadas simultaneas com o mesmo 401, caem aqui com
+    // o token ja removido e nao disparam nada de novo.
+    final motivo = _motivoDeSessaoInvalida(response.statusCode, codigo);
+    if (motivo != null && _sessaoAutenticada(endpoint, tokenUsado)) {
+      mensagem = motivo == MotivoSessaoEncerrada.expirada
+          ? mensagemSessaoExpirada
+          : mensagemProfessorDesativado;
+      _encerrarSessao(motivo);
+    }
+    throw ApiException(response.statusCode, mensagem, codigo: codigo);
+  }
+
+  // 401 = autenticacao invalida/expirada/ausente. 403 so encerra a sessao com
+  // o codigo do professor desativado; os demais 403 (papel, permissao) sao erro
+  // da operacao e mantem a sessao.
+  MotivoSessaoEncerrada? _motivoDeSessaoInvalida(int status, String? codigo) {
+    if (status == 401) return MotivoSessaoEncerrada.expirada;
+    if (status == 403 && codigo == codigoProfessorDesativado) {
+      return MotivoSessaoEncerrada.professorDesativado;
+    }
+    return null;
+  }
+
+  bool _sessaoAutenticada(String endpoint, String? tokenUsado) =>
+      tokenUsado != null &&
+      tokenUsado == token &&
+      !endpoint.startsWith('/auth/');
+
+  void _encerrarSessao(MotivoSessaoEncerrada motivo) {
+    final tipo = tipoUsuario;
+    // limparSessao zera token e usuario de forma sincrona (antes do primeiro
+    // await): a partir daqui nenhuma chamada nova leva o token antigo.
+    limparSessao();
+    aoEncerrarSessao?.call(motivo, tipo);
+  }
+
+  String? _extrairCodigo(http.Response response) {
+    if (response.body.isEmpty) return null;
+    try {
+      final corpo = jsonDecode(response.body);
+      if (corpo is Map && corpo['code'] is String) return corpo['code'];
+    } catch (_) {
+      // corpo nao era JSON
+    }
+    return null;
   }
 
   // O Flask responde erro como {"error": "mensagem"}. Se vier outra coisa,
