@@ -610,12 +610,14 @@ def main():
         reduzir = professor_a.put("/api/activities/%d" % nova,
                                   {"nota_maxima": 15})
         checar(reduzir.status_code == 400
-               and "20" in reduzir.get_json()["error"],
-               "T15: reduzir o valor abaixo de nota ja lancada responde 400")
+               and "notas" in reduzir.get_json()["error"].lower(),
+               "T15: reduzir o valor de atividade com nota lancada responde 400")
 
+        # M-03: com nota lancada o valor maximo fica congelado (antes, T16
+        # permitia aumentar e o percentual mudava sem relancar a nota).
         checar(professor_a.put("/api/activities/%d" % nova,
-                               {"nota_maxima": 25}).status_code == 200,
-               "T16: aumentar o valor e permitido")
+                               {"nota_maxima": 25}).status_code == 400,
+               "T16: aumentar o valor de atividade com nota lancada responde 400 (M-03)")
 
         checar(coord_b.get("/api/activities/%d" % nova).status_code == 404,
                "T17: escola B nao acessa a atividade da escola A")
@@ -3559,6 +3561,190 @@ def main():
                and hist[1]["anoLetivo"] == ano_m2 and hist[1]["atual"] is False,
                "M02-38: transferir um aluno A PARTIR de turma de ano encerrado continua permitido "
                "(caminho de promocao) e o historico do ano encerrado e preservado")
+
+        # ---------------------------------------------------------
+        print("\n[M-03] Atividade com notas: etapa, criterio e valor ficam congelados")
+        etapa_m3 = criar_etapa(coord_a, "E M03", 109, 6, 10)
+        etapa_m3b = criar_etapa(coord_a, "E M03 b", 110, 6, 10)
+        crit_m3 = criar_criterio(coord_a, etapa_m3["id"], "Provas", 50)
+        crit_m3x = criar_criterio(coord_a, etapa_m3["id"], "Trabalhos", 50)
+        crit_m3b = criar_criterio(coord_a, etapa_m3b["id"], "Provas", 100)
+        turma_m3 = turma_orig["id"]
+        al_m3 = alunos_i2  # Ana Mover Silva e Bia Mover Costa, da turma_orig
+
+        def nova_m3(titulo, valor=10, etapa=None, crit=None):
+            return criar_atividade(prof_i2, turma_m3, (etapa or etapa_m3)["id"],
+                                   (crit or crit_m3)["id"], valor, titulo)
+
+        def put_m3(atividade, corpo, cliente=None):
+            return (cliente or prof_i2).put("/api/activities/%d" % atividade["id"], corpo)
+
+        def msg_m3(resposta):
+            return (resposta.get_json(silent=True) or {}).get("error", "")
+
+        def bloqueou_m3(resposta):
+            return (resposta.status_code == 400
+                    and "notas lancadas" in msg_m3(resposta).lower())
+
+        # 8. atividade SEM notas altera tudo normalmente
+        sem = nova_m3("M03 sem notas")
+        r = put_m3(sem, {"etapa_id": etapa_m3b["id"], "criterio_id": crit_m3b["id"]})
+        checar(r.status_code == 200 and r.get_json()["etapa_id"] == etapa_m3b["id"]
+               and r.get_json()["criterio_id"] == crit_m3b["id"],
+               "M03-01: atividade SEM notas troca de etapa (e criterio) -> 200")
+        r = put_m3(sem, {"etapa_id": etapa_m3["id"], "criterio_id": crit_m3["id"]})
+        r2 = put_m3(sem, {"criterio_id": crit_m3x["id"]})
+        checar(r.status_code == 200 and r2.status_code == 200
+               and r2.get_json()["criterio_id"] == crit_m3x["id"],
+               "M03-02: atividade SEM notas troca de criterio dentro da etapa -> 200")
+        r = put_m3(sem, {"nota_maxima": 20})
+        checar(r.status_code == 200 and r.get_json()["nota_maxima"] == 20.0,
+               "M03-03: atividade SEM notas altera o valor maximo (aumentar) -> 200")
+        r = put_m3(sem, {"nota_maxima": 5})
+        checar(r.status_code == 200 and r.get_json()["nota_maxima"] == 5.0,
+               "M03-04: atividade SEM notas altera o valor maximo (diminuir) -> 200")
+
+        # atividades com notas
+        com = nova_m3("M03 com notas")
+        lancar(prof_i2, com["id"], al_m3[0]["id"], 8)
+        lancar(prof_i2, com["id"], al_m3[1]["id"], 3)
+        zero = nova_m3("M03 so nota zero")
+        lancar(prof_i2, zero["id"], al_m3[0]["id"], 0)
+
+        def foto_atividade(atividade_id):
+            return (
+                query_one("SELECT * FROM atividade WHERE id = %s", (atividade_id,)),
+                query_all("SELECT * FROM nota WHERE atividade_id = %s ORDER BY id",
+                          (atividade_id,)),
+            )
+
+        def foto_resultados():
+            """Boletim da turma e desempenho de cada aluno, como o Professor ve."""
+            # Do desempenho entra so o que e calculo (a lista de notas traz o
+            # titulo e a data da atividade, que o teste edita de proposito).
+            desempenho = []
+            for a in al_m3:
+                est = prof_i2.get("/api/professor/alunos/%d/estatisticas" % a["id"]).get_json()
+                desempenho.append({k: est[k] for k in
+                                   ("etapas", "consolidado", "media", "totalNotas")})
+            return (
+                prof_i2.get("/api/professor/turmas/%d/boletim" % turma_m3).get_json(),
+                desempenho,
+            )
+
+        antes_com, antes_zero = foto_atividade(com["id"]), foto_atividade(zero["id"])
+        resultados_antes = foto_resultados()
+        checar(len(resultados_antes[0]["alunos"]) >= 2
+               and all(est["etapas"] for est in resultados_antes[1]),
+               "M03-05: preparo: boletim e desempenho consultados antes das tentativas")
+
+        # 4-7. tentativas de mudar o contexto das notas -> 400
+        checar(bloqueou_m3(put_m3(com, {"etapa_id": etapa_m3b["id"], "criterio_id": crit_m3b["id"]})),
+               "M03-06: com nota, trocar a etapa -> 400 amigavel")
+        checar(bloqueou_m3(put_m3(com, {"criterio_id": crit_m3x["id"]})),
+               "M03-07: com nota, trocar o criterio -> 400 amigavel")
+        r = put_m3(com, {"nota_maxima": 20})
+        checar(bloqueou_m3(r), "M03-08: com nota, AUMENTAR o valor maximo (10 -> 20) -> 400 amigavel")
+        r = put_m3(com, {"nota_maxima": 5})
+        checar(bloqueou_m3(r), "M03-09: com nota, DIMINUIR o valor maximo (10 -> 5) -> 400")
+        checar(bloqueou_m3(put_m3(com, {"nota_maxima": 8})) and bloqueou_m3(put_m3(com, {"nota_maxima": 10.5})),
+               "M03-10: bloqueia mesmo quando todas as notas ainda caberiam no novo limite (8 e 10,5)")
+        checar(bloqueou_m3(put_m3(com, {"nota_maxima": "20,0", "title": "tentativa mista"})),
+               "M03-11: pedido misto (titulo + valor novo) tambem e recusado por inteiro")
+        # 8. nota zero conta
+        checar(bloqueou_m3(put_m3(zero, {"nota_maxima": 20}))
+               and bloqueou_m3(put_m3(zero, {"etapa_id": etapa_m3b["id"], "criterio_id": crit_m3b["id"]}))
+               and bloqueou_m3(put_m3(zero, {"criterio_id": crit_m3x["id"]})),
+               "M03-12: uma unica nota de valor ZERO tambem congela etapa, criterio e valor")
+        checar("etapa" in msg_m3(put_m3(com, {"nota_maxima": 20})).lower()
+               and "sql" not in msg_m3(put_m3(com, {"nota_maxima": 20})).lower(),
+               "M03-13: a mensagem e de negocio (cita os dados congelados, sem termo tecnico)")
+
+        # 15-16. nada mudou
+        checar(foto_atividade(com["id"]) == antes_com and foto_atividade(zero["id"]) == antes_zero,
+               "M03-14: atividade e notas identicas (linha a linha, inclusive updated_at) depois das tentativas")
+        checar(foto_resultados() == resultados_antes,
+               "M03-15: boletim e desempenho dos alunos identicos depois das tentativas")
+
+        # 9-14. o que continua permitido
+        r = put_m3(com, {"title": "M03 com notas (titulo novo)"})
+        checar(r.status_code == 200 and r.get_json()["title"] == "M03 com notas (titulo novo)",
+               "M03-16: com nota, editar o titulo -> 200")
+        r = put_m3(com, {"description": "descricao nova"})
+        checar(r.status_code == 200 and r.get_json()["description"] == "descricao nova",
+               "M03-17: com nota, editar a descricao -> 200")
+        r = put_m3(com, {"due_date": "2026-12-15"})
+        checar(r.status_code == 200 and r.get_json()["due_date"].startswith("2026-12-15"),
+               "M03-18: com nota, editar a data de entrega -> 200")
+        checar(put_m3(com, {"etapa_id": etapa_m3["id"]}).status_code == 200
+               and put_m3(com, {"criterio_id": crit_m3["id"]}).status_code == 200
+               and put_m3(com, {"etapa_id": str(etapa_m3["id"]), "criterio_id": crit_m3["id"]}).status_code == 200,
+               "M03-19: reenviar a MESMA etapa e o MESMO criterio (int ou texto) -> 200")
+        checar(all(put_m3(com, {"nota_maxima": valor}).status_code == 200
+                   for valor in (10, 10.0, "10", "10,0")),
+               "M03-20: reenviar o MESMO valor maximo (10, 10.0, '10', '10,0') -> 200")
+        r = put_m3(com, {"class_id": turma_m3, "etapa_id": etapa_m3["id"],
+                         "criterio_id": crit_m3["id"], "nota_maxima": 10,
+                         "title": "M03 tudo igual, so titulo"})
+        checar(r.status_code == 200 and r.get_json()["title"] == "M03 tudo igual, so titulo",
+               "M03-21: reenviar turma, etapa, criterio e valor iguais + novo titulo -> 200")
+        r = put_m3(com, {"class_id": turma_dest["id"]})
+        checar(r.status_code == 400 and "outra turma" in msg_m3(r).lower(),
+               "M03-22: trocar a turma continua recusado com a mensagem propria do I-02")
+        antes_depois = foto_atividade(com["id"])
+        checar([n for n in antes_depois[1]] == antes_com[1],
+               "M03-23: as notas seguem identicas depois das edicoes permitidas")
+        checar(foto_resultados() == resultados_antes,
+               "M03-24: boletim e desempenho seguem identicos depois das edicoes permitidas")
+
+        # 20. cross-school e professor sem vinculo: 404, sem revelar se ha notas
+        for rotulo, corpo in (("valor", {"nota_maxima": 20}),
+                              ("etapa de outra escola", {"etapa_id": 1, "criterio_id": 1}),
+                              ("titulo", {"title": "x"})):
+            r = put_m3(com, corpo, professor_b)
+            checar(r.status_code == 404 and "notas" not in msg_m3(r).lower(),
+                   "M03-25: professor de OUTRA escola editando atividade com notas (%s) -> 404" % rotulo)
+        prof_sv = ativar_professor(coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Sem Vinculo", "email": "prof.sv.%s" % SUFIXO,
+        }).get_json())
+        r = put_m3(com, {"nota_maxima": 20}, prof_sv)
+        checar(r.status_code == 404 and "notas" not in msg_m3(r).lower(),
+               "M03-26: professor da escola SEM vinculo com a turma -> 404 (nao descobre as notas)")
+        checar(put_m3(com, {"nota_maxima": 20}, coord_a).status_code == 403,
+               "M03-27: coordenacao continua sem poder editar atividade (403)")
+        checar(foto_atividade(com["id"])[1] == antes_com[1],
+               "M03-28: nada mudou depois das tentativas cross-school, sem vinculo e da coordenacao")
+
+        # 17. etapa fechada continua bloqueando (I-03)
+        fech = nova_m3("M03 em etapa a fechar", etapa=etapa_m3b, crit=crit_m3b)
+        lancar(prof_i2, fech["id"], al_m3[0]["id"], 6)
+        coord_a.post("/api/config/etapas/%d/fechar" % etapa_m3b["id"])
+        r = put_m3(fech, {"title": "titulo em etapa fechada"})
+        checar(r.status_code == 400 and "fechada" in msg_m3(r).lower(),
+               "M03-29: etapa fechada continua bloqueando ate o titulo (mensagem da etapa fechada)")
+        coord_a.post("/api/config/etapas/%d/reabrir" % etapa_m3b["id"])
+        checar(put_m3(fech, {"title": "titulo apos reabrir"}).status_code == 200
+               and bloqueou_m3(put_m3(fech, {"nota_maxima": 30})),
+               "M03-30: reaberta a etapa, o titulo volta a ser editavel e o valor segue congelado pelas notas")
+
+        # 18. ano encerrado continua bloqueando (M-02)
+        ano_m3 = coord_a.post("/api/config/anos-letivos", {"ano": 2041}).get_json()
+        etapa_m3y = coord_a.post("/api/config/etapas", {"nome": "E M03 y", "ordem": 1,
+                                                        "ano_letivo": 2041}).get_json()
+        coord_a.post("/api/config/etapas/%d/notas" % etapa_m3y["id"], {"nota_minima": 6, "nota_maxima": 10})
+        crit_m3y = criar_criterio(coord_a, etapa_m3y["id"], "Provas", 100)
+        turma_m3y = coord_a.post("/api/classes", {"name": "M03 Turma 2041", "ano_letivo": 2041}).get_json()
+        aluno_m3y = coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m3y["id"],
+                                 {"nome": "Aluno Anual Teste"}).get_json()
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+                     {"turma_ids": [turma_orig["id"], turma_dest["id"], turma_outro_ano["id"],
+                                    turma_m2["id"], turma_m3y["id"]]})
+        ativ_y = criar_atividade(prof_i2, turma_m3y["id"], etapa_m3y["id"], crit_m3y["id"], 10, "M03 ano")
+        lancar(prof_i2, ativ_y["id"], aluno_m3y["id"], 7)
+        coord_a.put("/api/config/anos-letivos/%d" % ano_m3["id"], {"status": "encerrado"})
+        r = put_m3(ativ_y, {"title": "titulo em ano encerrado"})
+        checar(r.status_code == 400 and "encerrado" in msg_m3(r).lower(),
+               "M03-31: ano encerrado continua bloqueando a edicao (mensagem do ano encerrado)")
 
         print("\nLimpando os dados de teste...")
         limpar()

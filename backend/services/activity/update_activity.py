@@ -61,6 +61,10 @@ class UpdateActivityService:
             if not titulo:
                 raise ValueError("O titulo nao pode ficar vazio")
 
+        # Uma unica consulta serve a protecao da turma (I-02) e a dos campos
+        # academicos (M-03). Nota 0 conta como nota lancada.
+        tem_notas = Nota.contar_da_atividade(atividade_id) > 0
+
         # Mover a atividade para outra turma so vale se a turma destino
         # tambem for do professor.
         if turma_id is not None and turma_id != atual["turma_id"]:
@@ -71,7 +75,7 @@ class UpdateActivityService:
             # As notas apontam para alunos da turma de origem: mover a
             # atividade deixaria essas notas presas a uma turma onde os
             # alunos nao estao, e sumiriam das listas e do boletim.
-            if Nota.contar_da_atividade(atividade_id):
+            if tem_notas:
                 raise ValueError(
                     "Esta atividade ja tem notas lancadas e nao pode ser "
                     "movida para outra turma. Apague as notas ou crie a "
@@ -106,15 +110,16 @@ class UpdateActivityService:
         if nota_maxima is not None:
             nota_maxima = validar_nota_maxima(nota_maxima)
 
-            # Reduzir o teto abaixo de uma nota ja lancada deixaria aluno
-            # com nota acima do maximo da propria atividade.
-            maior = Nota.maior_nota_da_atividade(atividade_id)
-            if maior is not None and float(maior) > nota_maxima:
-                raise ValueError(
-                    "Ja existe nota %s lancada nesta atividade. Apague ou "
-                    "corrija essa nota antes de baixar o valor para %s."
-                    % (_limpo(maior), _limpo(nota_maxima))
-                )
+        # Depois de achar e validar tudo dentro da escola (um id de outra
+        # escola continua 404, sem revelar se ha notas): com nota lancada,
+        # etapa, criterio e valor maximo ficam congelados. Mudar qualquer um
+        # muda retroativamente o que a nota significa (8 de 10 vira 8 de 20)
+        # sem relancar nada. So conta mudanca REAL: reenviar o mesmo valor e
+        # permitido. Titulo, descricao e data seguem editaveis.
+        if tem_notas and _muda_dado_academico(
+            atual, etapa_id, criterio_id, nota_maxima
+        ):
+            raise ValueError(MENSAGEM_ATIVIDADE_COM_NOTAS)
 
         Atividade.update(
             atividade_id, titulo, descricao, turma_id,
@@ -123,7 +128,31 @@ class UpdateActivityService:
         return Atividade.to_dict(Atividade.find_by_id(atividade_id))
 
 
-def _limpo(valor):
-    """20.0 vira "20"; 13.5 continua "13.5". So para a mensagem de erro."""
-    numero = float(valor)
-    return str(int(numero)) if numero == int(numero) else str(numero)
+MENSAGEM_ATIVIDADE_COM_NOTAS = (
+    "Esta atividade ja possui notas lancadas e seus dados academicos (etapa, "
+    "criterio e valor maximo) nao podem ser alterados."
+)
+
+
+def _mesmo_id(enviado, atual):
+    """True quando o campo nao veio ou veio igual ao que ja esta gravado."""
+    if enviado is None or str(enviado).strip() == "":
+        return True
+    try:
+        return int(enviado) == atual
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _muda_dado_academico(atual, etapa_id, criterio_id, nota_maxima):
+    if not _mesmo_id(etapa_id, atual.get("etapa_id")):
+        return True
+    if not _mesmo_id(criterio_id, atual.get("criterio_id")):
+        return True
+    if nota_maxima is not None and str(nota_maxima).strip() != "":
+        # Valor invalido segue o erro proprio da validacao (400), nao esta
+        # mensagem; o valor gravado tem duas casas (DECIMAL(5,2)).
+        novo = validar_nota_maxima(nota_maxima)
+        gravado = atual.get("nota_maxima")
+        return gravado is None or round(novo, 2) != round(float(gravado), 2)
+    return False
