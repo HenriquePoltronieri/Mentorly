@@ -95,6 +95,15 @@ class Nota:
         return {linha["atividade_id"]: numero(linha["valor"]) for linha in linhas}
 
     @staticmethod
+    def contar_da_atividade(atividade_id):
+        """Quantas notas ja existem na atividade (nota 0 conta como nota)."""
+        linha = query_one(
+            "SELECT COUNT(*) AS total FROM nota WHERE atividade_id = %s",
+            (atividade_id,),
+        )
+        return linha["total"] if linha else 0
+
+    @staticmethod
     def maior_nota_da_atividade(atividade_id):
         """Maior nota ja lancada, ou None se ainda nao ha nenhuma.
 

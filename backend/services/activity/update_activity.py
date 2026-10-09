@@ -58,6 +58,15 @@ class UpdateActivityService:
                 professor_id, turma_id
             ):
                 raise LookupError("Turma nao encontrada")
+            # As notas apontam para alunos da turma de origem: mover a
+            # atividade deixaria essas notas presas a uma turma onde os
+            # alunos nao estao, e sumiriam das listas e do boletim.
+            if Nota.contar_da_atividade(atividade_id):
+                raise ValueError(
+                    "Esta atividade ja tem notas lancadas e nao pode ser "
+                    "movida para outra turma. Apague as notas ou crie a "
+                    "atividade na outra turma."
+                )
 
         # A etapa da atividade precisa ser do mesmo ano letivo da turma em que
         # ela vai ficar (a nova, se estiver sendo movida).

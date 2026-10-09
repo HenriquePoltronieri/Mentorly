@@ -2660,6 +2660,128 @@ def main():
                    "M9D-25: gerar feedback NAO altera nenhuma tabela academica (nota, atividade, etapa, "
                    "criterio, aluno, turma, vinculos): estado identico antes e depois")
 
+        # ---------------------------------------------------------
+        print("\n[I-02] Atividade com notas nao troca de turma")
+        prof_i2_dados = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Mover", "email": "prof.mover.%s" % SUFIXO,
+            "disciplina": "Geografia",
+        }).get_json()
+        prof_i2 = ativar_professor(prof_i2_dados)
+        turma_orig = coord_a.post("/api/classes", {"name": "I02 Origem"}).get_json()
+        turma_dest = coord_a.post("/api/classes", {"name": "I02 Destino"}).get_json()
+        coord_a.post("/api/config/anos-letivos", {"ano": 2033})
+        turma_outro_ano = coord_a.post(
+            "/api/classes", {"name": "I02 Turma 2033", "ano_letivo": 2033}
+        ).get_json()
+        coord_a.post(
+            "/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+            {"turma_ids": [turma_orig["id"], turma_dest["id"], turma_outro_ano["id"]]},
+        )
+        etapa_i2 = criar_etapa(coord_a, "E I02", 101, 6, 10)
+        crit_i2 = criar_criterio(coord_a, etapa_i2["id"], "Provas", 100)
+        alunos_i2 = [
+            coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_orig["id"],
+                         {"nome": nome}).get_json()
+            for nome in ("Ana Mover Silva", "Bia Mover Costa")
+        ]
+
+        def turma_da_atividade(atividade_id):
+            return query_one(
+                "SELECT turma_id FROM atividade WHERE id = %s", (atividade_id,)
+            )["turma_id"]
+
+        def notas_da_atividade(atividade_id):
+            return query_all(
+                "SELECT id, atividade_id, aluno_id, valor, observacao, "
+                "created_at, updated_at FROM nota WHERE atividade_id = %s "
+                "ORDER BY id", (atividade_id,),
+            )
+
+        # 1. sem notas: muda de turma normalmente
+        ativ_sem = criar_atividade(prof_i2, turma_orig["id"], etapa_i2["id"],
+                                   crit_i2["id"], 10, "I02 sem notas")
+        mover = prof_i2.put("/api/activities/%d" % ativ_sem["id"],
+                            {"class_id": turma_dest["id"]})
+        checar(mover.status_code == 200
+               and turma_da_atividade(ativ_sem["id"]) == turma_dest["id"],
+               "I02-01: atividade SEM notas muda de turma com sucesso")
+        checar(prof_i2.put("/api/activities/%d" % ativ_sem["id"],
+                           {"turma_id": turma_outro_ano["id"]}).status_code == 400
+               and turma_da_atividade(ativ_sem["id"]) == turma_dest["id"],
+               "I02-02: sem notas, a validacao normal continua valendo (etapa de outro ano -> 400)")
+
+        # atividade com notas (uma delas zero: nota 0 conta como nota lancada)
+        ativ_com = criar_atividade(prof_i2, turma_orig["id"], etapa_i2["id"],
+                                   crit_i2["id"], 10, "I02 com notas")
+        lancar(prof_i2, ativ_com["id"], alunos_i2[0]["id"], 8)
+        lancar(prof_i2, ativ_com["id"], alunos_i2[1]["id"], 0)
+        antes = notas_da_atividade(ativ_com["id"])
+        checar(len(antes) == 2, "I02-03: preparo: atividade com 2 notas (uma delas zero)")
+
+        # 2. tentar mudar de turma -> 400 amigavel
+        for chave in ("class_id", "turma_id"):
+            r = prof_i2.put("/api/activities/%d" % ativ_com["id"],
+                            {chave: turma_dest["id"]})
+            checar(r.status_code == 400 and "notas" in r.get_json()["error"].lower(),
+                   "I02-04: atividade com notas nao troca de turma (%s) -> 400 amigavel" % chave)
+        checar(turma_da_atividade(ativ_com["id"]) == turma_orig["id"],
+               "I02-05: a atividade continua na turma de origem apos a tentativa")
+
+        # 5. nenhuma nota apagada ou alterada
+        checar(notas_da_atividade(ativ_com["id"]) == antes,
+               "I02-06: nenhuma nota foi apagada ou alterada na tentativa bloqueada "
+               "(ids, alunos, valores, observacao e datas identicos)")
+
+        # so uma nota de valor zero tambem bloqueia
+        ativ_zero = criar_atividade(prof_i2, turma_orig["id"], etapa_i2["id"],
+                                    crit_i2["id"], 10, "I02 so zero")
+        lancar(prof_i2, ativ_zero["id"], alunos_i2[0]["id"], 0)
+        checar(prof_i2.put("/api/activities/%d" % ativ_zero["id"],
+                           {"class_id": turma_dest["id"]}).status_code == 400,
+               "I02-07: uma unica nota de valor zero ja impede a troca de turma")
+
+        # 3. editar so titulo/descricao continua funcionando
+        r = prof_i2.put("/api/activities/%d" % ativ_com["id"], {
+            "title": "I02 com notas (renomeada)", "description": "novo texto",
+        })
+        checar(r.status_code == 200 and r.get_json()["title"] == "I02 com notas (renomeada)"
+               and r.get_json()["class_id"] == turma_orig["id"],
+               "I02-08: com notas, editar titulo e descricao continua funcionando")
+
+        # 4. mesma turma no payload continua valida
+        r = prof_i2.put("/api/activities/%d" % ativ_com["id"], {
+            "class_id": turma_orig["id"], "title": "I02 com notas v2",
+        })
+        checar(r.status_code == 200 and r.get_json()["title"] == "I02 com notas v2",
+               "I02-09: com notas, informar a MESMA turma no payload continua funcionando")
+        checar(notas_da_atividade(ativ_com["id"]) == antes,
+               "I02-10: nenhuma nota mudou depois das edicoes permitidas")
+
+        # 6. cross-school segue como esta (404, nada muda)
+        checar(professor_b.put("/api/activities/%d" % ativ_com["id"],
+                               {"class_id": turma_b["id"]}).status_code == 404,
+               "I02-11: professor de OUTRA escola tentando mover atividade com notas -> 404")
+        checar(prof_i2.put("/api/activities/%d" % ativ_sem["id"],
+                           {"class_id": turma_b["id"]}).status_code == 404,
+               "I02-12: mover atividade (sem notas) para turma de outra escola -> 404")
+        checar(turma_da_atividade(ativ_sem["id"]) == turma_dest["id"]
+               and turma_da_atividade(ativ_com["id"]) == turma_orig["id"]
+               and notas_da_atividade(ativ_com["id"]) == antes,
+               "I02-13: depois das tentativas cross-school nada mudou (turmas e notas)")
+
+        # 7. etapa fechada: comportamento existente intacto
+        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_i2["id"]
+                            ).status_code == 200, "I02-14: coordenacao fecha a etapa do teste")
+        checar(prof_i2.put("/api/activities/%d" % ativ_com["id"],
+                           {"title": "na etapa fechada"}).status_code == 400,
+               "I02-15: etapa fechada: editar atividade com notas continua 400")
+        checar(prof_i2.put("/api/activities/%d" % ativ_sem["id"],
+                           {"class_id": turma_orig["id"]}).status_code == 400,
+               "I02-16: etapa fechada: mover atividade sem notas continua 400")
+        checar(turma_da_atividade(ativ_sem["id"]) == turma_dest["id"]
+               and notas_da_atividade(ativ_com["id"]) == antes,
+               "I02-17: etapa fechada: nada mudou")
+
         print("\nLimpando os dados de teste...")
         limpar()
 
