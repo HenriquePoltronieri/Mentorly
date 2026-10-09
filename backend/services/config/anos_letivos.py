@@ -20,6 +20,25 @@ class AnoLetivoConflito(ValueError):
     """Pedido valido que conflita com o estado atual (vira 409)."""
 
 
+class AnoEncerrado(ValueError):
+    """Escrita em dados de um ano letivo encerrado (vira 400)."""
+
+
+def exigir_ano_nao_encerrado(coordenacao_id, ano):
+    """Ano encerrado e historico somente leitura: recusa qualquer escrita.
+
+    E a regra unica usada por turma, aluno, etapa, criterio, atividade e nota.
+    Quem chama ja achou o recurso DENTRO da escola (404 para quem nao tem
+    acesso), entao o status do ano de outra escola nunca e revelado. Leitura
+    nao passa por aqui.
+    """
+    registro = AnoLetivo.find_by_ano(coordenacao_id, ano)
+    if registro and registro["status"] == "encerrado":
+        raise AnoEncerrado(
+            "O ano letivo %d esta encerrado e nao permite alteracoes." % ano
+        )
+
+
 def validar_ano(bruto):
     try:
         ano = int(str(bruto).strip())

@@ -18,7 +18,9 @@ from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
+from services.config.anos_letivos import AnoEncerrado
 from services.planilha.leitor import PlanilhaInvalida, ler_planilha
+from services.professor.notas import exigir_ano_aberto_da_atividade
 from services.planilha.validacao import validar_linha_nota
 
 
@@ -32,6 +34,11 @@ class ImportarNotasService:
             professor_id, atividade["turma_id"]
         ):
             raise LookupError("Atividade nao encontrada")
+
+        try:
+            exigir_ano_aberto_da_atividade(atividade)
+        except AnoEncerrado as erro:
+            raise PlanilhaInvalida(str(erro))
 
         if atividade.get("etapa_id") and Etapa.esta_fechada(
             atividade["etapa_id"], atividade["coordenacao_id"]

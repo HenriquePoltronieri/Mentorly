@@ -1,6 +1,10 @@
 from models.turma_model import Turma
 from services import entrada
-from services.config.anos_letivos import resolver_ano_letivo, validar_ano
+from services.config.anos_letivos import (
+    exigir_ano_nao_encerrado,
+    resolver_ano_letivo,
+    validar_ano,
+)
 from services.conflito import excluir_ou_conflito
 
 
@@ -65,6 +69,7 @@ def atualizar_turma(turma_id, coordenacao_id, nome=None, descricao=None,
     atual = Turma.find_by_id(turma_id, coordenacao_id)
     if not atual:
         raise LookupError("Turma nao encontrada")
+    exigir_ano_nao_encerrado(coordenacao_id, atual["ano_letivo"])
 
     descricao = _descricao(descricao)
     disciplina = _opcional(disciplina, "A disciplina", entrada.LIMITE_DISCIPLINA)
@@ -101,8 +106,10 @@ def atualizar_turma(turma_id, coordenacao_id, nome=None, descricao=None,
 
 def excluir_turma(turma_id, coordenacao_id):
     """O schema cascateia os alunos, atividades e notas da turma excluida."""
-    if not Turma.find_by_id(turma_id, coordenacao_id):
+    turma = Turma.find_by_id(turma_id, coordenacao_id)
+    if not turma:
         raise LookupError("Turma nao encontrada")
+    exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
     excluir_ou_conflito(
         lambda: Turma.delete(turma_id, coordenacao_id),
         "Esta turma possui dados historicos vinculados e nao pode ser excluida.",

@@ -1,6 +1,8 @@
 from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from models.professor_turma_model import ProfessorTurma
+from models.turma_model import Turma
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 
 
 class DeleteActivityService:
@@ -14,6 +16,10 @@ class DeleteActivityService:
             professor_id, atual["turma_id"]
         ):
             raise LookupError("Atividade nao encontrada")
+
+        turma = Turma.find_by_id(atual["turma_id"], atual["coordenacao_id"])
+        if turma:
+            exigir_ano_nao_encerrado(atual["coordenacao_id"], turma["ano_letivo"])
 
         if atual.get("etapa_id") and Etapa.esta_fechada(
             atual["etapa_id"], atual["coordenacao_id"]

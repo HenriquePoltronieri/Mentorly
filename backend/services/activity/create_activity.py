@@ -4,6 +4,7 @@ from models.atividade_model import Atividade
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from services import entrada
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
@@ -60,6 +61,7 @@ class CreateActivityService:
         turma = Turma.find_by_id(turma_id, coordenacao_id)
         if not turma:
             raise LookupError("Turma nao encontrada")
+        exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
 
         # Etapa e criterio precisam ser da escola do token. Nunca confiar no
         # id que chegou do cliente.

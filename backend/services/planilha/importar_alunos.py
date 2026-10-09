@@ -7,6 +7,7 @@ errada obrigaria o usuario a corrigir e reenviar tudo.
 
 from models.aluno_model import Aluno
 from services.aluno.acesso_turma import turma_acessivel
+from services.config.anos_letivos import AnoEncerrado, exigir_ano_nao_encerrado
 from services.planilha.leitor import PlanilhaInvalida, exigir_colunas, ler_planilha
 from services.planilha.validacao import validar_linha_aluno
 
@@ -16,7 +17,11 @@ LIMITE_LINHAS = 2000
 class ImportarAlunosService:
     def execute(self, turma_id, coordenacao_id, nome_arquivo, conteudo,
                 professor_id=None):
-        turma_acessivel(turma_id, coordenacao_id, professor_id)
+        turma = turma_acessivel(turma_id, coordenacao_id, professor_id)
+        try:
+            exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
+        except AnoEncerrado as erro:
+            raise PlanilhaInvalida(str(erro))
 
         if not conteudo:
             raise PlanilhaInvalida("Nenhum arquivo foi enviado")

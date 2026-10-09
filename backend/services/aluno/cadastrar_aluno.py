@@ -1,5 +1,6 @@
 from models.aluno_model import Aluno
 from services.aluno.acesso_turma import turma_acessivel
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 from services.planilha.validacao import validar_linha_aluno
 
 
@@ -13,7 +14,8 @@ class CadastrarAlunoService:
 
     def execute(self, turma_id, coordenacao_id, nome, matricula=None,
                 email=None, professor_id=None):
-        turma_acessivel(turma_id, coordenacao_id, professor_id)
+        turma = turma_acessivel(turma_id, coordenacao_id, professor_id)
+        exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
 
         dados, erro = validar_linha_aluno(
             {"nome": nome, "matricula": matricula, "email": email}

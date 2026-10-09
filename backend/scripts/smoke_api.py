@@ -3337,6 +3337,229 @@ def main():
                    "M01-55: 400 e 401 seguem como antes")
         app_erro.logger.removeHandler(captura)
 
+        # ---------------------------------------------------------
+        print("\n[M-02] Ano encerrado e historico somente leitura")
+        ano_m2 = 2040
+        r = coord_a.post("/api/config/anos-letivos", {"ano": ano_m2})
+        id_ano_m2 = r.get_json()["id"]
+        etapa_m2 = coord_a.post("/api/config/etapas", {
+            "nome": "E M02", "ordem": 1, "ano_letivo": ano_m2}).get_json()
+        coord_a.post("/api/config/etapas/%d/notas" % etapa_m2["id"],
+                     {"nota_minima": 6, "nota_maxima": 10})
+        crit_m2 = criar_criterio(coord_a, etapa_m2["id"], "Provas", 100)
+        turma_m2 = coord_a.post("/api/classes", {"name": "M02 Turma 2040",
+                                                 "ano_letivo": ano_m2}).get_json()
+        alunos_m2 = [
+            coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"],
+                         {"nome": nome, "matricula": mat}).get_json()
+            for nome, mat in (("Ana Historica Silva", "H1"), ("Bia Historica Costa", "H2"))
+        ]
+        coord_a.post(
+            "/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+            {"turma_ids": [turma_orig["id"], turma_dest["id"], turma_outro_ano["id"],
+                           turma_m2["id"]]},
+        )
+        ativ_m2 = criar_atividade(prof_i2, turma_m2["id"], etapa_m2["id"],
+                                  crit_m2["id"], 10, "M02 atividade")
+        lancar(prof_i2, ativ_m2["id"], alunos_m2[0]["id"], 8)
+        nota_m2 = query_one("SELECT id FROM nota WHERE atividade_id = %s AND aluno_id = %s",
+                            (ativ_m2["id"], alunos_m2[0]["id"]))["id"]
+        # aluno de ano aberto, para o teste de transferencia PARA ano encerrado
+        aluno_aberto = coord_a.post(
+            "/api/coordenacao/turmas/%d/alunos" % turma_orig["id"],
+            {"nome": "Caio Ano Aberto", "matricula": "AB1"}).get_json()
+
+        # controle: com o ano ainda em planejamento tudo funciona
+        checar(coord_a.put("/api/classes/%d" % turma_m2["id"],
+                           {"description": "ano em planejamento"}).status_code == 200
+               and coord_a.put("/api/config/etapas/%d" % etapa_m2["id"],
+                               {"nome": "E M02 (planejamento)"}).status_code == 200,
+               "M02-01: ano em PLANEJAMENTO continua aceitando edicao de turma e etapa")
+        status_2026 = ano_por_numero(coord_a, ANO)["status"]
+        checar(status_2026 in ("atual", "planejamento")
+               and coord_a.put("/api/classes/%d" % turma_orig["id"],
+                               {"description": "ano nao encerrado"}).status_code == 200,
+               "M02-02: turma de ano nao encerrado (%s) continua editavel" % status_2026)
+
+        def estado_m2():
+            """Foto exata das tabelas do cenario, escopo da escola A."""
+            return {
+                tabela: query_all(sql, (cid_a,))
+                for tabela, sql in (
+                    ("turma", "SELECT * FROM turma WHERE coordenacao_id = %s ORDER BY id"),
+                    ("aluno", "SELECT al.* FROM aluno al INNER JOIN turma t ON t.id = al.turma_id "
+                              "WHERE t.coordenacao_id = %s ORDER BY al.id"),
+                    ("etapa", "SELECT * FROM etapa WHERE coordenacao_id = %s ORDER BY id"),
+                    ("criterio", "SELECT * FROM criterio WHERE coordenacao_id = %s ORDER BY id"),
+                    ("atividade", "SELECT * FROM atividade WHERE coordenacao_id = %s ORDER BY id"),
+                    ("nota", "SELECT n.* FROM nota n INNER JOIN atividade a ON a.id = n.atividade_id "
+                             "WHERE a.coordenacao_id = %s ORDER BY n.id"),
+                    ("historico", "SELECT * FROM aluno_turma_historico WHERE coordenacao_id = %s ORDER BY id"),
+                )
+            }
+
+        # encerra o ano
+        checar(coord_a.put("/api/config/anos-letivos/%d" % id_ano_m2,
+                           {"status": "encerrado"}).status_code == 200,
+               "M02-03: coordenacao encerra o ano 2040")
+        antes_m2 = estado_m2()
+
+        def bloqueado(resposta):
+            corpo = resposta.get_json(silent=True) or {}
+            return (resposta.status_code == 400
+                    and "encerrado" in (corpo.get("error") or "").lower())
+
+        # ---- leitura continua liberada
+        leituras = (
+            ("turma", coord_a.get("/api/classes/%d" % turma_m2["id"])),
+            ("lista de turmas do ano", coord_a.get("/api/classes?ano_letivo=%d" % ano_m2)),
+            ("alunos (coordenacao)", coord_a.get("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"])),
+            ("alunos (professor)", prof_i2.get("/api/professor/turmas/%d/alunos" % turma_m2["id"])),
+            ("historico do aluno", coord_a.get("/api/coordenacao/alunos/%d/historico" % alunos_m2[0]["id"])),
+            ("atividades", prof_i2.get("/api/activities?class_id=%d" % turma_m2["id"])),
+            ("atividade", prof_i2.get("/api/activities/%d" % ativ_m2["id"])),
+            ("notas da atividade", prof_i2.get("/api/atividades/%d/notas" % ativ_m2["id"])),
+            ("boletim (coordenacao)", coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_m2["id"])),
+            ("boletim (professor)", prof_i2.get("/api/professor/turmas/%d/boletim" % turma_m2["id"])),
+            ("desempenho do aluno", prof_i2.get("/api/professor/alunos/%d/estatisticas" % alunos_m2[0]["id"])),
+            ("etapas do ano", coord_a.get("/api/config/etapas?ano_letivo=%d" % ano_m2)),
+            ("etapa", coord_a.get("/api/config/etapas/%d" % etapa_m2["id"])),
+            ("criterios", coord_a.get("/api/config/criterios/etapa/%d" % etapa_m2["id"])),
+        )
+        for rotulo, resposta in leituras:
+            checar(resposta.status_code == 200, "M02-04: leitura em ano encerrado continua 200 (%s)" % rotulo)
+        checar(any(n["valor"] == 8 for n in leituras[7][1].get_json()["notas"] if n["valor"] is not None)
+               and leituras[8][1].get_json()["alunos"][0]["etapas"][0]["situacao"] == "adequado",
+               "M02-05: o historico segue visivel e calculado (nota 8 -> adequado)")
+
+        # ---- turma
+        checar(bloqueado(coord_a.put("/api/classes/%d" % turma_m2["id"], {"name": "Renomeada"})),
+               "M02-06: editar turma de ano encerrado -> 400")
+        checar(bloqueado(coord_a.delete("/api/classes/%d" % turma_m2["id"])),
+               "M02-07: excluir turma de ano encerrado -> 400 (sem cascata)")
+        r = coord_a.post("/api/classes", {"name": "M02 nova turma", "ano_letivo": ano_m2})
+        checar(r.status_code == 409 and "encerrado" in r.get_json()["error"].lower(),
+               "M02-08: criar turma em ano encerrado continua bloqueada (409, como validado no Marco 6)")
+
+        # ---- aluno
+        checar(bloqueado(coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"],
+                                      {"nome": "Novo Aluno Teste"})),
+               "M02-09: cadastrar aluno em turma de ano encerrado (coordenacao) -> 400")
+        checar(bloqueado(prof_i2.post("/api/professor/turmas/%d/alunos" % turma_m2["id"],
+                                      {"nome": "Novo Aluno Teste"})),
+               "M02-10: cadastrar aluno em turma de ano encerrado (professor) -> 400")
+        checar(bloqueado(coord_a.upload("/api/coordenacao/turmas/%d/alunos/importar" % turma_m2["id"],
+                                        "alunos.csv", b"nome\nAluno Importado Teste\n")),
+               "M02-11: importar alunos para turma de ano encerrado -> 400")
+        checar(bloqueado(coord_a.put("/api/coordenacao/alunos/%d" % alunos_m2[0]["id"],
+                                     {"nome": "Ana Renomeada Silva"})),
+               "M02-12: editar aluno (nome) de turma de ano encerrado -> 400 (decisao: aluno e historico)")
+        checar(bloqueado(coord_a.put("/api/coordenacao/alunos/%d" % alunos_m2[0]["id"],
+                                     {"matricula": "H9"}))
+               and bloqueado(prof_i2.put("/api/professor/alunos/%d" % alunos_m2[0]["id"],
+                                         {"email": "ana@escola.com"})),
+               "M02-13: editar matricula/e-mail do aluno (coordenacao e professor) -> 400")
+        checar(bloqueado(coord_a.delete("/api/coordenacao/alunos/%d" % alunos_m2[1]["id"]))
+               and bloqueado(prof_i2.delete("/api/professor/alunos/%d" % alunos_m2[1]["id"])),
+               "M02-14: excluir aluno de turma de ano encerrado (coordenacao e professor) -> 400")
+
+        # ---- etapa e criterio (etapa ABERTA: o ano encerrado vale mesmo assim)
+        ep_m2 = "/api/config/etapas/%d" % etapa_m2["id"]
+        checar(coord_a.get(ep_m2).get_json()["fechada"] is False,
+               "M02-15: a etapa do teste esta ABERTA (nao e a regra do I-03 que bloqueia)")
+        checar(bloqueado(coord_a.post("/api/config/etapas", {"nome": "E nova", "ordem": 2, "ano_letivo": ano_m2})),
+               "M02-16: criar etapa em ano encerrado -> 400")
+        checar(bloqueado(coord_a.post("/api/config/etapas", {"nome": "Reconfig", "ordem": 1, "ano_letivo": ano_m2})),
+               "M02-17: reconfigurar (upsert) etapa existente de ano encerrado -> 400")
+        checar(bloqueado(coord_a.put(ep_m2, {"nome": "Outro nome"})),
+               "M02-18: editar etapa de ano encerrado -> 400")
+        checar(bloqueado(coord_a.post(ep_m2 + "/notas", {"nota_minima": 5, "nota_maxima": 10})),
+               "M02-19: alterar notas minima/maxima de etapa de ano encerrado -> 400")
+        checar(bloqueado(coord_a.delete(ep_m2)),
+               "M02-20: excluir etapa de ano encerrado -> 400")
+        checar(bloqueado(coord_a.post("/api/config/criterios/etapa/%d" % etapa_m2["id"],
+                                      {"nome": "Novo criterio", "peso": 10})),
+               "M02-21: criar criterio em etapa de ano encerrado -> 400")
+        checar(bloqueado(coord_a.put("/api/config/criterios/%d" % crit_m2["id"], {"peso": 50})),
+               "M02-22: editar criterio de ano encerrado -> 400")
+        checar(bloqueado(coord_a.delete("/api/config/criterios/%d" % crit_m2["id"])),
+               "M02-23: excluir criterio de ano encerrado -> 400")
+
+        # ---- atividade e nota
+        checar(bloqueado(prof_i2.post("/api/activities", {
+            "title": "Nova", "class_id": turma_m2["id"], "etapa_id": etapa_m2["id"],
+            "criterio_id": crit_m2["id"], "nota_maxima": 10})),
+               "M02-24: criar atividade em turma de ano encerrado -> 400")
+        checar(bloqueado(prof_i2.put("/api/activities/%d" % ativ_m2["id"], {"title": "Outro"})),
+               "M02-25: editar atividade de ano encerrado -> 400")
+        checar(bloqueado(prof_i2.put("/api/activities/%d" % ativ_m2["id"], {"class_id": turma_dest["id"]})),
+               "M02-26: mover atividade de ano encerrado para outra turma -> 400")
+        checar(bloqueado(prof_i2.delete("/api/activities/%d" % ativ_m2["id"])),
+               "M02-27: excluir atividade de ano encerrado -> 400")
+        checar(bloqueado(lancar(prof_i2, ativ_m2["id"], alunos_m2[1]["id"], 5)),
+               "M02-28: lancar nota nova em ano encerrado -> 400")
+        checar(bloqueado(lancar(prof_i2, ativ_m2["id"], alunos_m2[0]["id"], 3)),
+               "M02-29: editar nota existente em ano encerrado -> 400")
+        checar(bloqueado(prof_i2.delete("/api/professor/notas/%d" % nota_m2)),
+               "M02-30: excluir nota em ano encerrado -> 400")
+        checar(bloqueado(prof_i2.upload("/api/atividades/%d/notas/importar" % ativ_m2["id"],
+                                        "notas.csv", b"matricula,nota\nH1,5\n")),
+               "M02-31: importar notas em ano encerrado -> 400")
+
+        # ---- transferencia
+        r = coord_a.post("/api/coordenacao/alunos/%d/transferir" % aluno_aberto["id"],
+                         {"turma_id": turma_m2["id"]})
+        checar(r.status_code == 400 and "encerrado" in r.get_json()["error"].lower(),
+               "M02-32: transferir aluno PARA turma de ano encerrado continua recusado (400)")
+
+        # ---- cross-school e papel: o status do ano da escola A nao vaza
+        for rotulo, resposta in (
+            ("editar turma", coord_b.put("/api/classes/%d" % turma_m2["id"], {"name": "x"})),
+            ("excluir turma", coord_b.delete("/api/classes/%d" % turma_m2["id"])),
+            ("cadastrar aluno", coord_b.post("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"], {"nome": "Zé Silva"})),
+            ("editar aluno", coord_b.put("/api/coordenacao/alunos/%d" % alunos_m2[0]["id"], {"nome": "Zé Silva"})),
+            ("excluir aluno", coord_b.delete("/api/coordenacao/alunos/%d" % alunos_m2[0]["id"])),
+            ("editar etapa", coord_b.put(ep_m2, {"nome": "x"})),
+            ("excluir criterio", coord_b.delete("/api/config/criterios/%d" % crit_m2["id"])),
+            ("editar atividade", professor_b.put("/api/activities/%d" % ativ_m2["id"], {"title": "x"})),
+            ("excluir atividade", professor_b.delete("/api/activities/%d" % ativ_m2["id"])),
+            ("lancar nota", lancar(professor_b, ativ_m2["id"], alunos_m2[0]["id"], 1)),
+            ("excluir nota", professor_b.delete("/api/professor/notas/%d" % nota_m2)),
+        ):
+            checar(resposta.status_code == 404
+                   and "encerrado" not in resposta.get_data(as_text=True).lower(),
+                   "M02-33: escola B, %s do ano encerrado da escola A -> 404 (sem revelar o status)" % rotulo)
+        checar(prof_i2.put("/api/classes/%d" % turma_m2["id"], {"name": "x"}).status_code == 403
+               and prof_i2.delete("/api/config/etapas/%d" % etapa_m2["id"]).status_code == 403,
+               "M02-34: professor continua recebendo 403 nas rotas da coordenacao")
+
+        # ---- integridade
+        checar(estado_m2() == antes_m2,
+               "M02-35: nada mudou (turma, aluno, etapa, criterio, atividade, nota e "
+               "historico identicos, linha a linha, depois de todas as tentativas)")
+
+        # ---- a regra acompanha o status do ano: reabrindo, volta a funcionar
+        checar(coord_a.put("/api/config/anos-letivos/%d" % id_ano_m2,
+                           {"status": "planejamento"}).status_code == 200,
+               "M02-36: coordenacao volta o ano 2040 para planejamento")
+        checar(coord_a.put("/api/classes/%d" % turma_m2["id"], {"description": "reaberto"}).status_code == 200
+               and coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"],
+                                {"nome": "Aluno Reaberto Teste"}).status_code == 201
+               and coord_a.put(ep_m2, {"nome": "E M02 (reaberta)"}).status_code == 200
+               and prof_i2.put("/api/activities/%d" % ativ_m2["id"], {"title": "M02 reaberta"}).status_code == 200
+               and lancar(prof_i2, ativ_m2["id"], alunos_m2[1]["id"], 5).status_code == 201,
+               "M02-37: fora do encerrado, turma, aluno, etapa, atividade e nota voltam a aceitar escrita")
+
+        # ---- transferencia a PARTIR de ano encerrado continua permitida (promocao)
+        coord_a.put("/api/config/anos-letivos/%d" % id_ano_m2, {"status": "encerrado"})
+        r = coord_a.post("/api/coordenacao/alunos/%d/transferir" % alunos_m2[0]["id"],
+                         {"turma_id": turma_dest["id"], "motivo": "promocao"})
+        hist = coord_a.get("/api/coordenacao/alunos/%d/historico" % alunos_m2[0]["id"]).get_json()
+        checar(r.status_code == 200 and len(hist) == 2 and hist[0]["atual"] is True
+               and hist[1]["anoLetivo"] == ano_m2 and hist[1]["atual"] is False,
+               "M02-38: transferir um aluno A PARTIR de turma de ano encerrado continua permitido "
+               "(caminho de promocao) e o historico do ano encerrado e preservado")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

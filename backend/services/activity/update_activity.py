@@ -4,6 +4,7 @@ from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from services import entrada
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 from services.activity.create_activity import parse_data
 from services.activity.validacao import (
     validar_ano_da_etapa,
@@ -33,6 +34,11 @@ class UpdateActivityService:
             professor_id, atual["turma_id"]
         ):
             raise LookupError("Atividade nao encontrada")
+
+        # Atividade de turma de ano encerrado e historico: nem editar nem mover.
+        turma_atual = Turma.find_by_id(atual["turma_id"], coordenacao_id)
+        if turma_atual:
+            exigir_ano_nao_encerrado(coordenacao_id, turma_atual["ano_letivo"])
 
         # Atividade de etapa ja fechada fica congelada por inteiro (mesmo
         # so trocando o titulo): senao o resultado que a Coordenacao ja deu
@@ -78,6 +84,7 @@ class UpdateActivityService:
         turma = Turma.find_by_id(turma_final, coordenacao_id)
         if not turma:
             raise LookupError("Turma nao encontrada")
+        exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
 
         # Etapa e criterio: so mexe quando vieram na requisicao, mas quando
         # vieram passam pela validacao completa de escola e de ano.

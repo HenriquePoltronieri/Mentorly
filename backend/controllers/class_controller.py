@@ -14,6 +14,7 @@ from auth.decorators import coordenacao_atual, eh_professor, usuario_atual_id
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from repositories.consultas import relatorio_turmas_atividades
+from services.config.anos_letivos import AnoEncerrado
 from services.conflito import ConflitoDeIntegridade
 from services.entrada import EntradaInvalida
 from services.turmas import (
@@ -106,6 +107,8 @@ class ClassController:
             excluir_turma(class_id, coordenacao_atual())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except AnoEncerrado as erro:
+            return jsonify({"error": str(erro)}), 400
         except ConflitoDeIntegridade as erro:
             return jsonify({"error": str(erro)}), 409
         return "", 204

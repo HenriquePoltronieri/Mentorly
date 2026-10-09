@@ -123,6 +123,8 @@ class ProfessorController:
             )
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
         return "", 204
 
     def modelo_planilha_alunos(self, turma_id):

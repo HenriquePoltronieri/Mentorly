@@ -4,7 +4,11 @@ from models.criterio_model import Criterio
 from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, resumo_pesos
-from services.config.anos_letivos import resolver_ano_letivo
+from services.config.anos_letivos import (
+    AnoEncerrado,
+    exigir_ano_nao_encerrado,
+    resolver_ano_letivo,
+)
 from services import entrada
 from services.conflito import (
     ConflitoDeIntegridade,
@@ -48,13 +52,18 @@ MENSAGEM_ETAPA_FECHADA = (
 
 
 def exigir_etapa_aberta(etapa):
-    """Etapa fechada congela a configuracao: o resultado ja dado como definitivo
-    nao pode mudar por peso, nota minima/maxima, ordem ou criterio.
+    """Etapa fechada (ou de ano encerrado) congela a configuracao: o resultado
+    ja dado como definitivo nao pode mudar por peso, nota minima/maxima, ordem
+    ou criterio.
+
+    O ano encerrado vale mesmo com a etapa aberta e vem primeiro: e a regra
+    mais ampla. Etapa e criterio (config) passam todos por esta funcao.
 
     Chamada DEPOIS de achar a etapa dentro da escola (404 para quem nao tem
     acesso), para nao revelar o estado de uma etapa alheia. A reabertura e o
     caminho oficial para voltar a editar.
     """
+    exigir_ano_nao_encerrado(etapa["coordenacao_id"], etapa["ano_letivo"])
     if etapa.get("fechada"):
         raise ValueError(MENSAGEM_ETAPA_FECHADA)
 
@@ -133,10 +142,11 @@ class SalvarEtapaService:
             coordenacao_id, ano_letivo, permitir_encerrado=True
         )
         ano_letivo = registro["ano"]
-        if (registro["status"] == "encerrado"
-                and not Etapa.find_by_ordem(coordenacao_id, ano_letivo, ordem)):
-            raise ValueError(
-                "O ano letivo %d esta encerrado e nao recebe etapas novas"
+        if registro["status"] == "encerrado":
+            # Nem etapa nova nem reconfigurar a existente: ano encerrado e
+            # historico (a leitura continua liberada).
+            raise AnoEncerrado(
+                "O ano letivo %d esta encerrado e nao permite alteracoes."
                 % ano_letivo
             )
 

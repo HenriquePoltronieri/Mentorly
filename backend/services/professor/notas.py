@@ -3,7 +3,9 @@ from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
+from models.turma_model import Turma
 from services import entrada
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 
 
 def _atividade_do_professor(atividade_id, professor_id):
@@ -16,6 +18,13 @@ def _atividade_do_professor(atividade_id, professor_id):
     ):
         raise LookupError("Atividade nao encontrada")
     return atividade
+
+
+def exigir_ano_aberto_da_atividade(atividade):
+    """Nota de atividade de turma em ano encerrado e historico (so leitura)."""
+    turma = Turma.find_by_id(atividade["turma_id"], atividade["coordenacao_id"])
+    if turma:
+        exigir_ano_nao_encerrado(atividade["coordenacao_id"], turma["ano_letivo"])
 
 
 def _inteiro_do_aluno(bruto):
@@ -50,6 +59,7 @@ class LancarNotasService:
 
     def execute(self, atividade_id, professor_id, payload):
         atividade = _atividade_do_professor(atividade_id, professor_id)
+        exigir_ano_aberto_da_atividade(atividade)
 
         if atividade.get("etapa_id") and Etapa.esta_fechada(
             atividade["etapa_id"], atividade["coordenacao_id"]
@@ -156,6 +166,7 @@ class ExcluirNotaService:
         aluno = Aluno.find_by_id(nota["aluno_id"])
         if not aluno or aluno["turma_id"] != atividade["turma_id"]:
             raise LookupError("Nota nao encontrada")
+        exigir_ano_aberto_da_atividade(atividade)
 
         if atividade.get("etapa_id") and Etapa.esta_fechada(
             atividade["etapa_id"], atividade["coordenacao_id"]

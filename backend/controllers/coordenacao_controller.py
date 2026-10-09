@@ -179,6 +179,8 @@ class CoordenacaoController:
             ExcluirAlunoService().execute(aluno_id, coordenacao_atual())
         except LookupError as erro:
             return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
         return "", 204
 
     def transferir_aluno(self, aluno_id):

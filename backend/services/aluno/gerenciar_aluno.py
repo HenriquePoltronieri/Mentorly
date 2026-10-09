@@ -13,6 +13,7 @@ Professor).
 from models.aluno_model import Aluno
 from services import entrada
 from services.aluno.acesso_turma import aluno_acessivel
+from services.config.anos_letivos import exigir_ano_nao_encerrado
 from services.planilha.validacao import validar_email, validar_nome_completo
 
 
@@ -23,6 +24,11 @@ class AtualizarAlunoService:
     def execute(self, aluno_id, coordenacao_id, nome=None, matricula=None,
                 email=None, professor_id=None):
         aluno = aluno_acessivel(aluno_id, coordenacao_id, professor_id)
+        # Decisao: o aluno de uma turma de ano encerrado e historico, inclusive
+        # nome e matricula (aparecem no boletim daquele ano e a matricula e a
+        # chave da importacao de notas). Para corrigir um cadastro, transfira o
+        # aluno para uma turma de ano aberto.
+        exigir_ano_nao_encerrado(coordenacao_id, aluno["ano_letivo"])
 
         if nome is not None:
             nome, erro = validar_nome_completo(nome)
@@ -59,5 +65,6 @@ class ExcluirAlunoService:
     schema, o mesmo jeito que excluir turma ja cascateia aluno/nota)."""
 
     def execute(self, aluno_id, coordenacao_id, professor_id=None):
-        aluno_acessivel(aluno_id, coordenacao_id, professor_id)
+        aluno = aluno_acessivel(aluno_id, coordenacao_id, professor_id)
+        exigir_ano_nao_encerrado(coordenacao_id, aluno["ano_letivo"])
         Aluno.delete(aluno_id)
