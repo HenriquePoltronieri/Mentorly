@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/confirmarExclusaoDialog.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../../coordenacao/models/turmaModel.dart';
@@ -97,25 +98,14 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   }
 
   Future<void> _excluirAtividade(AtividadeModel atividade) async {
-    final confirmou = await showDialog<bool>(
-      context: context,
-      builder: (contexto) => AlertDialog(
-        title: const Text('Excluir atividade'),
-        content: Text('Excluir a atividade "${atividade.nome}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(contexto, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(contexto, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmou = await confirmarExclusao(
+      context,
+      titulo: 'Excluir atividade?',
+      nome: atividade.nome,
+      aviso: AvisosDeExclusao.atividade,
     );
 
-    if (confirmou != true) return;
+    if (!confirmou) return;
 
     try {
       await _atividadesService.excluirAtividade(atividade.id);

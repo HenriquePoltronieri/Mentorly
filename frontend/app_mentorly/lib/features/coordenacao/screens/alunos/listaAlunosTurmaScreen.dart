@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/confirmarExclusaoDialog.dart';
 import '../../../../core/services/apiService.dart';
 import '../../models/turmaModel.dart';
 import '../../../../core/widgets/adicionarAlunosModal.dart';
@@ -112,27 +113,13 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   }
 
   Future<void> _excluirAluno(Map<String, dynamic> aluno) async {
-    final confirmou = await showDialog<bool>(
-      context: context,
-      builder: (contexto) => AlertDialog(
-        title: const Text('Excluir aluno'),
-        content: Text(
-          'Tem certeza que deseja excluir "${aluno['nome']}"? '
-          'Essa ação não pode ser desfeita.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(contexto, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(contexto, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmou = await confirmarExclusao(
+      context,
+      titulo: 'Excluir aluno?',
+      nome: aluno['nome'].toString(),
+      aviso: AvisosDeExclusao.aluno,
     );
-    if (confirmou != true) return;
+    if (!confirmou) return;
 
     try {
       await _alunosService.excluirAluno(aluno['id'] as int);
