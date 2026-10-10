@@ -1,6 +1,7 @@
 # Mentorly
 
-> Estado atual: **Marcos 1 a 9 concluídos em código e testes**. O plano até a apresentação e o histórico das
+> Estado atual: **Marcos 1 a 8 e bloco de IA (9A a 9D) concluídos em código e testes**. A fase atual é
+> **validação final, congelamento (freeze) do MVP e preparação da apresentação**. O plano e o histórico das
 > decisões estão em [docs/roadmap.md](docs/roadmap.md).
 
 ## Sobre o Projeto
@@ -38,7 +39,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 - MySQL 8 (com Stored Procedures)
 - PyJWT 2.9.0 (autenticação) e Werkzeug 3.0.4 (hash de senha)
 - openpyxl 3.1.5 (importação de planilhas XLSX)
-- integração HTTP configurável com modelo de linguagem externo
+- integração HTTP com a **Groq** (modelo `openai/gpt-oss-20b`), configurável por ambiente
 
 ### Frontend
 - Flutter 3 (Dart SDK `>=3.0.0 <4.0.0`)
@@ -111,10 +112,65 @@ Route                      (Blueprint + decorator de papel)
 - **Autenticação** — JWT com `{sub, tipo, coordenacao_id, exp}`. A escola sempre é lida do
   token, nunca de um parâmetro da requisição.
 
-Os insights mantêm uma separação explícita: `services/academico/calculo.py` produz todos os
-valores oficiais; `services/ia/gerar_insights_turma.py` monta um payload mínimo; e
-`services/ia/client.py` envia esses resultados a um provedor externo compatível com chat
-completions. A resposta não é persistida e uma falha externa não afeta notas, boletim ou login.
+### Princípio central: motor, IA e decisão humana
+
+```text
+Motor acadêmico = verdade numérica e regras
+IA              = interpretação, geração e sugestão
+Professor       = decisão humana final
+```
+
+`services/academico/calculo.py` produz todos os valores oficiais; os services de
+`services/ia/` montam payloads mínimos; e `services/ia/client.py` (um único `AIClient`, usado
+por 9A, 9B, 9C e 9D) envia esses payloads a um provedor compatível com chat completions. A IA
+**nunca grava no banco**: o que ela sugere só vira dado oficial quando o Professor confirma, pelo
+fluxo normal. Uma falha externa não afeta notas, boletim ou login.
+
+### Insights acadêmicos (Marco 9A)
+
+Na tela de uma turma, **Insights IA** gera resumo, pontos positivos, pontos de atenção com
+evidência numérica e sugestões para a etapa atual. **A Groq recebe pseudônimos ("Aluno 1",
+"Aluno 2"...) e dados acadêmicos, nunca o nome, a matrícula, o e-mail ou o id do aluno.** O mapa
+pseudônimo → nome real fica dentro do Mentorly: depois que a resposta volta, o backend troca as
+referências pelo primeiro nome antes de entregá-la ao Professor. A IA não participa do mapeamento.
+Uma resposta que cite uma referência inexistente é tratada como inválida.
+
+### Regras de integridade e segurança
+
+Estas regras valem no backend, mesmo fora do aplicativo:
+
+- **Nota mínima.** A comparação com o mínimo tem tolerância numérica (1e-9): uma nota
+  matematicamente igual ao mínimo é "adequada", não "abaixo do mínimo" por ruído de ponto flutuante.
+- **Etapa fechada congela a configuração.** Além de atividades e notas, a Coordenação não altera
+  nome, ordem, datas, notas mínima/máxima nem critérios (criar, editar, excluir) até reabrir a etapa.
+- **Ano encerrado é histórico somente leitura.** Leituras, boletim e desempenho seguem normais;
+  criar, editar ou excluir turma, aluno, etapa, critério, atividade e nota daquele ano é recusado (400).
+  A transferência de um aluno *a partir* de um ano encerrado continua permitida (promoção).
+- **Atividade com notas congela turma, etapa, critério e valor máximo.** Título, descrição e data
+  seguem editáveis. Nota 0 conta como nota lançada.
+- **Exclusão barrada pelo banco devolve 409** com mensagem amigável (critério ou etapa em uso, turma
+  protegida por histórico de transferência), em vez de erro interno. Os diálogos de exclusão do app
+  avisam o que será apagado em cascata.
+- **Entradas validadas.** Corpo que não é objeto, tipos errados, textos acima do limite da coluna,
+  `NaN`/`Infinity`, pesos fora de 0–100, datas inválidas e ordem de etapa duplicada recebem 400/409,
+  não 500. Um bug interno (inclusive `KeyError`/`IndexError`) responde 500 genérico, sem detalhe;
+  "não encontrado" (404) é uma exceção própria, `RecursoNaoEncontrado`.
+- **Sessão e token.** O JWT é aceito só no cabeçalho `Authorization: Bearer`. A única exceção são
+  as três rotas GET de download de modelo de planilha, abertas pelo navegador, que não envia
+  cabeçalho. No aplicativo, um 401 (ou o 403 de professor desativado, identificado por
+  `code: professor_desativado`) limpa a sessão e leva ao login, uma única vez; os demais 403 são
+  erro da operação e não encerram a sessão.
+- **Limite de requisições** (em memória, por processo; reiniciar o backend zera os contadores e
+  várias instâncias não compartilham o limite). Excedido: HTTP 429 com `Retry-After`.
+
+  | Fluxo | Limite | Chave |
+  |---|---|---|
+  | Login (Coordenação e Professor) | 10 por 15 min | IP + e-mail |
+  | Confirmar código de verificação | 6 por 15 min | IP + e-mail |
+  | Enviar/reenviar código | 5 por 15 min | IP + e-mail |
+  | Reenviar convite de professor | 5 por 15 min | escola + professor |
+  | IA (9A, 9B, 9C e 9D, um limite só) | 20 por 15 min | Professor |
+  | IA, teto global do processo | 100 por 15 min | todos |
 
 ### Geração assistida de atividades (Marco 9B)
 
@@ -154,16 +210,25 @@ de plano vem da situação oficial: **recuperação** (abaixo do mínimo), **con
 nota, situação, critério ou etapa muda, e nenhum dado pessoal do aluno é enviado ao provedor. A IA
 não prevê reprovação ou evasão, não cria rótulo de risco, não faz diagnóstico e não inventa números.
 
-### Configuração da IA
+### Configuração da IA e do ambiente
 
 Copie os nomes de `backend/.env.example` para `backend/.env` e configure:
 
 | Variável | Uso |
 |---|---|
+| `SECRET_KEY` | assina o JWT; sem ela o backend gera uma chave por execução (sessões caem ao reiniciar) |
 | `AI_BASE_URL` | URL base do provedor; padrão `https://api.groq.com/openai/v1` |
 | `AI_API_KEY` | credencial do provedor; nunca deve ser versionada |
 | `AI_MODEL` | modelo; padrão `openai/gpt-oss-20b` |
 | `AI_TIMEOUT` | limite da chamada em segundos; padrão interno de 15 |
+| `FLASK_DEBUG` | `false` por padrão; `true` liga o debug do Flask só em desenvolvimento |
+| `DEV_EXPOSE_AUTH_CODES` | `false` por padrão; `true` deixa a API devolver código de verificação e token de convite, só para uso local |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TLS` | envio de e-mail (convite e código) |
+
+**SMTP ausente não expõe nada.** Sem `SMTP_HOST`, o e-mail simplesmente não é enviado e a API
+responde `conviteEnviado: false` / `enviado: false`; o aplicativo avisa que o convite não saiu.
+Quem libera mostrar o código ou o link do convite é só `DEV_EXPOSE_AUTH_CODES=true`, e o padrão
+seguro é `false`.
 
 O provedor do MVP é a Groq, com o modelo `openai/gpt-oss-20b`, e a integração foi validada com
 chamadas reais em 06/10/2026 (ver [docs/roadmap.md](docs/roadmap.md)). URL e modelo continuam
@@ -171,7 +236,8 @@ configuráveis para permitir troca sem alteração de código. Sem `AI_API_KEY`,
 inválida, o provedor fora do ar ou uma resposta inválida, o botão mostra uma mensagem amigável e o
 restante do Mentorly continua normal.
 
-Cuidados de operação, observados com o plano gratuito da Groq em 06/10/2026:
+Cuidados de operação, observados com o plano gratuito da Groq em 06/10/2026 (além do limite
+interno de 20 chamadas de IA por Professor a cada 15 minutos, descrito acima):
 
 - o modelo gasta parte do limite de saída raciocinando, por isso o cliente pede até 2500 tokens
   (900 truncava o JSON e a Groq recusava);
@@ -295,6 +361,8 @@ Professor sem token ou com o papel errado respondem 401/403.
 | DELETE | `/api/coordenacao/professores/<id>/turmas/<turma_id>` | Desvincular turma, preservando dados acadêmicos |
 | GET / POST | `/api/coordenacao/turmas/<id>/alunos` | Listar / cadastrar alunos da turma |
 | PUT / DELETE | `/api/coordenacao/alunos/<id>` | Editar / excluir aluno |
+| POST | `/api/coordenacao/alunos/<id>/transferir` | Transferir aluno de turma (preserva o histórico) |
+| GET | `/api/coordenacao/alunos/<id>/historico` | Histórico de turmas do aluno |
 | GET | `/api/coordenacao/turmas/<id>/alunos/modelo-planilha` | Baixar modelo de planilha |
 | POST | `/api/coordenacao/turmas/<id>/alunos/importar` | Importar alunos por planilha |
 | GET | `/api/coordenacao/turmas/<id>/boletim` | Boletim da turma |
@@ -308,14 +376,21 @@ Professor sem token ou com o papel errado respondem 401/403.
 | GET | `/api/professor/turmas/<id>/alunos/modelo-planilha` | Modelo de planilha de alunos |
 | POST | `/api/professor/turmas/<id>/alunos/importar` | Importar alunos por planilha |
 | GET | `/api/professor/turmas/<id>/boletim` | Boletim da turma |
-| POST | `/api/professor/turmas/<id>/insights` | Gerar insights da etapa atual com IA |
+| POST | `/api/professor/turmas/<id>/insights` | Gerar insights da etapa atual com IA (9A) |
+| POST | `/api/professor/turmas/<id>/atividades/gerar` | Sugerir atividade com IA, sem gravar (9B) |
+| POST | `/api/professor/atividades/<id>/correcao-assistida` | Sugerir avaliação de uma resposta, sem lançar nota (9C) |
+| POST | `/api/professor/alunos/<id>/feedback-ia` | Feedback e plano de recuperação, somente leitura (9D) |
 | GET | `/api/professor/dashboard` | Dashboard (alunos em risco) |
 | GET | `/api/professor/alunos/<id>/estatisticas` | Desempenho do aluno por etapa |
 | PUT / DELETE | `/api/professor/alunos/<id>` | Editar / excluir aluno |
 | DELETE | `/api/professor/notas/<id>` | Excluir nota lançada |
 | GET / POST | `/api/atividades/<id>/notas` | Listar / lançar notas |
-| GET | `/api/atividades/<id>/notas/modelo-planilha` | Modelo de planilha de notas |
+| GET | `/api/atividades/<id>/notas/modelo-planilha` | Modelo de planilha de notas (aceita `?token=`, ver abaixo) |
 | POST | `/api/atividades/<id>/notas/importar` | Importar notas por planilha |
+
+As três rotas de download de modelo de planilha (`GET .../modelo-planilha`, uma da Coordenação e
+duas do Professor) são as únicas que aceitam `?token=<jwt>`, porque são abertas pelo navegador, que
+não manda cabeçalho. Em qualquer outra rota o token só vale em `Authorization: Bearer`.
 
 ### Dashboard da escola (`/api/dashboard`)
 
@@ -331,6 +406,7 @@ Professor sem token ou com o papel errado respondem 401/403.
 backend/
 ├── app.py                      # cria o Flask, registra as rotas e instala schema/procedures
 ├── config.py                   # variáveis de ambiente e backend/.env
+├── erros.py                    # RecursoNaoEncontrado (404), separado de bug interno
 ├── requirements.txt
 ├── auth/                       # JWT e decorators de papel
 ├── routes/                     # Blueprints (activity, auth, class, config, coordenacao,
@@ -345,8 +421,11 @@ backend/
 │   ├── coordenacao/            # professores e vínculos
 │   ├── planilha/               # leitura, validação e importação de XLSX
 │   ├── professor/              # turmas, dashboard, estatísticas e notas
-│   ├── ia/                     # payload acadêmico e cliente do provedor externo
+│   ├── ia/                     # 9A–9D: payloads, contratos e o AIClient único
 │   ├── turmas.py               # CRUD de turma (funções)
+│   ├── entrada.py              # validação de tipo, tamanho, número finito e data
+│   ├── conflito.py             # violação de FK/unicidade esperada vira 409
+│   ├── rate_limit.py           # limite de requisições em memória
 │   └── email_service.py
 ├── models/                     # SQL de cada entidade
 ├── repositories/consultas.py   # consultas que chamam procedures
@@ -356,7 +435,7 @@ backend/
 │   ├── procedure.py            # único ponto que executa CALL
 │   ├── procedures.sql
 │   └── schema.sql
-└── scripts/                    # init_db, smoke_db, smoke_api, test_calculo, test_ia
+└── scripts/                    # init_db, smoke_db, smoke_api e os test_*.py (ver "Testes")
 
 docs/
 ├── architecture.md
@@ -374,14 +453,14 @@ frontend/app_mentorly/
 │   ├── main.dart
 │   ├── app/                    # routes.dart e theme.dart
 │   ├── core/
-│   │   ├── services/           # apiService.dart e authService.dart
-│   │   ├── utils/              # validators.dart
+│   │   ├── services/           # apiService.dart (inclui o tratamento de sessão inválida) e authService.dart
+│   │   ├── utils/              # validators.dart e mensagensConvite.dart
 │   │   └── widgets/            # botões, campos e modais de aluno (adicionar/editar)
 │   └── features/
 │       ├── auth/               # login, cadastro, convite e verificação em duas etapas
 │       ├── coordenacao/        # turmas, alunos, professores, configuração e boletim
 │       └── professor/          # dashboard, turmas, atividades, notas e boletim
-└── test/                       # auth_flow_test.dart e widget_test.dart
+└── test/                       # testes de widget e de fluxo (login, IA, sessão, limites, exclusão...)
 ```
 
 ---
@@ -400,7 +479,7 @@ cd backend
 pip install -r requirements.txt
 
 # 3. (Opcional) backend/.env, ignorado pelo Git, com uma variável por linha:
-#    DB_PASSWORD=...   SECRET_KEY=...
+#    DB_PASSWORD=...   SECRET_KEY=...   (veja backend/.env.example)
 
 # 4. Executar: cria o banco, aplica schema e migrações e instala as procedures
 python app.py
@@ -430,18 +509,28 @@ O backend precisa estar rodando. O endereço da API fica em um único lugar,
 
 ```bash
 cd backend
-python scripts/smoke_db.py       # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py      # API de ponta a ponta (298 verificações)
-python scripts/test_calculo.py   # motor de cálculo, sem banco
-python scripts/test_ia.py        # payload, autorização e cliente externo, sem internet
+python scripts/smoke_db.py                  # conexão, isolamento entre escolas, ano letivo e procedures
+python scripts/smoke_api.py                 # API de ponta a ponta (921 verificações)
+python scripts/test_calculo.py              # motor de cálculo, sem banco (20 testes)
+python scripts/test_config_dev.py           # padrões seguros de debug e de exposição de códigos (12)
+python scripts/test_rate_limit.py           # limite de requisições (15)
+python scripts/test_erros_nao_encontrado.py # 404 só para recurso inexistente (12)
+python scripts/test_ia.py                   # 9A: payload, autorização e cliente externo, sem internet (22)
+python scripts/test_ia_insights_privacidade.py  # 9A: nada identificável vai ao provedor (14)
+python scripts/test_ia_atividade.py         # 9B (25)
+python scripts/test_ia_correcao.py          # 9C (38)
+python scripts/test_ia_feedback.py          # 9D (39)
+python scripts/test_ia_erros_internos.py    # erro interno não vira erro de entrada (10)
 python scripts/test_migracao_ano_letivo.py   # migração do ano letivo sobre um banco no formato antigo
 python scripts/test_migracao_transferencia_aluno.py  # migration de histórico de turma
 python scripts/test_migracao_professor_habilitado.py # migration do status administrativo
 
 cd ../frontend/app_mentorly
-flutter analyze
-flutter test
+flutter analyze   # 0 warnings e 0 errors; 101 infos de estilo
+flutter test      # 107 testes
 ```
+
+Nenhum teste chama a Groq nem envia e-mail: o provedor e o SMTP são substituídos por dublês.
 
 Os scripts de smoke usam o banco configurado em `DB_NAME` e limpam os dados que criam. Para
 não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
@@ -457,10 +546,13 @@ não tocar nos seus dados, aponte `DB_NAME` para um banco temporário.
 
 ## Status do Projeto
 
-Em desenvolvimento. Os Marcos 1 a 9 (avaliação, desempenho, ciclo escolar, gerenciamento de
-alunos, exclusão de nota, ano letivo, transferência com histórico, gestão de professores e
-insights com IA) estão concluídos em código e testes. A integração externa depende das variáveis
-de ambiente do provedor e não altera nem persiste dados acadêmicos.
+Os Marcos 1 a 8 (avaliação, desempenho, ciclo escolar, gerenciamento de alunos, exclusão de
+nota, ano letivo, transferência com histórico e gestão de professores) e o bloco de IA (9A
+insights, 9B geração de atividades, 9C correção assistida e 9D feedback e recuperação) estão
+concluídos em código e testes. Passou por uma auditoria final, com todos os itens importantes e
+médios corrigidos. A fase atual é de validação final, congelamento do MVP e preparação da
+apresentação. A integração externa depende das variáveis de ambiente do provedor e não altera nem
+persiste dados acadêmicos.
 
 ---
 

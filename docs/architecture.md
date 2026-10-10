@@ -106,9 +106,7 @@ uma camada é pulada.
 
 - **Controller** — `backend/controllers/`. É uma classe por área. Lê a requisição, chama o Service
 
-  e devolve o código HTTP certo. Traduz exceções do Service em status (`LookupError` → 404,
-
-  `ValueError` → 400/409). Não escreve SQL e não tem regra acadêmica.
+  e devolve o código HTTP certo. Traduz exceções do Service em status (`RecursoNaoEncontrado` → 404, `ValueError` → 400, `ConflitoDeIntegridade` → 409, `LimiteExcedido` → 429); um erro interno (inclusive `KeyError` e `IndexError`) vira 500 genérico, sem detalhe para o cliente. Não escreve SQL e não tem regra acadêmica.
 
 - **Service** — `backend/services/`. Concentra as validações e as regras de negócio, inclusive a
 
@@ -219,8 +217,8 @@ Nada é persistido por esse fluxo.
 
 **2. IA geradora com revisão humana**
 
-É o padrão usado na geração de atividades (9B) e na correção assistida (9C), e o previsto para
-feedback/recuperação (9D), com a diferença de que o 9D é só leitura e nada é salvo:
+É o padrão usado na geração de atividades (9B) e na correção assistida (9C); o feedback e a
+recuperação (9D) seguem o mesmo desenho, com a diferença de que o 9D é só leitura e nada é salvo:
 
 ```text
 Professor solicita
@@ -246,8 +244,16 @@ Aluno / Turma / Etapa / Critério / Atividade / Nota
 
 `GerarInsightsTurmaService` exige o vínculo `professor_turma`, compara a escola da turma com a
 escola do JWT e usa a etapa do ano da própria turma. O payload contém nome da turma, ano, etapa,
-escala, agregados, primeiro nome do aluno, situação, percentuais, completude e critérios. Email,
-matrícula, identificadores do banco e autenticação não saem da aplicação.
+escala, agregados e, por aluno, uma **referência neutra** ("Aluno 1", "Aluno 2"...), a situação, os
+percentuais, a completude e os critérios. **Nome, primeiro nome, sobrenome, e-mail, matrícula,
+identificadores do banco e autenticação não saem da aplicação.**
+
+A referência é atribuída pelo próprio Mentorly, na ordem da priorização (abaixo do mínimo primeiro).
+O mapa referência → nome fica só em memória no service. Quando a resposta volta, o backend troca
+cada "Aluno N" pelo primeiro nome (com a inicial do sobrenome se dois alunos tiverem o mesmo
+primeiro nome), por substituição exata: "Aluno 10" não vira "Aluno 1" + "0", e "Maluno 1" não é
+tocado. Uma referência que o Mentorly não atribuiu, ou um plural ("Alunos 1 e 2"), torna a resposta
+inválida (503 amigável). A IA não participa do mapeamento e nunca recebe o mapa.
 
 Detalhes individuais são limitados a 50 alunos; para turmas maiores, os agregados continuam
 considerando todos.
@@ -435,7 +441,7 @@ Quando o motor devolve `Decimal` (MySQL), o payload é convertido para tipos JSO
 **Contexto enviado à Groq:** tipo de plano, etapa (nome e escala), resultado (nota, percentual,
 situação, completude), critérios (nome, peso, desempenho, atividades avaliadas e sem nota lançada) e
 contagem de atividades. **Nenhum nome, e-mail, matrícula, id, turma ou dado de outra escola**: o
-nome do aluno aparece só na tela. O primeiro nome não é necessário, então não é enviado.
+nome do aluno aparece só na tela.
 
 **Etapa fechada é permitida.** Como o fluxo é só leitura, olhar o desempenho de uma etapa encerrada
 é um uso legítimo (diferente de lançar nota, que o backend bloqueia).
@@ -548,10 +554,19 @@ registrados em logs.
 
 A minimização também depende do caso:
 
-- **Insights:** primeiro nome e dados acadêmicos necessários;
+- **Insights:** pseudônimos ("Aluno N") e dados acadêmicos necessários; nenhum nome real;
 - **Geração de atividade:** normalmente nenhum dado de aluno;
 - **Correção:** questão, rubrica e resposta textual, sem email, matrícula, senha, JWT ou id do banco;
 - **Feedback:** somente os resultados acadêmicos necessários para o objetivo.
+
+#### Um único `AIClient` e limite de uso
+
+Os quatro casos usam o mesmo `AIClient` (`services/ia/client.py`), que cuida de transporte, timeout,
+limite de tamanho da resposta, uma nova tentativa para resposta fora do contrato e validação do
+JSON; cada caso entrega o seu prompt, o seu contrato e o seu limite de saída (`CasoDeUso`). Como a
+cota da Groq é pequena, cada Professor tem um **limite único de 20 chamadas de IA a cada 15
+minutos** (compartilhado por 9A, 9B, 9C e 9D), mais um teto de 100 no processo. Passado o limite, a
+resposta é 429 com `Retry-After` e o provedor nem é chamado.
 
 #### Falha segura
 
@@ -609,6 +624,39 @@ Não existe tabela genérica de IA.
 
 O modelo externo nunca acessa o banco. Quando uma sugestão precisa virar dado oficial, ela volta
 ao fluxo normal do domínio e passa novamente pelas validações do Mentorly.
+
+---
+
+## Regras de integridade e robustez
+
+Regras do backend (valem fora do aplicativo), nascidas da auditoria final:
+
+- **Motor.** A nota é comparada com a mínima com tolerância de 1e-9 (ruído de ponto flutuante), e o
+  arredondamento continua acontecendo uma única vez, no resultado final.
+- **Congelamentos.** Etapa fechada congela atividades, notas e a configuração da etapa e dos
+  critérios. Ano letivo encerrado é histórico somente leitura (turma, aluno, etapa, critério,
+  atividade e nota; a leitura e a transferência a partir dele seguem permitidas). Atividade com
+  notas congela turma, etapa, critério e valor máximo. A regra de ano vem de uma única função,
+  `exigir_ano_nao_encerrado`, e a de etapa de `exigir_etapa_aberta`; ambas rodam depois da checagem
+  de escola e de vínculo, então quem não tem acesso recebe 404 e nunca descobre o estado do recurso.
+- **Erros.** `RecursoNaoEncontrado` (`backend/erros.py`) é a única exceção que vira 404; ela de
+  propósito não herda de `LookupError`, porque `KeyError` e `IndexError` herdam, e um bug interno
+  não pode parecer "não encontrado". Violações esperadas do banco viram `ConflitoDeIntegridade`
+  (409). Entradas passam por `services/entrada.py` (tipo, tamanho, número finito, data) e viram 400;
+  o que sobrar é 500 genérico, com o detalhe só no log.
+- **Autenticação.** O JWT vale só em `Authorization: Bearer`; a exceção são as três rotas GET de
+  download de modelo de planilha, abertas pelo navegador. O professor desativado perde o acesso
+  imediatamente (403 com `code: professor_desativado`).
+- **Sessão no Flutter.** O `ApiService` é o único ponto que reconhece sessão inválida: um 401 em
+  chamada autenticada (ou aquele 403) apaga a sessão, troca a pilha pelo login do papel e mostra
+  uma mensagem, uma só vez, mesmo com várias chamadas simultâneas. Os outros 403 e o 401 do próprio
+  login seguem como erro da operação.
+- **Limite de requisições.** `services/rate_limit.py`: janela deslizante em memória, por processo,
+  com chave coerente com o fluxo (IP + e-mail no login e nos códigos, escola + professor no convite,
+  Professor na IA). Reiniciar o backend zera os contadores e várias instâncias não compartilham o
+  limite; é a proteção simples do MVP.
+- **Configuração de desenvolvimento.** `FLASK_DEBUG` e `DEV_EXPOSE_AUTH_CODES` vêm desligados. SMTP
+  ausente significa "e-mail não enviado", nunca "pode mostrar o código ou o convite".
 
 ---
 

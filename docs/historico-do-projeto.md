@@ -121,8 +121,16 @@ URLs e os status HTTP foram preservados.
 
 ## Estado atual
 
-Os Marcos 1 a 6 estão concluídos e o projeto tem 20 funcionalidades demonstráveis, listadas em
-[funcionalidades.md](funcionalidades.md). A verificação mais recente (02/10/2026):
+Os Marcos 1 a 8 e o bloco de IA (9A a 9D) estão concluídos, e o projeto tem 25 funcionalidades
+demonstráveis, listadas em [funcionalidades.md](funcionalidades.md). Depois de uma auditoria final,
+os itens importantes e médios foram corrigidos (ver [roadmap.md](roadmap.md)). A verificação mais
+recente (10/10/2026) tem `smoke_api` com 921 verificações, 107 testes Flutter e os demais scripts de
+teste do backend passando; os números completos estão em [funcionalidades.md](funcionalidades.md). A
+fase atual é de validação final, congelamento do MVP e preparação da apresentação.
+
+### Registro histórico (02/10/2026, Marcos 1 a 6)
+
+Neste ponto do projeto havia 20 funcionalidades e a verificação era:
 
 - `py_compile`: 88 arquivos, OK;
 - `smoke_db`: OK;
@@ -132,5 +140,5 @@ Os Marcos 1 a 6 estão concluídos e o projeto tem 20 funcionalidades demonstrá
 - `flutter analyze`: 0 warnings e 0 errors;
 - `flutter test`: 13 testes, OK.
 
-Faltam, para o MVP, a transferência de aluno com histórico, a gestão completa de professores e a
-IA. O plano, com datas, está em [roadmap.md](roadmap.md).
+Faltavam, na época, a transferência de aluno com histórico, a gestão completa de professores e a
+IA; todos foram concluídos depois (Marcos 7, 8 e 9).

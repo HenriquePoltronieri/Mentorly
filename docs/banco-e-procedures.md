@@ -24,10 +24,11 @@ que impede uma escola de ver os dados da outra.
 |---|---|---|
 | `coordenacao` | A escola em si (login da Coordenação) | é a raiz |
 | `ano_letivo` | Anos letivos da escola (`planejamento`, `atual` ou `encerrado`) | `coordenacao_id` |
-| `professor` | Professores da escola | `coordenacao_id` |
+| `professor` | Professores da escola, com `habilitado` (acesso administrativo) e o convite | `coordenacao_id` |
 | `turma` | Turmas da escola, cada uma em um ano letivo | `coordenacao_id` + `ano_letivo` (FK composta) |
 | `professor_turma` | O vínculo que a Coordenação cria | `coordenacao_id` (FK composta) |
 | `aluno` | Alunos de uma turma | `turma_id` → `turma.coordenacao_id` |
+| `aluno_turma_historico` | Vínculos atuais e anteriores do aluno com turma e ano (um aberto por aluno) | `coordenacao_id` + `turma_id` / `ano_letivo` (FKs compostas) |
 | `etapa` | Etapas de um ano letivo (padrão da escola), com a flag `fechada` | `coordenacao_id` + `ano_letivo` (FK composta) |
 | `criterio` | Critérios de avaliação de cada etapa | `coordenacao_id` + `etapa_id` |
 | `atividade` | Atividades criadas pelo Professor | `coordenacao_id` (FK composta) |
@@ -78,7 +79,9 @@ a legada (sem etapa) quanto a coerente.
 
 ## Autenticação
 
-O login devolve um JWT (HS256) cujo payload carrega `{sub, tipo, coordenacao_id, exp}`.
+O login devolve um JWT (HS256) cujo payload carrega `{sub, tipo, coordenacao_id, exp}`. O token só
+vale no cabeçalho `Authorization: Bearer`; a única exceção são as três rotas GET de download de
+modelo de planilha, abertas pelo navegador (`?token=`).
 **Toda consulta lê a escola desse token, nunca de um parâmetro enviado pelo cliente** —
 não existe endpoint que aceite `coordenacao_id` na URL ou no corpo.
 
@@ -88,6 +91,9 @@ Os decorators ficam em `backend/auth/decorators.py`:
 - `@coordenacao_required` — cadastro de turma/aluno, vínculo de professor, configuração
   do ano letivo, fechamento e reabertura de etapa;
 - `@professor_required` — criar/editar/excluir atividade, lançar, importar e excluir nota.
+
+O Professor é revalidado no banco a cada requisição: se `professor.habilitado` for 0, o JWT antigo
+recebe 403 com `code: professor_desativado`.
 
 É `@professor_required` que garante, no backend, que a Coordenação **não** cria
 atividade nem lança nota: um token de coordenação recebe 403 mesmo que a chamada seja
@@ -160,8 +166,11 @@ está no `schema.sql` e também em uma migração (`_etapa_ganha_fechada` em
 `backend/database/migrations.py`), para chegar a bancos que já existiam. Só a Coordenação fecha ou
 reabre uma etapa (`POST /api/config/etapas/<id>/fechar` e `/reabrir`).
 
-**O que uma etapa fechada bloqueia.** Criar, editar e excluir atividade nessa etapa, e lançar,
-importar e excluir nota nas atividades dela. O bloqueio vive nos Services
+**O que uma etapa fechada bloqueia.** Criar, editar e excluir atividade nessa etapa, lançar,
+importar e excluir nota nas atividades dela, e **alterar a configuração da própria etapa**: nome,
+ordem, datas, notas mínima e máxima, exclusão da etapa, e criar, editar ou excluir critério
+(`exigir_etapa_aberta`, em `services/config/etapas.py`). Isso evita que o resultado dado como
+definitivo mude por trás. O bloqueio vive nos Services
 (`services/activity/validacao.py`, `update_activity.py`, `delete_activity.py` e
 `services/professor/notas.py`, `planilha/importar_notas.py`), que consultam o estado da etapa
 (`Etapa.esta_fechada` ou o campo `fechada`) antes de aceitar a escrita. A etapa só volta a aceitar alterações quando a Coordenação a reabre.
@@ -257,6 +266,23 @@ quantas são, e a regra nova impede que isso volte a acontecer.
 
 `scripts/test_migracao_ano_letivo.py` cria um banco temporário no formato antigo e prova tudo isso:
 contagens preservadas, anos e status escolhidos, idempotência e retomada de execução interrompida.
+
+## Regras de integridade que o banco ajuda a fazer valer
+
+- **Exclusão com vínculo protegido.** `atividade` aponta para `etapa` e `criterio` com
+  `ON DELETE RESTRICT`, e `aluno_turma_historico` aponta para `turma` com `RESTRICT`. Excluir uma
+  etapa ou critério em uso, ou a turma de origem de um aluno transferido, é recusado pelo MySQL; a
+  API converte essa violação (e só ela) em **409** com mensagem amigável
+  (`services/conflito.py`). Excluir um aluno apaga as notas e o histórico dele; excluir uma
+  atividade apaga as notas dela; excluir uma turma sem histórico protegido apaga alunos,
+  atividades e notas (`ON DELETE CASCADE`), por isso o aplicativo avisa antes.
+- **Ano encerrado.** O banco guarda só o status; o bloqueio de escrita em ano `encerrado` é do
+  backend (`exigir_ano_nao_encerrado`, em `services/config/anos_letivos.py`).
+- **Atividade com notas.** Turma, etapa, critério e valor máximo não mudam depois da primeira nota
+  (nota 0 conta); título, descrição e data continuam editáveis.
+- **Colunas.** Valores numéricos são `DECIMAL(5,2)` (até 999,99) e os textos têm limite de
+  coluna; a API valida tipo, tamanho e número finito antes de chegar ao MySQL
+  (`services/entrada.py`).
 
 ## Sobre o instalador de procedures
 

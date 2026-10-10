@@ -12,9 +12,15 @@ A seção 6 preserva o plano original em 13 fases. Itens adiados não foram remo
 
 # 1. Estado atual
 
-Os Marcos 1–8 estão concluídos e publicados. Os Marcos 6–8 também já foram migrados e validados
-no banco real. O Marco 9A está publicado (`origin/main` em `fafc013`) e foi validado com a Groq
-real em 06/10/2026; a correção de estabilidade descrita abaixo ainda não foi publicada.
+Os Marcos 1–8 estão concluídos. Os Marcos 6–8 foram migrados e validados no banco real. O bloco de
+IA do MVP está **concluído**: 9A (insights), 9B (geração de atividades), 9C (correção assistida) e
+9D (feedback e recuperação) estão implementados, testados e validados com a Groq real, com o
+`AIClient` único e o modelo `openai/gpt-oss-20b`. A auditoria final pré-MVP (10/2026) já teve todos
+os itens importantes e médios corrigidos.
+
+**Fase atual: validação final, congelamento (freeze) do MVP e preparação da apresentação.** Não há
+feature nova planejada para o MVP; o que resta é o teste manual de ponta a ponta, a revisão final
+e o ensaio.
 
 ## Marco 1 — Avaliação funcionando
 **Status: ✅ Concluído**
@@ -102,38 +108,82 @@ real em 06/10/2026; a correção de estabilidade descrita abaixo ainda não foi 
 - login e JWT antigo bloqueados imediatamente quando o Professor é desativado.
 
 ## Marco 9A — Insights acadêmicos explicáveis
-**Status: ✅ Validado com Groq real em fluxo completo do Mentorly (06/10/2026)**
+**Status: ✅ Concluído; validado com Groq real em fluxo completo do Mentorly (06/10/2026)**
 
 O 9A adiciona a infraestrutura de IA, o endpoint de insights da turma, a tela Flutter, isolamento
 por escola, tratamento de falhas e testes com cliente simulado. O provedor é a Groq, com o modelo
 `openai/gpt-oss-20b`, e a chamada real foi provada de ponta a ponta, inclusive na tela do Flutter.
 Detalhes e resultados na seção do Marco 9A mais abaixo.
 
+## Marcos 9B, 9C e 9D — Geração de atividades, correção assistida e feedback
+**Status: ✅ Concluídos e validados (06/10 e 08/10/2026)**
+
+- **9B:** a IA sugere atividade e questões; o Professor revisa e salva pelo fluxo normal. A IA não grava.
+- **9C:** a IA sugere uma avaliação da resposta; o Professor decide e lança a nota pelo fluxo normal.
+  O percentual é calculado pelo backend.
+- **9D:** feedback e plano de recuperação, continuidade ou acompanhamento a partir do resultado do
+  motor. Somente leitura.
+- 9B, 9C e 9D não enviam identificação do aluno; o 9A envia pseudônimos (ver abaixo).
+
+## Auditoria final pré-MVP
+**Status: ✅ Itens importantes e médios corrigidos (08–10/10/2026); documentação atualizada**
+
+Correções feitas depois da auditoria, cada uma com testes de regressão:
+
+| Item | Correção |
+|---|---|
+| I-01 | nota igual à mínima deixou de virar "abaixo do mínimo" por ruído de ponto flutuante (tolerância de 1e-9) |
+| I-02 | atividade com notas não muda de turma |
+| I-03 | etapa fechada congela também a configuração da etapa e dos critérios |
+| I-04 | exclusão barrada por vínculo protegido devolve 409 amigável, não 500 |
+| I-05 | os diálogos de exclusão do app avisam o que será apagado em cascata |
+| M-01 | validação de entradas (corpo, tipos, tamanhos, `NaN`/`Infinity`, peso 0–100, datas, ordem duplicada) e handler 500 genérico |
+| M-02 | ano letivo encerrado é histórico somente leitura |
+| M-03 | atividade com notas congela turma, etapa, critério e valor máximo (título e descrição seguem editáveis) |
+| M-04 | a lista de atividades mostra só uma prévia da descrição e não quebra em telas estreitas |
+| M-05 | sessão inválida (401, ou 403 de professor desativado) limpa a sessão e volta ao login, uma única vez |
+| M-06 | `FLASK_DEBUG` e `DEV_EXPOSE_AUTH_CODES`, ambos desligados por padrão; SMTP ausente não expõe código nem token |
+| M-07 | o JWT só vale no cabeçalho; `?token=` ficou restrito às 3 rotas de download de modelo de planilha |
+| M-08 | limite de requisições em memória (login, códigos, convites, IA) com 429 e `Retry-After` |
+| M-09 | o 9A envia pseudônimos ("Aluno N") à Groq; os nomes voltam pelo Mentorly |
+| M-10 | `RecursoNaoEncontrado` separado de erro interno: `KeyError`/`IndexError` deixaram de virar 404 |
+| D-07 | documentação atualizada; a tela de convite passou a dizer quando o e-mail não saiu |
+
+Continuam como **dívida técnica aceita para o MVP**: histórico de alterações de nota
+(`nota_historico`), pool de conexões e consultas N+1, limite de requisições distribuído, token na
+URL dos três downloads, 2FA fora do fluxo de login, histórico navegável de notas de aluno
+transferido e a decisão sobre autoria (A06).
+
 ---
 
 # 2. Estado técnico validado
 
-Verificação mais recente (08/10/2026, com o Marco 9D):
+Verificação mais recente (10/10/2026, depois da auditoria final):
 
 | Verificação | Resultado |
 |---|---|
-| `py_compile` | 106 arquivos, OK |
+| `py_compile` | 115 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 400 verificações, 0 falhas |
-| `test_calculo` | 13 testes, OK |
+| `smoke_api` | 921 verificações, 0 falhas |
+| `test_calculo` | 20 testes, OK |
+| `test_config_dev` | 12 testes, OK |
+| `test_rate_limit` | 15 testes, OK |
+| `test_erros_nao_encontrado` | 12 testes, OK |
 | `test_ia` | 22 testes, OK; cliente externo simulado, sem internet |
+| `test_ia_insights_privacidade` | 14 testes, OK; nada identificável chega ao provedor |
 | `test_ia_atividade` | 25 testes, OK; contrato, pedido, service e retry do 9B, sem internet |
 | `test_ia_correcao` | 38 testes, OK; contrato, percentual, service sem nota e retry do 9C, sem internet |
 | `test_ia_feedback` | 39 testes, OK; contrato, prompt, privacidade e service somente leitura do 9D, sem internet |
+| `test_ia_erros_internos` | 10 testes, OK |
 | `test_migracao_ano_letivo` | 24 verificações, 0 falhas |
 | `test_migracao_transferencia_aluno` | 8 verificações, 0 falhas |
 | `test_migracao_professor_habilitado` | 8 verificações, 0 falhas |
-| `flutter analyze` | 0 warnings, 0 errors; 90 infos de estilo (`file_names`, `withOpacity` e afins) |
-| `flutter test` | 51 testes, todos passando |
+| `flutter analyze` | 0 warnings, 0 errors; 101 infos de estilo (`file_names`, `withOpacity` e afins) |
+| `flutter test` | 107 testes, todos passando |
 
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
-Por contagem conservadora, o código local possui hoje **25 funcionalidades demonstráveis de
+Por contagem conservadora, o código possui hoje **25 funcionalidades demonstráveis de
 MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os quatro sub-marcos do bloco de IA
 (9A, 9B, 9C e 9D) estão implementados e validados.
 
@@ -171,7 +221,10 @@ A etapa atual da disciplina exige:
 - [x] realizar push dos Marcos 1–8;
 - [x] validar a chamada externa real do Marco 9A;
 - [x] publicar o Marco 9A;
-- [ ] publicar a correção de estabilidade do 9A (limite de tokens, retry e prompt);
+- [x] correção de estabilidade do 9A (limite de tokens, retry e prompt) e os Marcos 9B–9D;
+- [x] auditoria final pré-MVP e correções dos itens importantes e médios;
+- [x] atualizar a documentação para o freeze;
+- [ ] publicar o estado final no repositório remoto (push, a critério da equipe);
 - [ ] conferir os arquivos no repositório remoto;
 - [ ] confirmar acesso do professor ao repositório.
 
@@ -250,9 +303,9 @@ Essas exceções são pequenas e **não colocam regra de negócio pesada na inte
 | Validação completa da IA | 11/10 – 12/10 |
 | E2E completo do sistema | 13/10 |
 | Correção de UX/bugs | 14/10 – 16/10 |
-| Documentação final | 16/10 – 17/10 |
-| Auditoria final | 18/10 |
-| Correções finais | 19/10 – 20/10 |
+| Documentação final | ✅ atualizada em 10/10 (revisar após o E2E) |
+| Auditoria final | ✅ feita em 08–10/10; itens importantes e médios corrigidos |
+| Correções finais | 19/10 – 20/10 (só o que o E2E revelar) |
 | Congelamento | 20/10 |
 | Buffer | 21/10 – 22/10 |
 | MVP | 23/10 |
@@ -376,8 +429,10 @@ fictícios, dois critérios, notas variadas, um aluno abaixo do mínimo e uma at
 - cadeia provada: Professor → turma vinculada → motor acadêmico → payload → `AIClient` → Groq →
   JSON validado → Flutter → resultado na tela, com carregamento, botão desabilitado durante o pedido
   e um único pedido mesmo com duplo clique;
-- o payload leva só o primeiro nome do aluno e dados acadêmicos: sem e-mail, matrícula, ids, senha,
-  token ou dados de outra escola;
+- na validação de 06/10 o payload levava só o primeiro nome do aluno e dados acadêmicos. **Desde o
+  M-09 (10/2026) nem isso:** a Groq recebe "Aluno 1", "Aluno 2"..., sem nome, e-mail, matrícula, ids,
+  senha, token ou dados de outra escola, e o Mentorly troca as referências pelos nomes antes de
+  entregar o texto ao Professor;
 - autorização: Professor vinculado recebe 200; Professor não vinculado ou de outra escola, 404;
   Coordenação, 403; sem token, 401; nenhuma dessas falhas chega à Groq;
 - dados insuficientes (turma sem alunos, sem atividades, sem notas ou sem etapa) devolvem 422 sem
@@ -698,10 +753,9 @@ contexto original.
 
 ### A03 — mover atividade com notas
 
-Permanece pendente: mover uma atividade que já possui notas pode deixar atividade e alunos em
-contextos de turma diferentes. A correção mínima é bloquear a troca de turma quando houver nota;
-uma solução mais ampla precisa respeitar ano letivo, autoria e histórico. Não resolver de forma
-implícita dentro dos marcos de IA.
+**Resolvida na auditoria final (I-02 e M-03).** Atividade com notas não muda de turma, etapa,
+critério nem valor máximo; título, descrição e data continuam editáveis. Uma solução mais ampla
+(mover as notas, migrar alunos) segue fora do MVP.
 
 ### A05 — contexto de ano letivo
 
@@ -723,7 +777,7 @@ professor_id
 alterado_em
 ```
 
-Hoje a mitigação é parcial: o fechamento de etapa impede alterar ou excluir nota sem uma reabertura explícita, mas a alteração em si não deixa trilha.
+Hoje a mitigação é parcial: o fechamento de etapa e o ano encerrado impedem alterar ou excluir nota sem uma reabertura explícita, mas a alteração em si não deixa trilha.
 
 ### A06 — autoria
 Pergunta ainda **sem resposta** (não resolver agora):
@@ -748,7 +802,7 @@ Decisão pendente:
 - opcional?
 - apenas Coordenação?
 
-A infraestrutura (`/api/auth/enviar-codigo`, `/api/auth/confirmar-codigo` e `twoFactorScreen`) existe, mas está fora do fluxo de login. Para o MVP, a recomendação do plano original é opcional ou somente para a Coordenação.
+A infraestrutura (`/api/auth/enviar-codigo`, `/api/auth/confirmar-codigo` e `twoFactorScreen`) existe, mas está fora do fluxo de login. Para o MVP, a recomendação do plano original é opcional ou somente para a Coordenação. Os dois endpoints têm limite de requisições (M-08) e, sem `DEV_EXPOSE_AUTH_CODES`, não devolvem o código.
 
 ### Segurança e implantação
 
@@ -1272,9 +1326,10 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
-**Status: 🟡 parcial.** Existem `smoke_db`, `smoke_api` (298 verificações), `test_calculo`
-(13 testes), `test_ia` (22 testes), três testes de migration (24, 8 e 8 verificações) e
-`flutter test` (21 testes). Uma suíte estruturada por módulo continua como evolução.
+**Status: 🟡 parcial, bem coberta.** Existem `smoke_db`, `smoke_api` (921 verificações), 10 scripts
+`test_*` de backend (motor, IA 9A–9D, privacidade, limites, erros, configuração), três testes de
+migration (24, 8 e 8 verificações) e `flutter test` (107 testes). A lista completa está em
+[funcionalidades.md](funcionalidades.md). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
@@ -1317,7 +1372,7 @@ Testes pelo menos de:
 
 ## Fase 11 — Limpeza técnica
 
-**Status: 🟡 parcial.** Já feito: ORM antigo removido, código morto removido (ver [simplificacao-tecnica.md](simplificacao-tecnica.md)), bypass de login removido, `SECRET_KEY` sem valor padrão fixo, `backend/.env` ignorado pelo Git. Pendente: URL da API por ambiente, padronização de nomes de arquivo Dart e tratamento de erros mais uniforme.
+**Status: 🟡 parcial.** Já feito: ORM antigo removido, código morto removido (ver [simplificacao-tecnica.md](simplificacao-tecnica.md)), bypass de login removido, `SECRET_KEY` sem valor padrão fixo, `backend/.env` ignorado pelo Git. O tratamento de erros ficou mais uniforme na auditoria final (400/409/404/429/500 bem separados). Pendente: URL da API por ambiente e padronização de nomes de arquivo Dart.
 
 Quando o domínio estiver estável:
 
@@ -1477,8 +1532,8 @@ pela IA precisam de revisão do Professor antes de qualquer persistência.
 | 13 | IA — validação externa dos Insights | 🔴 | ✅ Marco 9A validado com Groq real |
 | 14 | IA — correção assistida com rubrica | 🔴 | ✅ Marco 9C |
 | 15 | IA — geração de atividades e questões | 🟠 | ✅ Marco 9B |
-| 16 | Testes completos | 🟠 | 🟡 parcial |
-| 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ⏳ pendente |
+| 16 | Testes completos | 🟠 | 🟡 bem coberta (921 + 107 + scripts) |
+| 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ✅ auditoria final (I-02, M-03) |
 | 18 | Recuperação de senha | 🟡 | ⏳ pendente fora do bloco atual |
 | 19 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |
 | 20 | IA — feedback e recuperação | 🟡 | ✅ Marco 9D |
