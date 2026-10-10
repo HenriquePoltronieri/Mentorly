@@ -126,7 +126,7 @@ Detalhes e resultados na seção do Marco 9A mais abaixo.
 - 9B, 9C e 9D não enviam identificação do aluno; o 9A envia pseudônimos (ver abaixo).
 
 ## Auditoria final pré-MVP
-**Status: ✅ Itens importantes e médios corrigidos (08–10/10/2026); documentação atualizada**
+**Status: ✅ Itens importantes e médios e a regressão R1 corrigidos (08–10/10/2026); documentação atualizada**
 
 Correções feitas depois da auditoria, cada uma com testes de regressão:
 
@@ -147,6 +147,7 @@ Correções feitas depois da auditoria, cada uma com testes de regressão:
 | M-08 | limite de requisições em memória (login, códigos, convites, IA) com 429 e `Retry-After` |
 | M-09 | o 9A envia pseudônimos ("Aluno N") à Groq; os nomes voltam pelo Mentorly |
 | M-10 | `RecursoNaoEncontrado` separado de erro interno: `KeyError`/`IndexError` deixaram de virar 404 |
+| R1 | regressão achada na revisão pós-correções: fechar e reabrir etapa em ano encerrado ainda era permitido e alterava o consolidado histórico. **Corrigido**: ano letivo encerrado = somente leitura, inclusive fechar e reabrir etapa (400) |
 | D-07 | documentação atualizada; a tela de convite passou a dizer quando o e-mail não saiu |
 
 Continuam como **dívida técnica aceita para o MVP**: histórico de alterações de nota
@@ -164,7 +165,7 @@ Verificação mais recente (10/10/2026, depois da auditoria final):
 |---|---|
 | `py_compile` | 115 arquivos, OK |
 | `smoke_db` | OK |
-| `smoke_api` | 921 verificações, 0 falhas |
+| `smoke_api` | 944 verificações, 0 falhas |
 | `test_calculo` | 20 testes, OK |
 | `test_config_dev` | 12 testes, OK |
 | `test_rate_limit` | 15 testes, OK |
@@ -1326,7 +1327,7 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 
 ## Fase 10 — Testes de verdade
 
-**Status: 🟡 parcial, bem coberta.** Existem `smoke_db`, `smoke_api` (921 verificações), 10 scripts
+**Status: 🟡 parcial, bem coberta.** Existem `smoke_db`, `smoke_api` (944 verificações), 10 scripts
 `test_*` de backend (motor, IA 9A–9D, privacidade, limites, erros, configuração), três testes de
 migration (24, 8 e 8 verificações) e `flutter test` (107 testes). A lista completa está em
 [funcionalidades.md](funcionalidades.md). Uma suíte estruturada por módulo continua como evolução.
@@ -1532,7 +1533,7 @@ pela IA precisam de revisão do Professor antes de qualquer persistência.
 | 13 | IA — validação externa dos Insights | 🔴 | ✅ Marco 9A validado com Groq real |
 | 14 | IA — correção assistida com rubrica | 🔴 | ✅ Marco 9C |
 | 15 | IA — geração de atividades e questões | 🟠 | ✅ Marco 9B |
-| 16 | Testes completos | 🟠 | 🟡 bem coberta (921 + 107 + scripts) |
+| 16 | Testes completos | 🟠 | 🟡 bem coberta (944 + 107 + scripts) |
 | 17 | Integridade ao mover atividade com notas (A03) | 🟡 | ✅ auditoria final (I-02, M-03) |
 | 18 | Recuperação de senha | 🟡 | ⏳ pendente fora do bloco atual |
 | 19 | Auditoria de notas (`nota_historico`) | 🟡 | ⏳ pendente |

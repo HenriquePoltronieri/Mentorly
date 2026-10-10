@@ -65,7 +65,7 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
 - **Integridade acadêmica** (regras do backend, não novas telas):
   - nota igual à mínima é "adequada" (tolerância de ponto flutuante);
   - etapa fechada congela atividades, notas e também a configuração da etapa e dos critérios;
-  - ano letivo encerrado é histórico somente leitura (a transferência a partir dele continua permitida);
+  - ano letivo encerrado é histórico somente leitura, inclusive fechar e reabrir etapa (a transferência a partir dele continua permitida);
   - atividade que já tem notas não muda de turma, etapa, critério nem valor máximo;
   - exclusão barrada por vínculo protegido responde 409 com mensagem clara, e os diálogos de exclusão
     avisam o que será apagado em cascata.
@@ -113,7 +113,7 @@ Groq nem envia e-mail.
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
-| `python scripts/smoke_api.py` | API de ponta a ponta: papéis, isolamento, ano letivo, transferência, professores, IA (9A–9D com provedor simulado) e as regras de integridade e segurança da auditoria final | 921 verificações, 0 falhas |
+| `python scripts/smoke_api.py` | API de ponta a ponta: papéis, isolamento, ano letivo, transferência, professores, IA (9A–9D com provedor simulado) e as regras de integridade e segurança da auditoria final | 944 verificações, 0 falhas |
 | `python scripts/test_calculo.py` | Regras do motor de cálculo, inclusive a fronteira da nota mínima, sem banco | 20 testes, OK |
 | `python scripts/test_config_dev.py` | Padrões seguros de `FLASK_DEBUG` e `DEV_EXPOSE_AUTH_CODES`; ausência de segredos nos testes | 12 testes, OK |
 | `python scripts/test_rate_limit.py` | Janela deslizante, `Retry-After`, limpeza de memória e concorrência | 15 testes, OK |

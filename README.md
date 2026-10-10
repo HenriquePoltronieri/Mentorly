@@ -144,7 +144,7 @@ Estas regras valem no backend, mesmo fora do aplicativo:
 - **Etapa fechada congela a configuração.** Além de atividades e notas, a Coordenação não altera
   nome, ordem, datas, notas mínima/máxima nem critérios (criar, editar, excluir) até reabrir a etapa.
 - **Ano encerrado é histórico somente leitura.** Leituras, boletim e desempenho seguem normais;
-  criar, editar ou excluir turma, aluno, etapa, critério, atividade e nota daquele ano é recusado (400).
+  criar, editar ou excluir turma, aluno, etapa, critério, atividade e nota daquele ano, e também fechar ou reabrir etapa, é recusado (400).
   A transferência de um aluno *a partir* de um ano encerrado continua permitida (promoção).
 - **Atividade com notas congela turma, etapa, critério e valor máximo.** Título, descrição e data
   seguem editáveis. Nota 0 conta como nota lançada.
@@ -510,7 +510,7 @@ O backend precisa estar rodando. O endereço da API fica em um único lugar,
 ```bash
 cd backend
 python scripts/smoke_db.py                  # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py                 # API de ponta a ponta (921 verificações)
+python scripts/smoke_api.py                 # API de ponta a ponta (944 verificações)
 python scripts/test_calculo.py              # motor de cálculo, sem banco (20 testes)
 python scripts/test_config_dev.py           # padrões seguros de debug e de exposição de códigos (12)
 python scripts/test_rate_limit.py           # limite de requisições (15)

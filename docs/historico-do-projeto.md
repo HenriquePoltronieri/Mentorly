@@ -124,7 +124,7 @@ URLs e os status HTTP foram preservados.
 Os Marcos 1 a 8 e o bloco de IA (9A a 9D) estão concluídos, e o projeto tem 25 funcionalidades
 demonstráveis, listadas em [funcionalidades.md](funcionalidades.md). Depois de uma auditoria final,
 os itens importantes e médios foram corrigidos (ver [roadmap.md](roadmap.md)). A verificação mais
-recente (10/10/2026) tem `smoke_api` com 921 verificações, 107 testes Flutter e os demais scripts de
+recente (10/10/2026) tem `smoke_api` com 944 verificações, 107 testes Flutter e os demais scripts de
 teste do backend passando; os números completos estão em [funcionalidades.md](funcionalidades.md). A
 fase atual é de validação final, congelamento do MVP e preparação da apresentação.
 

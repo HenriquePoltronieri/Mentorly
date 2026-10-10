@@ -635,7 +635,7 @@ Regras do backend (valem fora do aplicativo), nascidas da auditoria final:
   arredondamento continua acontecendo uma única vez, no resultado final.
 - **Congelamentos.** Etapa fechada congela atividades, notas e a configuração da etapa e dos
   critérios. Ano letivo encerrado é histórico somente leitura (turma, aluno, etapa, critério,
-  atividade e nota; a leitura e a transferência a partir dele seguem permitidas). Atividade com
+  atividade e nota, além de fechar e reabrir etapa; a leitura e a transferência a partir dele seguem permitidas). Atividade com
   notas congela turma, etapa, critério e valor máximo. A regra de ano vem de uma única função,
   `exigir_ano_nao_encerrado`, e a de etapa de `exigir_etapa_aberta`; ambas rodam depois da checagem
   de escola e de vínculo, então quem não tem acesso recebe 404 e nunca descobre o estado do recurso.

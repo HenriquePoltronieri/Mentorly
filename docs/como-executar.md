@@ -114,7 +114,7 @@ provedor e o SMTP são substituídos por dublês).
 
 ```bash
 python scripts/smoke_db.py                      # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py                     # a API de ponta a ponta (921 verificações)
+python scripts/smoke_api.py                     # a API de ponta a ponta (944 verificações)
 python scripts/test_calculo.py                  # motor de cálculo, sem banco (20 testes)
 python scripts/test_config_dev.py               # padrões seguros de FLASK_DEBUG e DEV_EXPOSE_AUTH_CODES (12)
 python scripts/test_rate_limit.py               # limite de requisições (15)
