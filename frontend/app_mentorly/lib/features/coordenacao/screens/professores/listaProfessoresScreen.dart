@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/mensagensConvite.dart';
 import '../../../../app/routes.dart';
 import '../../models/professorModel.dart';
 import '../../services/professoresService.dart';
@@ -81,10 +82,15 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
     );
     if (confirmar != true) return;
     try {
-      await _professoresService.editarProfessor(
+      final resposta = await _professoresService.editarProfessor(
         professorId: professor['id'] as int,
         nome: nome.text.trim(), email: email.text.trim(), disciplina: disciplina.text.trim(),
       );
+      // Trocar o e-mail de quem ainda nao abriu o convite gera um convite novo.
+      final aviso = MensagensConvite.edicao(resposta);
+      if (aviso != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(aviso)));
+      }
       await _buscarProfessores();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível editar: $e')));
@@ -128,7 +134,7 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
       if (!mounted) return;
       final token = resposta['conviteToken'] as String?;
       final mensagem = token == null
-          ? 'Convite reenviado por e-mail.'
+          ? MensagensConvite.reenvio(resposta)
           : 'Convite renovado. Ambiente de desenvolvimento: token $token';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
       await _buscarProfessores();

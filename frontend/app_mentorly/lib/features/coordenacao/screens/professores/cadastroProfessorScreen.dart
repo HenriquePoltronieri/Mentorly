@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/mensagensConvite.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/services/apiService.dart';
 import '../../services/professoresService.dart';
@@ -32,6 +33,7 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   bool _carregando = false;
   String? _mensagemErro;
   String? _conviteToken;
+  bool _conviteEnviado = false;
 
   Future<void> _cadastrarProfessor() async {
     if (!_formKey.currentState!.validate()) return;
@@ -52,16 +54,17 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
 
       final token = professor['conviteToken'] as String?;
       if (token != null) {
-        // Backend sem SMTP: mostra o convite em vez de fechar a tela, se
-        // nao o professor nao tem como fazer o primeiro acesso.
-        setState(() => _conviteToken = token);
+        // Modo de desenvolvimento (DEV_EXPOSE_AUTH_CODES): o backend devolveu o
+        // token; mostra o link em vez de fechar a tela.
+        setState(() {
+          _conviteToken = token;
+          _conviteEnviado = professor['conviteEnviado'] == true;
+        });
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Professor cadastrado. Convite enviado por e-mail.'),
-        ),
+        SnackBar(content: Text(MensagensConvite.cadastro(professor))),
       );
       Navigator.pop(context, true); // volta pra lista avisando que deu certo
     } on ApiException catch (e) {
@@ -79,10 +82,15 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
     }
   }
 
-  // Mostrado so quando o backend esta em modo dev (sem SMTP configurado).
+  // Mostrado so quando o backend esta em modo dev (DEV_EXPOSE_AUTH_CODES).
   Widget _blocoConvite() {
-    final link =
-        Uri.base.origin + '/#/definir-senha?token=' + (_conviteToken ?? '');
+    // Uri.base.origin so existe em http/https (Flutter Web); em outras
+    // plataformas cai no endereco padrao do app em desenvolvimento.
+    final base = Uri.base;
+    final origem = (base.scheme == 'http' || base.scheme == 'https')
+        ? base.origin
+        : 'http://localhost:3000';
+    final link = '$origem/#/definir-senha?token=${_conviteToken ?? ''}';
 
     return Padding(
       padding: const EdgeInsets.only(top: 20),
@@ -101,11 +109,13 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'O servidor esta sem e-mail configurado, entao o convite nao '
-              'foi enviado. Passe este link para o professor fazer o '
-              'primeiro acesso:',
-              style: TextStyle(fontSize: 12),
+            Text(
+              _conviteEnviado
+                  ? 'O convite foi enviado por e-mail. Em desenvolvimento, '
+                      'este link tambem serve para o primeiro acesso:'
+                  : 'O e-mail com o convite não pôde ser enviado. Passe este '
+                      'link para o professor fazer o primeiro acesso:',
+              style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 10),
             SelectableText(link, style: const TextStyle(fontSize: 12)),
