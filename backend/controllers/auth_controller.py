@@ -6,6 +6,8 @@ O contrato de resposta ({token, usuario}) e o que o AuthService do Flutter
 
 from flask import jsonify, request
 
+from services.rate_limit import limitar_por_origem
+
 from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
 from services.auth.criar_senha_professor import CriarSenhaProfessorService
 from services.auth.login_coordenacao import LoginCoordenacaoService
@@ -32,6 +34,7 @@ class AuthController:
 
     def login_coordenacao(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem("login", request.remote_addr, dados.get("email"))
         try:
             resultado = LoginCoordenacaoService().execute(
                 dados.get("email"), dados.get("senha")
@@ -44,6 +47,7 @@ class AuthController:
 
     def login_professor(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem("login", request.remote_addr, dados.get("email"))
         try:
             resultado = LoginProfessorService().execute(
                 dados.get("email"), dados.get("senha")
@@ -68,6 +72,7 @@ class AuthController:
 
     def enviar_codigo(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem("codigo_enviar", request.remote_addr, dados.get("email"))
         try:
             resultado = EnviarCodigoService().execute(dados.get("email"))
         except ValueError as erro:
@@ -76,6 +81,7 @@ class AuthController:
 
     def confirmar_codigo(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem("codigo_confirmar", request.remote_addr, dados.get("email"))
         try:
             resultado = ConfirmarCodigoService().execute(
                 dados.get("email"), dados.get("codigo")

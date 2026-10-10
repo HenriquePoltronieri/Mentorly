@@ -28,6 +28,7 @@ from services.professor.notas import (
     ListarNotasService,
 )
 from services.ia.client import AIError
+from services.rate_limit import limitar_ia
 from services.ia.corrigir_resposta import CorrigirRespostaIaService
 from services.ia.gerar_atividade import GerarAtividadeIaService
 from services.ia.gerar_feedback import GerarFeedbackIaService
@@ -178,6 +179,7 @@ class ProfessorController:
         return jsonify(montar_boletim_turma(turma, coordenacao_atual()))
 
     def insights_turma(self, turma_id):
+        limitar_ia(usuario_atual_id())
         try:
             dados = GerarInsightsTurmaService().execute(
                 turma_id, usuario_atual_id(), coordenacao_atual()
@@ -192,6 +194,7 @@ class ProfessorController:
 
     def gerar_atividade(self, turma_id):
         """Sugestao de atividade por IA. NAO grava nada: so devolve o texto."""
+        limitar_ia(usuario_atual_id())
         try:
             dados = GerarAtividadeIaService().execute(
                 turma_id, usuario_atual_id(), coordenacao_atual(),
@@ -207,6 +210,7 @@ class ProfessorController:
 
     def feedback_aluno(self, aluno_id):
         """Feedback e plano sugeridos por IA. So leitura: nada e gravado."""
+        limitar_ia(usuario_atual_id())
         try:
             dados = GerarFeedbackIaService().execute(
                 aluno_id, usuario_atual_id(), coordenacao_atual(),
@@ -224,6 +228,7 @@ class ProfessorController:
 
     def corrigir_resposta(self, atividade_id):
         """Sugestao de avaliacao por IA. NAO lanca nota: so devolve a sugestao."""
+        limitar_ia(usuario_atual_id())
         try:
             dados = CorrigirRespostaIaService().execute(
                 atividade_id, usuario_atual_id(), request.get_json(silent=True)

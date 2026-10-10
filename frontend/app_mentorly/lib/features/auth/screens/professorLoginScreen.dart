@@ -3,6 +3,7 @@ import '../../../core/widgets/customTextfield.dart';
 import '../../../core/widgets/customButton.dart';
 import '../../../core/utils/validators.dart';
 import '../../../app/routes.dart';
+import '../../../core/services/apiService.dart';
 import '../../../core/services/authService.dart';
 
 // Tela de login do professor (para logins subsequentes, após já ter definido a senha)
@@ -35,7 +36,12 @@ class _ProfessorLoginScreenState extends State<ProfessorLoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          // 429 (limite de tentativas): o backend ja manda a mensagem pronta.
+          SnackBar(
+            content: Text(e is ApiException && e.statusCode == 429
+                ? e.mensagem
+                : e.toString()),
+          ),
         );
       }
     } finally {

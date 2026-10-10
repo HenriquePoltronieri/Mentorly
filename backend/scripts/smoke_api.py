@@ -27,6 +27,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DEV_EXPOSE_AUTH_CODES"] = "true"
 
 import app as app_module
+from services import rate_limit
+
+# As secoes antigas repetem login, codigo e IA centenas de vezes com o mesmo
+# usuario: sobem o limite (injecao explicita, nao ha modo "desligado") para
+# elas nao esbarrarem no 429. A secao [M-08] restaura os limites reais.
+LIMITES_REAIS = dict(rate_limit.LIMITES)
+rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
 from database.connection import execute, insert, query_all, query_one
 
 SUFIXO = "smoke-api@mentorly.local"
@@ -4088,6 +4095,242 @@ def main():
                "M07-20: a excecao nao se estende as rotas vizinhas (listas de alunos -> 401)")
         checar(estado_da_escola() == antes_m7,
                "M07-21: depois de tudo isso o banco segue identico")
+
+        # ---------------------------------------------------------
+        print("\n[M-08] Limite de requisicoes sensiveis (429)")
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from services.ia import client as iaclient
+
+        # a partir daqui valem os limites REAIS (as secoes antigas rodaram com limite alto)
+        rate_limit.LIMITES.update(LIMITES_REAIS)
+        rate_limit.limiter.reset()
+        MSG_429 = "Muitas tentativas. Aguarde alguns minutos e tente novamente."
+
+        class _Relogio:
+            def __init__(self):
+                self.agora = 10_000.0
+
+            def __call__(self):
+                return self.agora
+
+        def login_m8(email, senha, rota="login-coordenacao", cliente=None):
+            return (cliente or cliente_flask).post(
+                "/api/auth/%s" % rota, json={"email": email, "senha": senha})
+
+        email_coord_a = "a.%s" % SUFIXO
+        email_coord_b = "b.%s" % SUFIXO
+        email_prof = "prof.mover.%s" % SUFIXO
+
+        # ---- login: dentro do limite, resposta normal; o 11o e 429
+        respostas = [login_m8(email_coord_a, "errada") for _ in range(10)]
+        checar(all(r.status_code == 401 and r.get_json()["error"] == "Email ou senha invalidos"
+                   for r in respostas),
+               "M08-01: 10 tentativas erradas dentro do limite seguem com a resposta normal (401)")
+        r11 = login_m8(email_coord_a, "errada")
+        checar(r11.status_code == 429 and r11.get_json() == {"error": MSG_429},
+               "M08-02: a 11a tentativa -> 429 com mensagem amigavel")
+        checar(r11.headers.get("Retry-After", "").isdigit() and 1 <= int(r11.headers["Retry-After"]) <= 900,
+               "M08-03: o 429 traz Retry-After em segundos (ate 15 min)")
+        checar(login_m8(email_coord_a, "senha123").status_code == 429,
+               "M08-04: bloqueado mesmo com a senha certa (a tentativa conta e o identificador esta limitado)")
+
+        # nao revela se o usuario existe: o inexistente e bloqueado exatamente igual
+        fantasma = "nao.existe.%s" % SUFIXO
+        resp_f = [login_m8(fantasma, "x") for _ in range(10)]
+        r11f = login_m8(fantasma, "x")
+        checar(all(r.status_code == 401 and r.get_json()["error"] == "Email ou senha invalidos" for r in resp_f)
+               and r11f.status_code == 429 and r11f.get_json() == r11.get_json(),
+               "M08-05: usuario inexistente recebe a mesma sequencia (10x 401, depois 429 identico)")
+        checar(email_coord_a not in r11.get_data(as_text=True) and fantasma not in r11f.get_data(as_text=True),
+               "M08-06: o 429 nao menciona o e-mail nem diz se ele existe")
+
+        # outro usuario nao herda o bloqueio; login valido segue funcionando
+        r = login_m8(email_coord_b, "senha123")
+        checar(r.status_code == 200 and "token" in r.get_json(),
+               "M08-07: outro usuario (mesmo IP) nao herda o bloqueio e o login valido funciona (200)")
+        # maiusculas/espacos no e-mail contam como o mesmo identificador
+        checar(login_m8("  %s  " % email_coord_a.upper(), "errada").status_code == 429,
+               "M08-08: o identificador e normalizado (caixa e espacos nao burlam o limite)")
+        # professor tem o proprio contador, e erra/acerta normalmente
+        r = login_m8(email_prof, "senha123", "login-professor")
+        checar(r.status_code == 200 and r.get_json()["usuario"]["tipo"] == "professor",
+               "M08-09: login de professor dentro do limite continua normal")
+
+        # depois da janela volta a permitir (relogio injetado, sem esperar 15 minutos)
+        relogio = _Relogio()
+        with patch.object(rate_limit.limiter, "_relogio", relogio):
+            rate_limit.limiter.reset()
+            for _ in range(10):
+                login_m8(email_coord_a, "errada")
+            bloqueou = login_m8(email_coord_a, "senha123")
+            relogio.agora += 14 * 60
+            ainda = login_m8(email_coord_a, "senha123")
+            relogio.agora += 2 * 60
+            liberou = login_m8(email_coord_a, "senha123")
+        checar(bloqueou.status_code == 429 and ainda.status_code == 429 and liberou.status_code == 200,
+               "M08-10: depois da janela de 15 min (relogio injetado) o login volta a ser permitido")
+        rate_limit.limiter.reset()
+
+        # ---- confirmacao de codigo: 6 por 15 min
+        email_cod = "cod.m8.%s" % SUFIXO
+        Cliente(cliente_flask).post("/api/auth/enviar-codigo", {"email": email_cod})
+        certo = query_one("SELECT codigo FROM codigo_verificacao WHERE email = %s ORDER BY id DESC LIMIT 1",
+                          (email_cod,))["codigo"]
+        errado = "000000" if certo != "000000" else "111111"
+        r_ok = Cliente(cliente_flask).post("/api/auth/confirmar-codigo", {"email": email_cod, "codigo": certo})
+        checar(r_ok.status_code == 200 and r_ok.get_json() == {"valido": True},
+               "M08-11: o codigo certo, dentro do limite, continua funcionando")
+        Cliente(cliente_flask).post("/api/auth/enviar-codigo", {"email": email_cod})
+        certo = query_one("SELECT codigo FROM codigo_verificacao WHERE email = %s ORDER BY id DESC LIMIT 1",
+                          (email_cod,))["codigo"]
+        errados = [Cliente(cliente_flask).post("/api/auth/confirmar-codigo", {"email": email_cod, "codigo": errado})
+                   for _ in range(5)]
+        checar(all(r.status_code == 200 and r.get_json() == {"valido": False} for r in errados),
+               "M08-12: codigos errados contam (5 errados + 1 certo = 6 tentativas) e respondem como antes")
+        r7 = Cliente(cliente_flask).post("/api/auth/confirmar-codigo", {"email": email_cod, "codigo": errado})
+        checar(r7.status_code == 429 and r7.get_json() == {"error": MSG_429} and "Retry-After" in r7.headers,
+               "M08-13: a 7a tentativa de confirmacao -> 429 (limite de 6)")
+        r8 = Cliente(cliente_flask).post("/api/auth/confirmar-codigo", {"email": email_cod, "codigo": certo})
+        checar(r8.status_code == 429,
+               "M08-14: bloqueado mesmo com o codigo certo: o 6-digitos nao pode ser forcado")
+        outro = "outro.cod.m8.%s" % SUFIXO
+        Cliente(cliente_flask).post("/api/auth/enviar-codigo", {"email": outro})
+        certo_outro = query_one("SELECT codigo FROM codigo_verificacao WHERE email = %s ORDER BY id DESC LIMIT 1",
+                                (outro,))["codigo"]
+        checar(Cliente(cliente_flask).post("/api/auth/confirmar-codigo",
+                                           {"email": outro, "codigo": certo_outro}).get_json() == {"valido": True},
+               "M08-15: outro e-mail tem contador separado (confirma normalmente)")
+        # a expiracao e o comportamento do codigo nao mudaram
+        checar(query_one("SELECT usado FROM codigo_verificacao WHERE email = %s AND codigo = %s",
+                         (email_cod, certo))["usado"] == 0,
+               "M08-16: o codigo nao confirmado continua valido no banco (so as tentativas foram limitadas)")
+
+        # ---- envio / reenvio de codigo: 5 por 15 min
+        rate_limit.limiter.reset()
+        email_env = "env.m8.%s" % SUFIXO
+        envios = [Cliente(cliente_flask).post("/api/auth/enviar-codigo", {"email": email_env}) for _ in range(5)]
+        checar(all(r.status_code == 200 and "enviado" in r.get_json() for r in envios),
+               "M08-17: 5 solicitacoes de codigo dentro do limite respondem como antes")
+        r6 = Cliente(cliente_flask).post("/api/auth/enviar-codigo", {"email": email_env})
+        checar(r6.status_code == 429 and r6.get_json() == {"error": MSG_429},
+               "M08-18: a 6a solicitacao de codigo -> 429 (sem spam de e-mail)")
+        checar(Cliente(cliente_flask).post("/api/auth/enviar-codigo",
+                                           {"email": "env2.m8.%s" % SUFIXO}).status_code == 200,
+               "M08-19: outro e-mail tem contador de envio separado")
+        checar(query_one("SELECT COUNT(*) AS c FROM codigo_verificacao WHERE email = %s", (email_env,))["c"] == 5,
+               "M08-20: a solicitacao bloqueada nao gerou codigo novo (5 no banco)")
+
+        # ---- convite de professor: 5 reenvios por 15 min por professor
+        rate_limit.limiter.reset()
+        pc = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Convite M08", "email": "prof.conv.m8.%s" % SUFIXO}).get_json()
+        pc2 = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Convite Dois", "email": "prof.conv2.m8.%s" % SUFIXO}).get_json()
+        reenvios = [coord_a.post("/api/coordenacao/professores/%d/reenviar-convite" % pc["id"]) for _ in range(5)]
+        checar(all(r.status_code == 200 for r in reenvios),
+               "M08-21: 5 reenvios do convite dentro do limite funcionam")
+        r6 = coord_a.post("/api/coordenacao/professores/%d/reenviar-convite" % pc["id"])
+        checar(r6.status_code == 429 and "Retry-After" in r6.headers,
+               "M08-22: o 6o reenvio para o mesmo professor -> 429")
+        checar(coord_a.post("/api/coordenacao/professores/%d/reenviar-convite" % pc2["id"]).status_code == 200
+               and coord_a.get("/api/coordenacao/professores").status_code == 200,
+               "M08-23: a Coordenacao segue trabalhando: outro professor e as listagens funcionam")
+        email_antes = query_one("SELECT email FROM professor WHERE id = %s", (pc["id"],))["email"]
+        token_antes = query_one("SELECT convite_token FROM professor WHERE id = %s", (pc["id"],))["convite_token"]
+        r = coord_a.put("/api/coordenacao/professores/%d" % pc["id"], {"email": "novo.conv.m8.%s" % SUFIXO})
+        linha_pc = query_one("SELECT email, convite_token FROM professor WHERE id = %s", (pc["id"],))
+        checar(r.status_code == 429 and linha_pc["email"] == email_antes and linha_pc["convite_token"] == token_antes,
+               "M08-24: trocar o e-mail (novo convite) tambem e limitado, e o 429 nao grava nada pela metade")
+
+        # ---- IA: um unico limite por Professor para 9A, 9B, 9C e 9D
+        rate_limit.limiter.reset()
+        chamadas_ia = [0]
+
+        def _ia_falsa(self, payload, caso=None):
+            chamadas_ia[0] += 1
+            raise iaclient.AIProviderError(iaclient.MENSAGEM_INDISPONIVEL)
+
+        def ia(cliente, tipo, turma=None, ativ=None, aluno=None, etapa=None):
+            turma = turma or turma_orig["id"]
+            if tipo == "9A":
+                return cliente.post("/api/professor/turmas/%d/insights" % turma, {})
+            if tipo == "9B":
+                return cliente.post("/api/professor/turmas/%d/atividades/gerar" % turma, {"tema": "Fracoes"})
+            if tipo == "9C":
+                return cliente.post("/api/professor/atividades/%d/correcao-assistida" % (ativ or ativ_m1["id"]),
+                                    {"questao": "Q?", "respostaEsperada": "R esperada",
+                                     "respostaAluno": "Resposta com varias palavras aqui"})
+            return cliente.post("/api/professor/alunos/%d/feedback-ia" % (aluno or aluno_m1),
+                                {"etapaId": etapa or etapa_m1["id"]})
+
+        TIPOS = ("9A", "9B", "9C", "9D")
+        with patch.object(iaclient.AIClient, "gerar", _ia_falsa):
+            statuses = [ia(prof_i2, TIPOS[i % 4]).status_code for i in range(20)]
+            checar(429 not in statuses and 503 in statuses,
+                   "M08-25: 20 chamadas de IA (misturando 9A-9D) dentro do limite nao dao 429; chegam ao provedor (503 simulado)")
+            antes_ia = chamadas_ia[0]
+            checar(antes_ia >= 5,
+                   "M08-26: as chamadas dentro do limite chegaram ao AIClient (%d chamadas)" % antes_ia)
+            bloqueadas = [(t, ia(prof_i2, t)) for t in TIPOS]
+            checar(all(r.status_code == 429 and "IA" in r.get_json()["error"] and "Retry-After" in r.headers
+                       for _, r in bloqueadas),
+                   "M08-27: a 21a chamada -> 429 em CADA uma das quatro funcoes (limite unico compartilhado)")
+            checar(chamadas_ia[0] == antes_ia,
+                   "M08-28: as chamadas bloqueadas pelo limite NAO chamaram o AIClient (zero chamadas ao provedor)")
+
+            # Professor A nao consome o limite do Professor B
+            antes_b = chamadas_ia[0]
+            r = ia(professor_a, "9B", turma=turma_a["id"])
+            checar(r.status_code == 503 and chamadas_ia[0] == antes_b + 1,
+                   "M08-29: outro Professor tem limite proprio e chega ao AIClient normalmente")
+            # Coordenacao continua sem acesso e nao consome nada
+            checar(all(ia(coord_a, t).status_code == 403 for t in TIPOS),
+                   "M08-30: Coordenacao continua recebendo 403 nas quatro rotas de IA")
+            # cross-school continua 404 (e conta so para quem chamou)
+            checar(ia(professor_b, "9B", turma=turma_orig["id"]).status_code == 404
+                   and ia(professor_b, "9D", aluno=aluno_m1).status_code == 404,
+                   "M08-31: cross-school continua 404")
+            checar(chamadas_ia[0] == antes_b + 1, "M08-32: o cross-school nao chegou ao AIClient")
+
+            # falha de autenticacao nao consome cota de ninguem
+            rate_limit.limiter.reset()
+            sem_token = [cliente_flask.post("/api/professor/turmas/%d/atividades/gerar" % turma_orig["id"],
+                                            json={"tema": "x"},
+                                            headers={"Authorization": "Bearer lixo"}) for _ in range(30)]
+            apos = [ia(prof_i2, TIPOS[i % 4]).status_code for i in range(20)]
+            checar(all(r.status_code == 401 for r in sem_token) and 429 not in apos,
+                   "M08-33: 30 chamadas sem autenticacao valida (401) nao consomem a cota do Professor")
+
+            # teto global do processo
+            rate_limit.limiter.reset()
+            rate_limit.LIMITES["ia_global"] = (3, 900)
+            try:
+                s1 = [ia(prof_i2, "9B").status_code, ia(prof_i2, "9B").status_code,
+                      ia(professor_a, "9B", turma=turma_a["id"]).status_code]
+                s2 = ia(professor_a, "9B", turma=turma_a["id"])
+            finally:
+                rate_limit.LIMITES["ia_global"] = LIMITES_REAIS["ia_global"]
+            checar(429 not in s1 and s2.status_code == 429,
+                   "M08-34: o teto global (somando professores) tambem barra, mesmo com limite individual livre")
+            rate_limit.limiter.reset()
+
+        # ---- concorrencia: muitas requisicoes quase simultaneas nao passam do limite
+        rate_limit.limiter.reset()
+
+        def tentativa(_):
+            with aplicacao.test_client() as c:
+                return c.post("/api/auth/login-coordenacao",
+                              json={"email": "corrida.%s" % SUFIXO, "senha": "x"}).status_code
+
+        with ThreadPoolExecutor(max_workers=24) as pool:
+            codigos = list(pool.map(tentativa, range(40)))
+        checar(codigos.count(401) == 10 and codigos.count(429) == 30,
+               "M08-35: 40 logins simultaneos: exatamente 10 passam (401) e 30 sao barrados (429)")
+        rate_limit.limiter.reset()
+        # volta ao limite alto para o que vier depois desta secao
+        rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
+        execute("DELETE FROM codigo_verificacao WHERE email LIKE %s", ("%" + SUFIXO,))
 
         print("\nLimpando os dados de teste...")
         limpar()

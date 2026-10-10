@@ -12,6 +12,7 @@ from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
 from services import entrada
+from services.rate_limit import limitar_convite
 from services.email_service import enviar_convite_professor, expor_codigos_dev
 
 
@@ -22,7 +23,12 @@ def _professor_da_escola(coordenacao_id, professor_id):
     return professor
 
 
-def _novo_convite(coordenacao_id, professor):
+def _novo_convite(coordenacao_id, professor, contar=True):
+    # Reenviar o convite e trocar o e-mail de um professor pendente mandam um
+    # e-mail novo: o limite e por escola + professor (a Coordenacao trabalha
+    # normalmente; so o martelar do mesmo professor e barrado).
+    if contar:
+        limitar_convite(coordenacao_id, professor["id"])
     token = gerar_token_convite()
     expira_em = datetime.now() + timedelta(hours=CONVITE_EXPIRACAO_HORAS)
     Professor.atualizar_convite(professor["id"], token, expira_em)
@@ -65,14 +71,19 @@ class EditarProfessorService:
 
         if not campos:
             raise ValueError("Informe ao menos um dado para editar")
+        # O antigo destinatario nao pode aproveitar convite pendente depois
+        # que a Coordenacao troca o endereco. Conta ativa mantem a senha.
+        renova_convite = ("email" in campos and not professor.get("senha_hash")
+                          and professor.get("habilitado", True))
+        if renova_convite:
+            # Confere o limite ANTES de gravar o e-mail novo: um 429 nao pode
+            # deixar o e-mail trocado com o convite antigo ainda valendo.
+            limitar_convite(coordenacao_id, professor_id)
         Professor.update(professor_id, coordenacao_id, **campos)
         atualizado = Professor.find_by_id(professor_id, coordenacao_id)
 
-        # O antigo destinatario nao pode aproveitar convite pendente depois
-        # que a Coordenacao troca o endereco. Conta ativa mantem a senha.
-        if ("email" in campos and not atualizado.get("senha_hash")
-                and atualizado.get("habilitado", True)):
-            return _novo_convite(coordenacao_id, atualizado)
+        if renova_convite:
+            return _novo_convite(coordenacao_id, atualizado, contar=False)
         return Professor.to_dict(atualizado)
 
 

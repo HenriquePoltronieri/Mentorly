@@ -26,6 +26,7 @@ from controllers import professor_controller as modulo
 from controllers.professor_controller import ProfessorController
 from services.ia.client import AIProviderError, AIResponseError
 from services.ia.gerar_insights_turma import DadosInsuficientesError
+from services import rate_limit
 
 
 # (metodo do controller, nome da classe de service importada no modulo, argumento da rota,
@@ -50,6 +51,11 @@ def _app(controller, metodo):
 
 
 class _Base(unittest.TestCase):
+    def setUp(self):
+        # O controller agora limita a IA por Professor (M-08): estes testes
+        # chamam as mesmas rotas dezenas de vezes com o mesmo usuario falso.
+        rate_limit.limiter.reset()
+
     def _controller_com(self, servico, excecao):
         """Controller cujo service levanta `excecao` ao executar."""
         instancia = MagicMock()

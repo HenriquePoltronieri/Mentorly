@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 
 from config import DEBUG
 from database.connection import init_database, install_procedures, install_schema
+from services.rate_limit import LimiteExcedido
 from routes.activity_routes import activity_blueprint
 from routes.auth_routes import auth_blueprint
 from routes.class_routes import class_blueprint
@@ -64,6 +65,16 @@ def create_app():
     @app.errorhandler(500)
     def erro_interno(_erro):
         return jsonify({"error": "Erro interno do servidor."}), 500
+
+    # Limite de requisicoes sensiveis (login, codigos, convites, IA): 429 com a
+    # mensagem do limite e Retry-After em segundos. Quem levanta a excecao ja
+    # impediu o trabalho caro (a IA nao e chamada).
+    @app.errorhandler(LimiteExcedido)
+    def limite_excedido(erro):
+        resposta = jsonify({"error": erro.mensagem})
+        resposta.status_code = 429
+        resposta.headers["Retry-After"] = str(erro.retry_after)
+        return resposta
 
     @app.errorhandler(413)
     def arquivo_grande(_erro):
