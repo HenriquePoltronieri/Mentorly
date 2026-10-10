@@ -1,31 +1,53 @@
 """Envio de email do convite do professor e do codigo de duas etapas.
 
-Se SMTP_HOST nao estiver configurado, entra em MODO DEV: em vez de tentar
-enviar, imprime a mensagem no console do Flask. Sem isso o fluxo de convite
-e de 2FA seria impossivel de testar localmente.
+Sem SMTP_HOST o email nao e enviado e o envio devolve False (a API responde
+"enviado"/"conviteEnviado" = false). Quem libera expor o codigo/token na
+resposta, ou imprimir o email no console, e SOMENTE o interruptor explicito
+DEV_EXPOSE_AUTH_CODES (config.py): ausencia de SMTP nao e permissao.
 """
 
+import logging
 import smtplib
 from email.message import EmailMessage
 
+import config
 from config import APP_BASE_URL, SMTP_CONFIG
 
+logger = logging.getLogger(__name__)
 
-def modo_dev():
-    """True quando nao ha SMTP configurado."""
-    return not SMTP_CONFIG["host"]
+
+def expor_codigos_dev():
+    """True so quando DEV_EXPOSE_AUTH_CODES foi ligado de forma explicita.
+
+    Lido de config a cada chamada (e nao copiado no import) para o valor
+    refletir sempre a configuracao vigente.
+    """
+    return bool(config.DEV_EXPOSE_AUTH_CODES)
+
+
+def _smtp_configurado():
+    return bool(SMTP_CONFIG["host"])
 
 
 def _enviar(destinatario, assunto, corpo):
-    if modo_dev():
-        print("\n" + "=" * 62)
-        print("[EMAIL - MODO DEV] SMTP_HOST nao configurado, nada foi enviado.")
-        print("Para: %s" % destinatario)
-        print("Assunto: %s" % assunto)
-        print("-" * 62)
-        print(corpo)
-        print("=" * 62 + "\n", flush=True)
-        return True
+    if not _smtp_configurado():
+        if expor_codigos_dev():
+            # Caixa de saida de desenvolvimento: o email vai para o console.
+            print("\n" + "=" * 62)
+            print("[EMAIL - MODO DEV] SMTP_HOST nao configurado, nada foi enviado.")
+            print("Para: %s" % destinatario)
+            print("Assunto: %s" % assunto)
+            print("-" * 62)
+            print(corpo)
+            print("=" * 62 + "\n", flush=True)
+            return True
+        # Sem SMTP e sem modo dev: nada e enviado e o conteudo (que carrega
+        # codigo ou token) nao vai para lugar nenhum, nem para o log.
+        logger.warning(
+            "SMTP_HOST nao configurado: email para %s nao foi enviado",
+            destinatario,
+        )
+        return False
 
     mensagem = EmailMessage()
     mensagem["From"] = SMTP_CONFIG["remetente"]

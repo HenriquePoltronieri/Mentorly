@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 
+from config import DEBUG
 from database.connection import init_database, install_procedures, install_schema
 from routes.activity_routes import activity_blueprint
 from routes.auth_routes import auth_blueprint
@@ -80,4 +81,4 @@ if __name__ == "__main__":
     install_schema()
     install_procedures()
     app = create_app()
-    app.run(debug=True)
+    app.run(debug=DEBUG)

@@ -1,7 +1,7 @@
 from auth.jwt_utils import gerar_codigo_verificacao
 from models.codigo_model import CodigoVerificacao
 from services import entrada
-from services.email_service import enviar_codigo_verificacao, modo_dev
+from services.email_service import enviar_codigo_verificacao, expor_codigos_dev
 
 
 class EnviarCodigoService:
@@ -17,9 +17,9 @@ class EnviarCodigoService:
         enviado = enviar_codigo_verificacao(email, codigo)
 
         resposta = {"enviado": enviado}
-        if modo_dev():
-            # Sem SMTP configurado nao ha como o usuario receber o codigo.
-            # Devolver aqui mantem o fluxo testavel em desenvolvimento.
+        if expor_codigos_dev():
+            # So com DEV_EXPOSE_AUTH_CODES ligado (uso local): devolver o
+            # codigo mantem o fluxo testavel sem email.
             resposta["modo"] = "dev"
             resposta["codigo"] = codigo
         return resposta

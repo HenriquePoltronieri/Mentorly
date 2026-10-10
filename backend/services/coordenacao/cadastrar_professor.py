@@ -5,7 +5,7 @@ from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
 from services import entrada
-from services.email_service import enviar_convite_professor, modo_dev
+from services.email_service import enviar_convite_professor, expor_codigos_dev
 
 
 class CadastrarProfessorService:
@@ -51,8 +51,8 @@ class CadastrarProfessorService:
 
         resposta = Professor.to_dict(Professor.find_by_id(professor_id))
         resposta["conviteEnviado"] = enviado
-        if modo_dev():
-            # Sem SMTP configurado, a coordenacao precisa do token na tela
-            # para conseguir passar o primeiro acesso ao professor.
+        if expor_codigos_dev():
+            # So com DEV_EXPOSE_AUTH_CODES ligado (uso local): a tela mostra o
+            # link para passar o primeiro acesso sem depender de email.
             resposta["conviteToken"] = token
         return resposta

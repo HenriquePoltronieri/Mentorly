@@ -21,6 +21,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# O smoke precisa do codigo e do convite na resposta (nao ha SMTP aqui): liga o
+# interruptor de desenvolvimento ANTES de importar a config. O padrao real e
+# desligado; a secao [M-06] testa os dois lados.
+os.environ["DEV_EXPOSE_AUTH_CODES"] = "true"
+
 import app as app_module
 from database.connection import execute, insert, query_all, query_one
 
@@ -3751,6 +3756,175 @@ def main():
         r = put_m3(ativ_y, {"title": "titulo em ano encerrado"})
         checar(r.status_code == 400 and "encerrado" in msg_m3(r).lower(),
                "M03-31: ano encerrado continua bloqueando a edicao (mensagem do ano encerrado)")
+
+        # ---------------------------------------------------------
+        print("\n[M-06] Codigo e token so aparecem com DEV_EXPOSE_AUTH_CODES")
+        import contextlib
+        import smtplib
+        import config as config_module
+        from services import email_service
+
+        class _SmtpFalso:
+            """Nenhum email real: guarda o que seria enviado, ou falha."""
+            enviados = []
+            falhar = False
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def starttls(self):
+                pass
+
+            def login(self, *args):
+                pass
+
+            def send_message(self, mensagem):
+                if _SmtpFalso.falhar:
+                    raise smtplib.SMTPException("falha simulada")
+                _SmtpFalso.enviados.append(mensagem)
+
+        def cenario_m6(dev, smtp, falhar=False):
+            """Contexto: interruptor de dev, SMTP configurado ou nao, SMTP falso."""
+            pilha = contextlib.ExitStack()
+            pilha.enter_context(patch.object(config_module, "DEV_EXPOSE_AUTH_CODES", dev))
+            pilha.enter_context(patch.dict(
+                email_service.SMTP_CONFIG, {"host": "smtp.invalido.test" if smtp else ""}))
+            pilha.enter_context(patch.object(email_service.smtplib, "SMTP", _SmtpFalso))
+            _SmtpFalso.enviados = []
+            _SmtpFalso.falhar = falhar
+            return pilha
+
+        def convite_no_banco(email):
+            return query_one("SELECT convite_token FROM professor WHERE email = %s",
+                             (email,))["convite_token"]
+
+        def codigo_no_banco(email):
+            return query_one("SELECT codigo FROM codigo_verificacao WHERE email = %s "
+                             "ORDER BY id DESC LIMIT 1", (email,))["codigo"]
+
+        def corpo_de(mensagem):
+            return mensagem.get_content()
+
+        def rodar_cenario(rotulo, dev, smtp, falhar=False):
+            """Cadastra professor, reenvia o convite e pede um codigo. Devolve tudo."""
+            sufixo = "%s.%s" % (rotulo, SUFIXO)
+            saida = io.StringIO()
+            with cenario_m6(dev, smtp, falhar), contextlib.redirect_stdout(saida):
+                cadastro = coord_a.post("/api/coordenacao/professores", {
+                    "nome": "Professor M06 %s" % rotulo, "email": "prof.m6.%s" % sufixo})
+                professor_id = cadastro.get_json()["id"]
+                reenvio = coord_a.post(
+                    "/api/coordenacao/professores/%d/reenviar-convite" % professor_id)
+                codigo = Cliente(cliente_flask).post(
+                    "/api/auth/enviar-codigo", {"email": "codigo.m6.%s" % sufixo})
+                edicao = coord_a.put(
+                    "/api/coordenacao/professores/%d" % professor_id,
+                    {"email": "prof.m6.novo.%s" % sufixo})
+                enviados = list(_SmtpFalso.enviados)
+            return {
+                "cadastro": cadastro, "reenvio": reenvio, "codigo": codigo,
+                "edicao": edicao, "console": saida.getvalue(), "enviados": enviados,
+                "email_codigo": "codigo.m6.%s" % sufixo,
+                "email_professor": "prof.m6.novo.%s" % sufixo,
+                "id": professor_id,
+            }
+
+        def segredos_no_texto(r):
+            """Convite e codigo vigentes (do banco) procurados em TODAS as respostas."""
+            token = convite_no_banco(r["email_professor"])
+            codigo = codigo_no_banco(r["email_codigo"])
+            respostas = " ".join(r[k].get_data(as_text=True)
+                                 for k in ("cadastro", "reenvio", "codigo", "edicao"))
+            return token, codigo, respostas
+
+        # 3, 4, 7. SMTP ausente e modo dev DESLIGADO: nada vaza
+        r = rodar_cenario("a", dev=False, smtp=False)
+        token, codigo, respostas = segredos_no_texto(r)
+        checar(r["cadastro"].status_code == 201 and r["reenvio"].status_code == 200
+               and r["codigo"].status_code == 200 and r["edicao"].status_code == 200,
+               "M06-01: sem SMTP e sem modo dev os fluxos respondem normalmente (201/200)")
+        checar("conviteToken" not in respostas and token not in respostas,
+               "M06-02: sem SMTP e sem modo dev: o conviteToken NAO aparece (cadastro, reenvio e troca de e-mail)")
+        checar('"codigo"' not in r["codigo"].get_data(as_text=True)
+               and "modo" not in r["codigo"].get_json() and codigo not in respostas,
+               "M06-03: sem SMTP e sem modo dev: o codigo de verificacao NAO aparece")
+        checar(r["cadastro"].get_json()["conviteEnviado"] is False
+               and r["reenvio"].get_json()["conviteEnviado"] is False
+               and r["codigo"].get_json() == {"enviado": False},
+               "M06-04: sem SMTP a API informa que NAO enviou (conviteEnviado/enviado = false)")
+        checar(token not in r["console"] and codigo not in r["console"] and r["console"] == "",
+               "M06-05: o segredo nao e impresso nem no console (nada e escrito)")
+        checar(not r["enviados"], "M06-06: nenhum email foi tentado sem SMTP")
+        # o resto do fluxo continua valido: o codigo gravado confirma, o convite ativa
+        r_conf = Cliente(cliente_flask).post(
+            "/api/auth/confirmar-codigo", {"email": r["email_codigo"], "codigo": codigo})
+        ativ = cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "email": r["email_professor"], "senha": "senha123", "token": token})
+        checar(r_conf.get_json() == {"valido": True} and ativ.status_code == 200
+               and token not in ativ.get_data(as_text=True),
+               "M06-07: o codigo e o convite gravados continuam funcionando; o convite nao volta na resposta")
+
+        # 5, 6. modo dev LIGADO (sem SMTP): os campos auxiliares aparecem
+        r = rodar_cenario("b", dev=True, smtp=False)
+        token, codigo, respostas = segredos_no_texto(r)
+        checar("conviteToken" in r["cadastro"].get_json(),
+               "M06-08: modo dev: o cadastro devolve o conviteToken")
+        checar(r["reenvio"].get_json().get("conviteToken") is not None
+               and r["edicao"].get_json().get("conviteToken") == token,
+               "M06-09: modo dev: reenvio e troca de e-mail devolvem o conviteToken vigente")
+        checar(r["codigo"].get_json().get("codigo") == codigo
+               and r["codigo"].get_json().get("modo") == "dev",
+               "M06-10: modo dev: o codigo de verificacao aparece (marcado modo=dev)")
+        checar(token in r["console"] and r["cadastro"].get_json()["conviteEnviado"] is True,
+               "M06-11: modo dev sem SMTP: o email vai para o console (caixa de saida local)")
+
+        # 9. SMTP configurado e modo dev desligado: fluxo normal, sem segredo na resposta
+        r = rodar_cenario("c", dev=False, smtp=True)
+        token, codigo, respostas = segredos_no_texto(r)
+        checar("conviteToken" not in respostas and token not in respostas
+               and '"codigo"' not in r["codigo"].get_data(as_text=True)
+               and codigo not in respostas,
+               "M06-12: com SMTP e sem modo dev a resposta nao traz conviteToken nem codigo")
+        checar(r["cadastro"].get_json()["conviteEnviado"] is True
+               and r["codigo"].get_json() == {"enviado": True},
+               "M06-13: com SMTP o envio e confirmado (conviteEnviado/enviado = true)")
+        corpos = " ".join(corpo_de(m) for m in r["enviados"])
+        checar(len(r["enviados"]) == 4 and token in corpos and codigo in corpos,
+               "M06-14: o segredo segue pelo canal certo: esta no corpo do email enviado (4 emails)")
+        checar(r["console"] == "", "M06-15: com SMTP nada e impresso no console")
+
+        # SMTP configurado e modo dev ligado: dev explicito vale
+        r = rodar_cenario("d", dev=True, smtp=True)
+        checar("conviteToken" in r["cadastro"].get_json() and "codigo" in r["codigo"].get_json(),
+               "M06-16: SMTP configurado + modo dev explicito: campos auxiliares aparecem")
+
+        # 10. erro de SMTP: tratado de forma amigavel, sem segredo, professor criado
+        r = rodar_cenario("e", dev=False, smtp=True, falhar=True)
+        token, codigo, respostas = segredos_no_texto(r)
+        checar(r["cadastro"].status_code == 201
+               and r["cadastro"].get_json()["conviteEnviado"] is False
+               and r["codigo"].status_code == 200
+               and r["codigo"].get_json() == {"enviado": False}
+               and r["reenvio"].status_code == 200,
+               "M06-17: falha do SMTP: 201/200 com enviado=false (o professor foi cadastrado), sem erro 500")
+        checar("conviteToken" not in respostas and token not in respostas
+               and codigo not in respostas,
+               "M06-18: falha do SMTP nao vaza codigo nem token")
+
+        # outros campos: o segredo nunca aparece em campo inesperado (JSON inteiro)
+        lista = coord_a.get("/api/coordenacao/professores").get_data(as_text=True)
+        checar(token not in lista and "conviteToken" not in lista
+               and "convite_token" not in lista,
+               "M06-19: a listagem de professores nao expoe convite nem token")
+
+        # limpeza dos codigos gerados
+        execute("DELETE FROM codigo_verificacao WHERE email LIKE %s", ("%" + SUFIXO,))
 
         print("\nLimpando os dados de teste...")
         limpar()

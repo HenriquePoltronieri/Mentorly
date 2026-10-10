@@ -12,7 +12,7 @@ from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
 from services import entrada
-from services.email_service import enviar_convite_professor, modo_dev
+from services.email_service import enviar_convite_professor, expor_codigos_dev
 
 
 def _professor_da_escola(coordenacao_id, professor_id):
@@ -33,7 +33,7 @@ def _novo_convite(coordenacao_id, professor):
     )
     resposta = Professor.to_dict(Professor.find_by_id(professor["id"], coordenacao_id))
     resposta["conviteEnviado"] = enviado
-    if modo_dev():
+    if expor_codigos_dev():
         resposta["conviteToken"] = token
     return resposta
 

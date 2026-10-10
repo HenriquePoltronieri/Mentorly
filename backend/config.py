@@ -62,8 +62,32 @@ TOKEN_EXPIRACAO_HORAS = int(os.environ.get("TOKEN_EXPIRACAO_HORAS", 12))
 CONVITE_EXPIRACAO_HORAS = int(os.environ.get("CONVITE_EXPIRACAO_HORAS", 72))
 CODIGO_EXPIRACAO_MINUTOS = int(os.environ.get("CODIGO_EXPIRACAO_MINUTOS", 15))
 
-# Envio de email. Sem SMTP_HOST configurado o email_service entra em modo
-# dev: imprime o codigo/link no console em vez de tentar enviar.
+def _booleano_env(nome):
+    """True so para um valor explicito ("1", "true", "sim", "yes", "on").
+
+    Variavel ausente, vazia ou com qualquer outro valor e False: o padrao dos
+    dois interruptores de desenvolvimento abaixo e sempre o lado seguro.
+    """
+    return os.environ.get(nome, "").strip().lower() in (
+        "1", "true", "sim", "yes", "on"
+    )
+
+
+# Interruptores de DESENVOLVIMENTO. Ambos desligados por padrao; nada no codigo
+# os liga. Para usar localmente, ponha-os em backend/.env.
+#
+# FLASK_DEBUG: liga o modo debug do Flask (recarga automatica e depurador
+#   interativo no navegador) ao rodar `python app.py`.
+# DEV_EXPOSE_AUTH_CODES: permite que as respostas da API tragam o codigo de
+#   verificacao e o token de convite do professor (e que o email que nao e
+#   enviado seja impresso no console). Existe so porque localmente nao ha
+#   SMTP; sem SMTP, com isto desligado, nada disso vaza.
+DEBUG = _booleano_env("FLASK_DEBUG")
+DEV_EXPOSE_AUTH_CODES = _booleano_env("DEV_EXPOSE_AUTH_CODES")
+
+# Envio de email. Sem SMTP_HOST o email nao e enviado (o envio devolve False e
+# a API responde conviteEnviado/enviado = false); isso NAO libera nenhum codigo
+# ou token na resposta: quem decide e DEV_EXPOSE_AUTH_CODES.
 SMTP_CONFIG = {
     "host": os.environ.get("SMTP_HOST", ""),
     "port": int(os.environ.get("SMTP_PORT", 587)),
