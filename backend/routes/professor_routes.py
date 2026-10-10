@@ -1,6 +1,6 @@
 from flask import Blueprint
 
-from auth.decorators import professor_required
+from auth.decorators import professor_required, token_na_url_so_neste_download
 from controllers.professor_controller import ProfessorController
 
 professor_blueprint = Blueprint(
@@ -39,6 +39,7 @@ def cadastrar_aluno(turma_id):
 
 @professor_blueprint.get("/turmas/<int:turma_id>/alunos/modelo-planilha")
 @professor_required
+@token_na_url_so_neste_download
 def modelo_planilha_alunos(turma_id):
     return professor_controller.modelo_planilha_alunos(turma_id)
 
@@ -134,6 +135,7 @@ def lancar_notas(atividade_id):
 
 @atividade_notas_blueprint.get("/<int:atividade_id>/notas/modelo-planilha")
 @professor_required
+@token_na_url_so_neste_download
 def modelo_planilha_notas(atividade_id):
     return professor_controller.modelo_planilha_notas(atividade_id)
 

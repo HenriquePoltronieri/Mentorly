@@ -22,17 +22,34 @@ from auth.jwt_utils import (
 )
 
 
-def _carregar_usuario():
+def token_na_url_so_neste_download(funcao):
+    """Marca UMA rota GET de download como a unica excecao ao Bearer-only.
+
+    Os modelos de planilha sao abertos pelo navegador (launchUrl no Flutter),
+    que nao consegue mandar cabecalho: so essas rotas aceitam ?token=. A marca
+    vale para a view onde o decorator e aplicado (aplique-o ABAIXO do decorator
+    de papel) e nunca vira regra geral.
+    """
+    funcao.aceita_token_na_url = True
+    return funcao
+
+
+def _carregar_usuario(aceita_token_na_url=False):
     """Le o token e popula g.usuario. Devolve None se falhar.
 
-    O caminho normal e o cabecalho 'Authorization: Bearer <token>'. Como
-    fallback, aceita ?token=<token> na query string: os downloads de modelo
-    de planilha sao abertos pelo navegador (launchUrl), que nao tem como
-    mandar cabecalho. So os endpoints de download usam essa porta.
+    O padrao e o cabecalho 'Authorization: Bearer <token>', e so ele. A query
+    string ?token= NAO autentica endpoint nenhum, exceto os downloads marcados
+    com token_na_url_so_neste_download, e ainda assim so em GET e so quando a
+    requisicao NAO traz cabecalho Authorization: com cabecalho presente (valido
+    ou nao) a identidade vem dele e a URL e ignorada, nunca o contrario.
     """
-    token = extrair_token(request.headers.get("Authorization"))
-    if not token:
+    cabecalho = request.headers.get("Authorization")
+    if cabecalho:
+        token = extrair_token(cabecalho)
+    elif aceita_token_na_url and request.method == "GET":
         token = request.args.get("token")
+    else:
+        token = None
     if not token:
         return None
 
@@ -79,7 +96,7 @@ def auth_required(funcao):
 
     @wraps(funcao)
     def wrapper(*args, **kwargs):
-        usuario = _carregar_usuario()
+        usuario = _carregar_usuario(getattr(funcao, "aceita_token_na_url", False))
         if usuario is None:
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if not _professor_habilitado(usuario):
@@ -98,7 +115,7 @@ def coordenacao_required(funcao):
 
     @wraps(funcao)
     def wrapper(*args, **kwargs):
-        usuario = _carregar_usuario()
+        usuario = _carregar_usuario(getattr(funcao, "aceita_token_na_url", False))
         if usuario is None:
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if usuario["tipo"] != TIPO_COORDENACAO:
@@ -120,7 +137,7 @@ def professor_required(funcao):
 
     @wraps(funcao)
     def wrapper(*args, **kwargs):
-        usuario = _carregar_usuario()
+        usuario = _carregar_usuario(getattr(funcao, "aceita_token_na_url", False))
         if usuario is None:
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if usuario["tipo"] != TIPO_PROFESSOR:

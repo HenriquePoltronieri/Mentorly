@@ -3926,6 +3926,169 @@ def main():
         # limpeza dos codigos gerados
         execute("DELETE FROM codigo_verificacao WHERE email LIKE %s", ("%" + SUFIXO,))
 
+        # ---------------------------------------------------------
+        print("\n[M-07] Token na URL (?token=) nao autentica; so o Bearer")
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        from config import SECRET_KEY
+
+        def req(metodo, url, bearer=None, corpo=None, cabecalho_bruto=None):
+            cabecalhos = {}
+            if bearer:
+                cabecalhos["Authorization"] = "Bearer %s" % bearer
+            if cabecalho_bruto:
+                cabecalhos["Authorization"] = cabecalho_bruto
+            kw = {"headers": cabecalhos}
+            if corpo is not None:
+                kw["json"] = corpo
+            return getattr(cliente_flask, metodo)(url, **kw)
+
+        tok_coord_a, tok_coord_b = coord_a.token, coord_b.token
+        tok_prof_a, tok_prof_b = prof_i2.token, professor_b.token
+        turma_q = turma_orig["id"]
+
+        # professor desativado e token expirado (de um professor real)
+        pd_dados = coord_a.post("/api/coordenacao/professores", {
+            "nome": "Professor Desativado M07", "email": "prof.m7.%s" % SUFIXO}).get_json()
+        pd_cli = ativar_professor(pd_dados)
+        coord_a.post("/api/coordenacao/professores/%d/desativar" % pd_dados["id"])
+        agora = datetime.now(timezone.utc)
+        tok_expirado = jwt.encode({
+            "sub": str(prof_i2_dados["id"]), "uid": prof_i2_dados["id"],
+            "tipo": "professor", "coordenacao_id": cid_a,
+            "iat": agora - timedelta(hours=13), "exp": agora - timedelta(hours=1),
+        }, SECRET_KEY, algorithm="HS256")
+
+        antes_m7 = estado_da_escola()
+
+        # 1-4. endpoints normais + ?token=valido SEM header -> 401
+        gerais = (
+            ("GET", "/api/classes/%d" % turma_q, tok_coord_a, None),
+            ("GET", "/api/classes", tok_prof_a, None),
+            ("GET", "/api/activities", tok_prof_a, None),
+            ("GET", "/api/config/etapas", tok_coord_a, None),
+        )
+        coordenacao = (
+            ("GET", "/api/coordenacao/professores", tok_coord_a, None),
+            ("GET", "/api/coordenacao/turmas/%d/alunos" % turma_q, tok_coord_a, None),
+            ("GET", "/api/coordenacao/turmas/%d/boletim" % turma_q, tok_coord_a, None),
+            ("GET", "/api/config/anos-letivos", tok_coord_a, None),
+        )
+        professor = (
+            ("GET", "/api/professor/turmas", tok_prof_a, None),
+            ("GET", "/api/professor/dashboard", tok_prof_a, None),
+            ("GET", "/api/professor/turmas/%d/boletim" % turma_q, tok_prof_a, None),
+            ("GET", "/api/atividades/%d/notas" % ativ_m1["id"], tok_prof_a, None),
+        )
+        ia = (
+            ("POST", "/api/professor/turmas/%d/insights" % turma_q, tok_prof_a, {}),
+            ("POST", "/api/professor/turmas/%d/atividades/gerar" % turma_q, tok_prof_a, {"tema": "Fracoes"}),
+            ("POST", "/api/professor/alunos/%d/feedback-ia" % aluno_m1, tok_prof_a, {"etapaId": etapa_m1["id"]}),
+            ("POST", "/api/professor/atividades/%d/correcao-assistida" % ativ_m1["id"], tok_prof_a,
+             {"questao": "q", "respostaEsperada": "r", "respostaAluno": "a b c d"}),
+        )
+        for grupo, rotulo in ((gerais, "endpoint geral"), (coordenacao, "endpoint de Coordenacao"),
+                              (professor, "endpoint de Professor"), (ia, "endpoint de IA")):
+            for metodo, url, token, corpo in grupo:
+                r = req(metodo.lower(), "%s?token=%s" % (url, token), corpo=corpo)
+                checar(r.status_code == 401,
+                       "M07-01: %s %s com ?token= valido e SEM header -> 401 (%s)"
+                       % (metodo, url.split("?")[0][:50], rotulo))
+
+        # 10. escrita so por query nao grava nada
+        ataques = (
+            ("POST", "/api/classes", tok_coord_a, {"name": "Turma via URL", "ano_letivo": ANO}),
+            ("PUT", "/api/classes/%d" % turma_q, tok_coord_a, {"name": "Renomeada via URL"}),
+            ("DELETE", "/api/classes/%d" % turma_q, tok_coord_a, None),
+            ("PUT", "/api/config/etapas/%d" % etapa_m1["id"], tok_coord_a, {"nome": "via URL"}),
+            ("DELETE", "/api/config/criterios/%d" % crit_m1["id"], tok_coord_a, None),
+            ("POST", "/api/coordenacao/professores", tok_coord_a, {"nome": "Via Url Silva", "email": "via.url.%s" % SUFIXO}),
+            ("POST", "/api/coordenacao/alunos/%d/transferir" % aluno_m1, tok_coord_a, {"turma_id": turma_dest["id"]}),
+            ("POST", "/api/activities", tok_prof_a, {"title": "via url", "class_id": turma_q,
+                                                       "etapa_id": etapa_m1["id"], "criterio_id": crit_m1["id"], "nota_maxima": 10}),
+            ("PUT", "/api/activities/%d" % ativ_m1["id"], tok_prof_a, {"title": "via URL"}),
+            ("DELETE", "/api/activities/%d" % ativ_m1["id"], tok_prof_a, None),
+            ("POST", "/api/atividades/%d/notas" % ativ_m1["id"], tok_prof_a, {"aluno_id": aluno_m1, "valor": 1}),
+            ("DELETE", "/api/professor/alunos/%d" % aluno_m1, tok_prof_a, None),
+        )
+        for metodo, url, token, corpo in ataques:
+            r = req(metodo.lower(), "%s?token=%s" % (url, token), corpo=corpo)
+            checar(r.status_code == 401, "M07-02: %s %s so com ?token= -> 401" % (metodo, url[:52]))
+        checar(estado_da_escola() == antes_m7,
+               "M07-03: nenhuma das escritas autenticadas so por query alterou o banco (7 tabelas identicas)")
+
+        # 5. o header Bearer segue funcionando
+        checar(req("get", "/api/classes/%d" % turma_q, tok_coord_a).status_code == 200
+               and req("get", "/api/coordenacao/professores", tok_coord_a).status_code == 200
+               and req("get", "/api/professor/turmas", tok_prof_a).status_code == 200
+               and req("get", "/api/activities", tok_prof_a).status_code == 200,
+               "M07-04: Authorization: Bearer valido continua 200 (geral, coordenacao e professor)")
+        checar(req("get", "/api/professor/turmas", tok_coord_a).status_code == 403
+               and req("get", "/api/config/anos-letivos", tok_prof_a).status_code == 403,
+               "M07-05: os papeis continuam valendo com o header (403 no papel errado)")
+        checar(req("get", "/api/professor/turmas", pd_cli.token).status_code == 403,
+               "M07-06: professor desativado com header continua bloqueado (403)")
+        checar(req("get", "/api/classes/%d" % turma_q, tok_coord_b).status_code == 404,
+               "M07-07: cross-school com header continua 404")
+
+        # 6. header invalido + query valido -> 401 (a URL nao assume o lugar do header)
+        for rotulo, cab in (("Bearer com lixo", "Bearer lixo.lixo.lixo"), ("Bearer vazio", "Bearer"),
+                            ("esquema Basic", "Basic YWJjOmRlZg=="), ("token solto", "abc")):
+            for url in ("/api/classes/%d" % turma_q,
+                        "/api/professor/turmas/%d/alunos/modelo-planilha" % turma_q):
+                r = req("get", "%s?token=%s" % (url, tok_coord_a if "coord" in url else tok_prof_a),
+                        cabecalho_bruto=cab)
+                checar(r.status_code == 401,
+                       "M07-08: header invalido (%s) + ?token= valido -> 401 em %s" % (rotulo, url[:46]))
+
+        # 7. header valido + query de OUTRO usuario: a identidade e a do header
+        r = req("get", "/api/classes?token=%s" % tok_coord_b, tok_coord_a)
+        ids = {t["id"] for t in r.get_json()}
+        ids_a = {t["id"] for t in req("get", "/api/classes", tok_coord_a).get_json()}
+        checar(r.status_code == 200 and ids == ids_a and turma_b["id"] not in ids,
+               "M07-09: header da escola A + ?token= da escola B -> lista so da escola A")
+        checar(req("get", "/api/classes/%d?token=%s" % (turma_b["id"], tok_coord_a), tok_coord_b).status_code == 200
+               and req("get", "/api/classes/%d?token=%s" % (turma_q, tok_coord_a), tok_coord_b).status_code == 404,
+               "M07-10: a escola do header decide o acesso, nunca a do ?token=")
+        checar(req("get", "/api/professor/turmas?token=%s" % tok_prof_a, tok_coord_a).status_code == 403,
+               "M07-11: header de Coordenacao + ?token= de Professor -> 403 (papel do header)")
+
+        # token ruim na query: nao autentica
+        checar(req("get", "/api/professor/turmas?token=%s" % pd_cli.token).status_code == 401,
+               "M07-12: token de professor DESATIVADO na query (endpoint normal) -> 401")
+        checar(req("get", "/api/professor/turmas?token=%s" % tok_expirado).status_code == 401,
+               "M07-13: token EXPIRADO na query (endpoint normal) -> 401")
+
+        # excecao real e restrita: os 3 downloads de modelo de planilha (GET)
+        downloads = (
+            ("/api/coordenacao/turmas/%d/alunos/modelo-planilha" % turma_q, tok_coord_a, tok_prof_a),
+            ("/api/professor/turmas/%d/alunos/modelo-planilha" % turma_q, tok_prof_a, tok_coord_a),
+            ("/api/atividades/%d/notas/modelo-planilha" % ativ_m1["id"], tok_prof_a, tok_coord_a),
+        )
+        for url, certo, errado in downloads:
+            r = req("get", "%s?token=%s" % (url, certo))
+            checar(r.status_code == 200 and "spreadsheetml" in r.headers["Content-Type"],
+                   "M07-14: EXCECAO: download %s abre com ?token= (navegador nao manda header)" % url[5:48])
+            checar(req("get", "%s?token=%s" % (url, errado)).status_code == 403,
+                   "M07-15: exceção: o papel errado na URL continua barrado (403)")
+            checar(req("get", "%s?token=%s" % (url, tok_expirado)).status_code == 401
+                   and req("get", "%s?token=%s" % (url, pd_cli.token)).status_code in (401, 403)
+                   and req("get", "%s?token=lixo" % url).status_code == 401,
+                   "M07-16: exceção: expirado, desativado e lixo na URL nao autenticam")
+            checar(req("get", "%s?token=%s" % (url, tok_coord_b if "coordenacao" in url else tok_prof_b)
+                       ).status_code in (200, 404),
+                   "M07-17: exceção: token de outra escola so alcanca o modelo em branco (sem dado da escola A)")
+            checar(req("get", "%s?token=%s" % (url, errado), certo).status_code == 200,
+                   "M07-18: exceção: com header presente a URL e ignorada (identidade do header)")
+            checar(req("post", "%s?token=%s" % (url, certo)).status_code in (401, 405),
+                   "M07-19: exceção: so GET; POST na mesma rota com ?token= nao autentica")
+        # a excecao nao vaza para as rotas vizinhas
+        checar(req("get", "/api/professor/turmas/%d/alunos?token=%s" % (turma_q, tok_prof_a)).status_code == 401
+               and req("get", "/api/coordenacao/turmas/%d/alunos?token=%s" % (turma_q, tok_coord_a)).status_code == 401,
+               "M07-20: a excecao nao se estende as rotas vizinhas (listas de alunos -> 401)")
+        checar(estado_da_escola() == antes_m7,
+               "M07-21: depois de tudo isso o banco segue identico")
+
         print("\nLimpando os dados de teste...")
         limpar()
 

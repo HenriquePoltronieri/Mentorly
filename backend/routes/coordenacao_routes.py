@@ -1,6 +1,6 @@
 from flask import Blueprint
 
-from auth.decorators import coordenacao_required
+from auth.decorators import coordenacao_required, token_na_url_so_neste_download
 from controllers.coordenacao_controller import CoordenacaoController
 
 coordenacao_blueprint = Blueprint(
@@ -103,6 +103,7 @@ def historico_aluno(aluno_id):
 
 @coordenacao_blueprint.get("/turmas/<int:turma_id>/alunos/modelo-planilha")
 @coordenacao_required
+@token_na_url_so_neste_download
 def modelo_planilha_alunos(turma_id):
     return coordenacao_controller.modelo_planilha_alunos(turma_id)
 
