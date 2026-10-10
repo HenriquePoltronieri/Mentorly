@@ -15,6 +15,7 @@ Uso (a partir da pasta backend):
 
 import io
 import json
+import re
 import os
 import sys
 from unittest.mock import patch
@@ -4331,6 +4332,135 @@ def main():
         # volta ao limite alto para o que vier depois desta secao
         rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
         execute("DELETE FROM codigo_verificacao WHERE email LIKE %s", ("%" + SUFIXO,))
+
+        # ---------------------------------------------------------
+        print("\n[M-09] Insights (9A): nenhum dado de aluno vai ao provedor")
+        etapa_m9 = coord_a.post("/api/config/etapas", {
+            "nome": "E M09 atual", "ordem": 500, "ano_letivo": ANO}).get_json()
+        coord_a.post("/api/config/etapas/%d/notas" % etapa_m9["id"], {"nota_minima": 6, "nota_maxima": 10})
+        crit_m9 = criar_criterio(coord_a, etapa_m9["id"], "Provas", 100)
+        turma_m9 = coord_a.post("/api/classes", {"name": "M09 Turma"}).get_json()
+        pessoas_m9 = [
+            ("Ana Zelindovsky Prado", "MAT-M9-AZP", "ana.zelindovsky@m9.example"),
+            ("Bruno Quintanilha Reis", "MAT-M9-BQR", "bruno.quintanilha@m9.example"),
+            ("Carla Vasconcelos Dias", "MAT-M9-CVD", "carla.vasconcelos@m9.example"),
+        ]
+        alunos_m9 = [
+            coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m9["id"],
+                         {"nome": n, "matricula": m, "email": e}).get_json()
+            for n, m, e in pessoas_m9
+        ]
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"], {
+            "turma_ids": [turma_orig["id"], turma_dest["id"], turma_outro_ano["id"],
+                          turma_m2["id"], turma_m3y["id"], turma_m9["id"]]})
+        ativ_m9 = criar_atividade(prof_i2, turma_m9["id"], etapa_m9["id"], crit_m9["id"], 10, "M09 prova")
+        lancar(prof_i2, ativ_m9["id"], alunos_m9[0]["id"], 9)   # Ana: 90%, adequado
+        lancar(prof_i2, ativ_m9["id"], alunos_m9[1]["id"], 4)   # Bruno: 40%, abaixo do minimo
+        # Carla: sem nota -> em andamento
+        antes_m9 = estado_da_escola()
+        url_m9 = "/api/professor/turmas/%d/insights" % turma_m9["id"]
+
+        class _IaM9:
+            model = "modelo-smoke"
+            resposta = None
+            erro = None
+            payloads = []
+
+            def gerar(self, payload):
+                _IaM9.payloads.append(payload)
+                if _IaM9.erro:
+                    raise _IaM9.erro
+                return _IaM9.resposta
+
+        def insights_m9(**campos):
+            base = {"resumo": "Visao geral da turma.", "pontosPositivos": ["Provas com bom resultado."],
+                    "pontosAtencao": [], "sugestoesGerais": ["Acompanhar os proximos registros."]}
+            base.update(campos)
+            return base
+
+        _IaM9.resposta = insights_m9(
+            resumo="O Aluno 1 esta abaixo do minimo e o Aluno 2 tem atividade sem nota lancada.",
+            pontosAtencao=[{"titulo": "Aluno 1 precisa de apoio",
+                            "evidencia": "O Aluno 1 tem 40% em Provas.",
+                            "sugestao": "Conversar com o Aluno 1; o Aluno 3 segue bem."}])
+        with patch("services.ia.gerar_insights_turma.AIClient", return_value=_IaM9()):
+            r = prof_i2.post(url_m9, {})
+            checar(r.status_code == 200 and r.get_json()["geradoPorIA"] is True,
+                   "M09-01: o Professor vinculado gera os insights normalmente (200)")
+            payload = _IaM9.payloads[-1]
+            referencias = [a["referencia"] for a in payload["alunos"]]
+            checar(referencias == ["Aluno 1", "Aluno 2", "Aluno 3"]
+                   and all("nome" not in a for a in payload["alunos"]),
+                   "M09-02: o payload usa Aluno 1, Aluno 2, Aluno 3 e nao tem campo de nome")
+            checar([a["situacao"] for a in payload["alunos"]]
+                   == ["abaixo_do_minimo", "em_andamento", "adequado"]
+                   and [a["percentual"] for a in payload["alunos"]] == [40, None, 90],
+                   "M09-03: priorizacao e numeros do motor intactos (abaixo, em andamento, adequado; 40/None/90)")
+            serializado = json.dumps(payload, ensure_ascii=False)
+            proibidos = []
+            for aluno, (nome, matricula, email) in zip(alunos_m9, pessoas_m9):
+                proibidos += nome.split() + [nome, matricula, email]
+            achados = [v for v in proibidos if v in serializado]
+            checar(not achados,
+                   "M09-04: nenhum nome, sobrenome, matricula, e-mail ou id (valores reais do banco) "
+                   "aparece no payload do AIClient%s" % ("" if not achados else " - achou: %s" % achados))
+            # O id e um inteiro pequeno que pode coincidir com um numero academico
+            # (ex.: 90%): por isso a busca e estrutural, em chaves e em textos.
+            def chaves_e_textos(no):
+                if isinstance(no, dict):
+                    for chave, valor in no.items():
+                        yield chave
+                        yield from chaves_e_textos(valor)
+                elif isinstance(no, list):
+                    for item in no:
+                        yield from chaves_e_textos(item)
+                elif isinstance(no, str):
+                    yield no
+
+            vistos = set(chaves_e_textos(payload))
+            ids_texto = {str(a["id"]) for a in alunos_m9}
+            checar(not (vistos & ({"id", "alunoId", "aluno_id", "matricula", "email"} | ids_texto))
+                   and "@" not in serializado and "MAT-" not in serializado,
+                   "M09-05: o payload nao tem chave nem texto de id, matricula ou e-mail")
+            texto = r.get_json()["insights"]
+            checar(texto["resumo"] == "O Bruno esta abaixo do minimo e o Carla tem atividade sem nota lancada."
+                   and texto["pontosAtencao"][0]["titulo"] == "Bruno precisa de apoio"
+                   and texto["pontosAtencao"][0]["sugestao"] == "Conversar com o Bruno; o Ana segue bem.",
+                   "M09-06: o nome real volta ao Professor (primeiro nome), trocado pelo Mentorly")
+            checar(not re.search(r"(?i)\baluno\s+\d", json.dumps(texto)),
+                   "M09-07: nenhuma referencia 'Aluno N' sobra na resposta entregue")
+            checar(sorted(r.get_json()["insights"]) == ["pontosAtencao", "pontosPositivos", "resumo", "sugestoesGerais"],
+                   "M09-08: o contrato de quatro secoes continua o mesmo")
+            # nenhum nome no payload tambem na reentrada (outra chamada, outro Professor da escola)
+            checar(estado_da_escola() == antes_m9,
+                   "M09-09: gerar insights nao escreve nada (7 tabelas identicas)")
+
+            # cross-school e papel
+            chamadas = len(_IaM9.payloads)
+            checar(professor_b.post(url_m9, {}).status_code == 404
+                   and coord_a.post(url_m9, {}).status_code == 403,
+                   "M09-10: outra escola -> 404 e Coordenacao -> 403, como antes")
+            checar(len(_IaM9.payloads) == chamadas, "M09-11: nenhuma dessas chamou o provedor")
+
+            # resposta com referencia inventada ou plural: erro amigavel, nada de pseudonimo no ar
+            for rotulo, texto_ia in (("referencia inexistente", "O Aluno 9 foi muito bem."),
+                                     ("plural", "Alunos 1 e 3 estao em extremos.")):
+                _IaM9.resposta = insights_m9(resumo=texto_ia)
+                r = prof_i2.post(url_m9, {})
+                checar(r.status_code == 503 and "Tente novamente" in r.get_json()["error"]
+                       and "Aluno" not in r.get_data(as_text=True),
+                       "M09-12: IA devolve %s -> 503 amigavel, sem expor a referencia" % rotulo)
+
+        # falha do provedor: tratamento de sempre
+        _IaM9.erro = None
+        with patch("services.ia.gerar_insights_turma.AIClient", return_value=_IaM9()):
+            _IaM9.erro = iaclient.AIProviderError(iaclient.MENSAGEM_INDISPONIVEL)
+            r = prof_i2.post(url_m9, {})
+            checar(r.status_code == 503 and "Tente novamente" in r.get_json()["error"],
+                   "M09-13: falha do provedor continua 503 com mensagem amigavel")
+            _IaM9.erro = None
+        checar(estado_da_escola() == antes_m9,
+               "M09-14: depois de todas as tentativas o banco segue identico")
 
         print("\nLimpando os dados de teste...")
         limpar()

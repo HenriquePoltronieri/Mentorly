@@ -130,11 +130,14 @@ class GerarInsightsTurmaTest(unittest.TestCase):
         self.assertTrue(resposta["geradoPorIA"])
         self.assertEqual(resposta["insights"], INSIGHTS)
         self.assertEqual(self.cliente.payload["alunos"][0]["percentual"], 80)
-        self.assertEqual(self.cliente.payload["alunos"][0]["nome"], "Ana")
+        # M-09: nenhum nome (nem o primeiro) vai ao provedor, so a referencia.
+        self.assertEqual(self.cliente.payload["alunos"][0]["referencia"], "Aluno 1")
+        self.assertNotIn("nome", self.cliente.payload["alunos"][0])
         serializado = json.dumps(self.cliente.payload, ensure_ascii=False)
         self.assertNotIn("SEGREDO", serializado)
         self.assertNotIn("ana@", serializado)
         self.assertNotIn("Sobrenome", serializado)
+        self.assertNotIn("Ana", serializado)
 
     def test_strings_de_dados_sao_sanitizadas(self):
         self.service.execute(10, 20, 2)

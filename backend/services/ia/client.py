@@ -49,6 +49,8 @@ Regras obrigatorias:
 - use linguagem cuidadosa, pratica e nao punitiva;
 - sugira acoes pedagogicas que um professor possa avaliar;
 - inclua em pontosAtencao todo aluno com situacao abaixo_do_minimo;
+- os alunos aparecem so como "Aluno 1", "Aluno 2" etc. (campo referencia): cite
+  cada aluno exatamente nesse formato, um por vez, sem inventar nome nem numero;
 - inclua sempre as quatro chaves; use lista vazia quando nao houver itens;
 - seja curto e objetivo.
 
