@@ -7,6 +7,7 @@ from services.conflito import (
     excluir_ou_conflito,
     gravar_ou_conflito,
 )
+from erros import RecursoNaoEncontrado
 
 
 MENSAGEM_NOME_DUPLICADO = "Ja existe um criterio com este nome nesta etapa."
@@ -34,7 +35,7 @@ def _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id):
 class ListarCriteriosService:
     def execute(self, etapa_id, coordenacao_id):
         if not Etapa.find_by_id(etapa_id, coordenacao_id):
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         return [
             Criterio.to_dict(c)
             for c in Criterio.find_all_by_etapa(etapa_id, coordenacao_id)
@@ -45,7 +46,7 @@ class BuscarCriterioService:
     def execute(self, criterio_id, coordenacao_id):
         linha = Criterio.find_by_id(criterio_id, coordenacao_id)
         if not linha:
-            raise LookupError("Criterio nao encontrado")
+            raise RecursoNaoEncontrado("Criterio nao encontrado")
         return Criterio.to_dict(linha)
 
 
@@ -59,7 +60,7 @@ class SalvarCriterioService:
     def execute(self, etapa_id, coordenacao_id, nome, peso=0, nota_maxima=10):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
 
         nome = entrada.texto(
@@ -83,7 +84,7 @@ class AtualizarCriterioService:
                 nota_maxima=None):
         criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
         if not criterio:
-            raise LookupError("Criterio nao encontrado")
+            raise RecursoNaoEncontrado("Criterio nao encontrado")
         _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
         if nome is not None:
             nome = entrada.texto(
@@ -111,7 +112,7 @@ class ExcluirCriterioService:
     def execute(self, criterio_id, coordenacao_id):
         criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
         if not criterio:
-            raise LookupError("Criterio nao encontrado")
+            raise RecursoNaoEncontrado("Criterio nao encontrado")
         _exigir_etapa_do_criterio_aberta(criterio, coordenacao_id)
         excluir_ou_conflito(
             lambda: Criterio.delete(criterio_id, coordenacao_id),

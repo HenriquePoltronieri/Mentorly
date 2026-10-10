@@ -34,6 +34,7 @@ from services.config.etapas import (
     ReabrirEtapaService,
     SalvarEtapaService,
 )
+from erros import RecursoNaoEncontrado
 
 
 class ConfigController:
@@ -67,7 +68,7 @@ class ConfigController:
                 dados.get("status"),
                 dados.get("encerrar_atual", dados.get("encerrarAtual", False)),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except AnoLetivoConflito as erro:
             return jsonify({"error": str(erro)}), 409
@@ -78,7 +79,7 @@ class ConfigController:
     def excluir_ano_letivo(self, ano_letivo_id):
         try:
             ExcluirAnoLetivoService().execute(ano_letivo_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except AnoLetivoConflito as erro:
             return jsonify({"error": str(erro)}), 409
@@ -98,7 +99,7 @@ class ConfigController:
             return jsonify(
                 BuscarEtapaService().execute(etapa_id, coordenacao_atual())
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
 
     def salvar_etapa(self):
@@ -113,7 +114,7 @@ class ConfigController:
                 dados.get("data_fim") or dados.get("dataFim"),
                 dados.get("ativa", True),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             # Ano letivo que esta escola nao tem.
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
@@ -132,7 +133,7 @@ class ConfigController:
                 dados.get("data_fim") or dados.get("dataFim"),
                 dados.get("ativa"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -149,7 +150,7 @@ class ConfigController:
                 dados.get("nota_minima", dados.get("notaMinima")),
                 dados.get("nota_maxima", dados.get("notaMaxima")),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -158,7 +159,7 @@ class ConfigController:
     def excluir_etapa(self, etapa_id):
         try:
             ExcluirEtapaService().execute(etapa_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -169,7 +170,7 @@ class ConfigController:
     def fechar_etapa(self, etapa_id):
         try:
             etapa = FecharEtapaService().execute(etapa_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -178,7 +179,7 @@ class ConfigController:
     def reabrir_etapa(self, etapa_id):
         try:
             etapa = ReabrirEtapaService().execute(etapa_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -192,7 +193,7 @@ class ConfigController:
             return jsonify(
                 ListarCriteriosService().execute(etapa_id, coordenacao_atual())
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
 
     def buscar_criterio(self, criterio_id):
@@ -200,7 +201,7 @@ class ConfigController:
             return jsonify(
                 BuscarCriterioService().execute(criterio_id, coordenacao_atual())
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
 
     def salvar_criterio(self, etapa_id):
@@ -213,7 +214,7 @@ class ConfigController:
                 dados.get("peso"),
                 dados.get("nota_maxima", dados.get("notaMaxima")),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -229,7 +230,7 @@ class ConfigController:
                 dados.get("peso"),
                 dados.get("nota_maxima", dados.get("notaMaxima")),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -240,7 +241,7 @@ class ConfigController:
     def excluir_criterio(self, criterio_id):
         try:
             ExcluirCriterioService().execute(criterio_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400

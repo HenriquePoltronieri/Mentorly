@@ -22,18 +22,19 @@ from services.config.anos_letivos import AnoEncerrado
 from services.planilha.leitor import PlanilhaInvalida, ler_planilha
 from services.professor.notas import exigir_ano_aberto_da_atividade
 from services.planilha.validacao import validar_linha_nota
+from erros import RecursoNaoEncontrado
 
 
 class ImportarNotasService:
     def execute(self, atividade_id, professor_id, nome_arquivo, conteudo):
         atividade = Atividade.find_by_id(atividade_id)
         if not atividade:
-            raise LookupError("Atividade nao encontrada")
+            raise RecursoNaoEncontrado("Atividade nao encontrada")
 
         if not ProfessorTurma.professor_leciona_na_turma(
             professor_id, atividade["turma_id"]
         ):
-            raise LookupError("Atividade nao encontrada")
+            raise RecursoNaoEncontrado("Atividade nao encontrada")
 
         try:
             exigir_ano_aberto_da_atividade(atividade)

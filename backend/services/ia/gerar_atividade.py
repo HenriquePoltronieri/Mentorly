@@ -17,6 +17,7 @@ from services.ia.contrato_atividade import (
     TIPOS_PEDIDO,
     caso_gerar_atividade,
 )
+from erros import RecursoNaoEncontrado
 
 
 DIFICULDADES = ("facil", "media", "dificil")
@@ -90,10 +91,10 @@ class GerarAtividadeIaService:
         # 1. Quem pede: professor vinculado a turma da propria escola. 404 para
         #    qualquer outra combinacao, sem confirmar que a turma existe.
         if not ProfessorTurma.professor_leciona_na_turma(professor_id, turma_id):
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
         turma = Turma.find_by_id(turma_id, coordenacao_id)
         if not turma:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
 
         # 2. O que pede.
         pedido = validar_pedido(dados)

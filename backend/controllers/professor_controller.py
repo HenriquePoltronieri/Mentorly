@@ -36,6 +36,7 @@ from services.ia.gerar_insights_turma import (
     DadosInsuficientesError,
     GerarInsightsTurmaService,
 )
+from erros import RecursoNaoEncontrado
 
 MENSAGEM_FEEDBACK_INDISPONIVEL = (
     "Nao foi possivel gerar o feedback agora. Tente novamente em instantes. "
@@ -79,7 +80,7 @@ class ProfessorController:
             alunos = ListarAlunosDaTurmaService().execute(
                 turma_id, usuario_atual_id()
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(alunos)
 
@@ -94,7 +95,7 @@ class ProfessorController:
                 dados.get("email"),
                 professor_id=usuario_atual_id(),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -111,7 +112,7 @@ class ProfessorController:
                 dados.get("email"),
                 professor_id=usuario_atual_id(),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -122,7 +123,7 @@ class ProfessorController:
             ExcluirAlunoService().execute(
                 aluno_id, coordenacao_atual(), professor_id=usuario_atual_id()
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -143,7 +144,7 @@ class ProfessorController:
                 arquivo.read(),
                 professor_id=usuario_atual_id(),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except PlanilhaInvalida as erro:
             return jsonify({"error": str(erro)}), 400
@@ -159,7 +160,7 @@ class ProfessorController:
             dados = DashboardProfessorService().execute(
                 usuario_atual_id(), ano_letivo
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(dados)
 
@@ -168,7 +169,7 @@ class ProfessorController:
             dados = EstatisticasAlunoService().execute(
                 aluno_id, coordenacao_atual(), usuario_atual_id()
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(dados)
 
@@ -184,7 +185,7 @@ class ProfessorController:
             dados = GerarInsightsTurmaService().execute(
                 turma_id, usuario_atual_id(), coordenacao_atual()
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except DadosInsuficientesError as erro:
             return jsonify({"error": str(erro)}), 422
@@ -200,7 +201,7 @@ class ProfessorController:
                 turma_id, usuario_atual_id(), coordenacao_atual(),
                 request.get_json(silent=True),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -216,7 +217,7 @@ class ProfessorController:
                 aluno_id, usuario_atual_id(), coordenacao_atual(),
                 request.get_json(silent=True),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except DadosInsuficientesError as erro:
             return jsonify({"error": str(erro)}), 422
@@ -233,7 +234,7 @@ class ProfessorController:
             dados = CorrigirRespostaIaService().execute(
                 atividade_id, usuario_atual_id(), request.get_json(silent=True)
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -247,7 +248,7 @@ class ProfessorController:
     def listar_notas(self, atividade_id):
         try:
             dados = ListarNotasService().execute(atividade_id, usuario_atual_id())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(dados)
 
@@ -257,7 +258,7 @@ class ProfessorController:
             resultado = LancarNotasService().execute(
                 atividade_id, usuario_atual_id(), dados
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -266,7 +267,7 @@ class ProfessorController:
     def excluir_nota(self, nota_id):
         try:
             ExcluirNotaService().execute(nota_id, usuario_atual_id())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -276,7 +277,7 @@ class ProfessorController:
         """Modelo ja preenchido com os alunos da turma da atividade."""
         try:
             dados = ListarNotasService().execute(atividade_id, usuario_atual_id())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
 
         alunos = [
@@ -295,7 +296,7 @@ class ProfessorController:
             resultado = ImportarNotasService().execute(
                 atividade_id, usuario_atual_id(), arquivo.filename, arquivo.read()
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except PlanilhaInvalida as erro:
             return jsonify({"error": str(erro)}), 400

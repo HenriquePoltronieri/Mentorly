@@ -2,6 +2,7 @@
 
 from models.aluno_model import Aluno
 from models.aluno_turma_historico_model import AlunoTurmaHistorico
+from erros import RecursoNaoEncontrado
 
 
 class TransferirAlunoService:
@@ -21,6 +22,6 @@ class HistoricoAlunoService:
     def execute(self, aluno_id, coordenacao_id):
         aluno = Aluno.find_com_turma(aluno_id)
         if not aluno or aluno["coordenacao_id"] != coordenacao_id:
-            raise LookupError("Aluno nao encontrado")
+            raise RecursoNaoEncontrado("Aluno nao encontrado")
         return [AlunoTurmaHistorico.to_dict(linha)
                 for linha in AlunoTurmaHistorico.find_by_aluno(aluno_id)]

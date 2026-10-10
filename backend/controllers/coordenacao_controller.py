@@ -31,6 +31,7 @@ from services.coordenacao.vincular_turmas import (
 from services.planilha.importar_alunos import ImportarAlunosService
 from services.planilha.leitor import PlanilhaInvalida
 from services.planilha.modelo import modelo_alunos
+from erros import RecursoNaoEncontrado
 
 
 class CoordenacaoController:
@@ -62,7 +63,7 @@ class CoordenacaoController:
                 coordenacao_atual(), professor_id, dados.get("nome"),
                 dados.get("email"), dados.get("disciplina"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except EntradaInvalida as erro:
             return jsonify({"error": str(erro)}), 400
@@ -75,7 +76,7 @@ class CoordenacaoController:
             professor = DesativarProfessorService().execute(
                 coordenacao_atual(), professor_id
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(professor)
 
@@ -84,7 +85,7 @@ class CoordenacaoController:
             professor = ReativarProfessorService().execute(
                 coordenacao_atual(), professor_id
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(professor)
 
@@ -93,7 +94,7 @@ class CoordenacaoController:
             professor = ReenviarConviteProfessorService().execute(
                 coordenacao_atual(), professor_id
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -107,7 +108,7 @@ class CoordenacaoController:
             turmas = ListarTurmasDoProfessorService().execute(
                 coordenacao_atual(), professor_id
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(turmas)
 
@@ -117,7 +118,7 @@ class CoordenacaoController:
             resultado = VincularTurmasService().execute(
                 coordenacao_atual(), professor_id, dados.get("turma_ids")
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -128,7 +129,7 @@ class CoordenacaoController:
             DesvincularTurmaDoProfessorService().execute(
                 coordenacao_atual(), professor_id, turma_id
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return "", 204
 
@@ -138,7 +139,7 @@ class CoordenacaoController:
     def listar_alunos(self, turma_id):
         try:
             alunos = ListarAlunosService().execute(turma_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(alunos)
 
@@ -152,7 +153,7 @@ class CoordenacaoController:
                 dados.get("matricula"),
                 dados.get("email"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -168,7 +169,7 @@ class CoordenacaoController:
                 dados.get("matricula"),
                 dados.get("email"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -177,7 +178,7 @@ class CoordenacaoController:
     def excluir_aluno(self, aluno_id):
         try:
             ExcluirAlunoService().execute(aluno_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -189,7 +190,7 @@ class CoordenacaoController:
             aluno = TransferirAlunoService().execute(
                 aluno_id, coordenacao_atual(),
                 dados.get("turma_id", dados.get("turmaId")), dados.get("motivo"))
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -198,7 +199,7 @@ class CoordenacaoController:
     def historico_aluno(self, aluno_id):
         try:
             historico = HistoricoAlunoService().execute(aluno_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         return jsonify(historico)
 
@@ -227,7 +228,7 @@ class CoordenacaoController:
                 arquivo.filename,
                 arquivo.read(),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except PlanilhaInvalida as erro:
             return jsonify({"error": str(erro)}), 400

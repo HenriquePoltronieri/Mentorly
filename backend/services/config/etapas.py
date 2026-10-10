@@ -15,6 +15,7 @@ from services.conflito import (
     excluir_ou_conflito,
     gravar_ou_conflito,
 )
+from erros import RecursoNaoEncontrado
 
 
 MENSAGEM_ORDEM_DUPLICADA = "Ja existe uma etapa com esta ordem neste ano letivo."
@@ -106,7 +107,7 @@ class BuscarEtapaService:
     def execute(self, etapa_id, coordenacao_id):
         linha = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not linha:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         etapa = Etapa.to_dict(linha)
         criterios = Criterio.find_all_by_etapa(etapa_id, coordenacao_id)
         etapa["criterios"] = [Criterio.to_dict(c) for c in criterios]
@@ -166,7 +167,7 @@ class AtualizarEtapaService:
                 data_inicio=None, data_fim=None, ativa=None):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
         if nome is not None:
             nome = entrada.texto(nome, "O nome da etapa", entrada.LIMITE_NOME_ETAPA)
@@ -206,7 +207,7 @@ class DefinirNotasEtapaService:
     def execute(self, etapa_id, coordenacao_id, nota_minima, nota_maxima):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
 
         try:
@@ -230,7 +231,7 @@ class ExcluirEtapaService:
     def execute(self, etapa_id, coordenacao_id):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         exigir_etapa_aberta(etapa)
         excluir_ou_conflito(
             lambda: Etapa.delete(etapa_id, coordenacao_id),
@@ -277,7 +278,7 @@ class FecharEtapaService:
     def execute(self, etapa_id, coordenacao_id):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         if etapa.get("fechada"):
             raise ValueError("Etapa ja esta fechada")
 
@@ -295,7 +296,7 @@ class ReabrirEtapaService:
     def execute(self, etapa_id, coordenacao_id):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         if not etapa.get("fechada"):
             raise ValueError("Etapa ja esta aberta")
         Etapa.reabrir(etapa_id, coordenacao_id)

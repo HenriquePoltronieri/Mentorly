@@ -3,6 +3,7 @@ from models.ano_letivo_model import AnoLetivo
 from models.professor_model import Professor
 from models.professor_turma_model import ProfessorTurma
 from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
+from erros import RecursoNaoEncontrado
 
 
 class DashboardProfessorService:
@@ -46,7 +47,7 @@ class DashboardProfessorService:
             return AnoLetivo.atual(coordenacao_id)
         registro = AnoLetivo.find_by_ano(coordenacao_id, ano_letivo)
         if not registro:
-            raise LookupError("Ano letivo nao encontrado")
+            raise RecursoNaoEncontrado("Ano letivo nao encontrado")
         return registro
 
     @staticmethod

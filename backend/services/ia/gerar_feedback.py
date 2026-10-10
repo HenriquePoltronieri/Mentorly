@@ -22,6 +22,7 @@ from services.ia.contrato_feedback import (
     numeros_do_payload,
 )
 from services.ia.gerar_insights_turma import DadosInsuficientesError
+from erros import RecursoNaoEncontrado
 
 
 def _limpar(valor, limite=100):
@@ -65,7 +66,7 @@ class GerarFeedbackIaService:
         etapa_id = _etapa_id(dados)
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
-            raise LookupError("Etapa nao encontrada")
+            raise RecursoNaoEncontrado("Etapa nao encontrada")
         if etapa["ano_letivo"] != aluno["ano_letivo"]:
             raise ValueError(
                 "A etapa e do ano letivo %d, mas a turma do aluno e do ano "

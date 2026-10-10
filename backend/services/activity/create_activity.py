@@ -9,6 +9,7 @@ from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
 )
+from erros import RecursoNaoEncontrado
 
 
 def parse_data(valor):
@@ -55,12 +56,12 @@ class CreateActivityService:
         # uma escola (FK composta), entao isto ja barra turma de outra
         # coordenacao tambem.
         if not ProfessorTurma.professor_leciona_na_turma(professor_id, turma_id):
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
 
         # A etapa precisa ser do mesmo ano letivo da turma.
         turma = Turma.find_by_id(turma_id, coordenacao_id)
         if not turma:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
         exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
 
         # Etapa e criterio precisam ser da escola do token. Nunca confiar no

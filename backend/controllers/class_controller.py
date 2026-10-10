@@ -20,6 +20,7 @@ from services.entrada import EntradaInvalida
 from services.turmas import (
     atualizar_turma, buscar_turma, criar_turma, excluir_turma, listar_turmas,
 )
+from erros import RecursoNaoEncontrado
 
 
 class ClassController:
@@ -68,7 +69,7 @@ class ClassController:
                 dados.get("turno"),
                 dados.get("ano_letivo") or dados.get("anoLetivo"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             # Ano letivo que esta escola nao tem (inclusive o de outra escola).
             return jsonify({"error": str(erro)}), 404
         except EntradaInvalida as erro:
@@ -95,7 +96,7 @@ class ClassController:
                 dados.get("turno"),
                 dados.get("ano_letivo") or dados.get("anoLetivo"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -105,7 +106,7 @@ class ClassController:
     def delete_class(self, class_id):
         try:
             excluir_turma(class_id, coordenacao_atual())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except AnoEncerrado as erro:
             return jsonify({"error": str(erro)}), 400

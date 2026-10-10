@@ -7,7 +7,7 @@ quatro endpoints de IA, que:
 - um TypeError levantado pelo service (bug interno) NAO e convertido em 400:
   ele sobe e, numa rota real, vira 500;
 - os erros realmente esperados continuam com o mesmo codigo (ValueError -> 400
-  onde ja era, LookupError -> 404, DadosInsuficientesError -> 422, AIError -> 503).
+  onde ja era, RecursoNaoEncontrado -> 404, DadosInsuficientesError -> 422, AIError -> 503).
 
 Sem banco e sem rede: os services sao substituidos por dubles.
 """
@@ -21,6 +21,8 @@ from unittest.mock import MagicMock, patch
 from flask import Flask
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from erros import RecursoNaoEncontrado
 
 from controllers import professor_controller as modulo
 from controllers.professor_controller import ProfessorController
@@ -97,12 +99,14 @@ class ErroInternoNaoViraErroDeEntradaTest(_Base):
                     resposta = _app(controller, metodo).test_client().post("/ia", json={})
                     self.assertEqual(resposta.status_code, 500)
 
-    def test_keyerror_segue_a_convencao_do_projeto_lookuperror_vira_404(self):
-        """Observacao, nao correcao: KeyError e subclasse de LookupError e o projeto todo o mapeia para 404."""
+    def test_keyerror_e_indexerror_internos_viram_500_e_nunca_404(self):
+        """M-10: KeyError/IndexError sao bugs internos; antes (LookupError) viravam 404."""
         for metodo, servico, _ in ENDPOINTS:
-            with self.subTest(endpoint=metodo):
-                controller = self._controller_com(servico, KeyError("campo"))
-                self.assertEqual(_app(controller, metodo).test_client().post("/ia", json={}).status_code, 404)
+            for erro in (KeyError("campo"), IndexError("indice")):
+                with self.subTest(endpoint=metodo, erro=type(erro).__name__):
+                    controller = self._controller_com(servico, erro)
+                    resposta = _app(controller, metodo).test_client().post("/ia", json={})
+                    self.assertEqual(resposta.status_code, 500)
 
     def test_nenhum_controller_de_ia_trata_typeerror(self):
         """Trava contra a volta do padrao: o codigo-fonte dos quatro metodos nao menciona TypeError."""
@@ -127,10 +131,10 @@ class ErrosEsperadosContinuamIguaisTest(_Base):
                 self.assertEqual(codigo, 400)
                 self.assertEqual(corpo["error"], "Informe o tema da atividade")
 
-    def test_lookuperror_continua_404(self):
+    def test_recurso_nao_encontrado_continua_404(self):
         for metodo, servico, _ in ENDPOINTS:
             with self.subTest(endpoint=metodo):
-                codigo, corpo = self._post(metodo, servico, LookupError("Turma nao encontrada"))
+                codigo, corpo = self._post(metodo, servico, RecursoNaoEncontrado("Turma nao encontrada"))
                 self.assertEqual(codigo, 404)
                 self.assertEqual(corpo["error"], "Turma nao encontrada")
 

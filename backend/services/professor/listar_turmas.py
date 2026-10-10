@@ -1,5 +1,6 @@
 from models.turma_model import Turma
 from repositories.consultas import turmas_do_professor
+from erros import RecursoNaoEncontrado
 
 
 class ListarTurmasDoProfessorService:
@@ -48,7 +49,7 @@ class ListarAlunosDaTurmaService:
 
         turma = Turma.find_by_id_para_professor(turma_id, professor_id)
         if not turma:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
 
         # Etapa atual dentro do ano da propria turma.
         etapa, _regra = etapa_atual(turma["coordenacao_id"], turma["ano_letivo"])

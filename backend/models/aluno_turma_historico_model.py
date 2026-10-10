@@ -2,6 +2,7 @@
 
 from database.connection import query_all, transacao
 from models.utils import iso
+from erros import RecursoNaoEncontrado
 
 
 class AlunoTurmaHistorico:
@@ -27,7 +28,7 @@ class AlunoTurmaHistorico:
                 "WHERE al.id = %s FOR UPDATE", (aluno_id,))
             aluno = cursor.fetchone()
             if not aluno or aluno["coordenacao_id"] != coordenacao_id:
-                raise LookupError("Aluno nao encontrado")
+                raise RecursoNaoEncontrado("Aluno nao encontrado")
 
             cursor.execute(
                 "SELECT t.id, t.coordenacao_id, t.ano_letivo, a.status "
@@ -36,7 +37,7 @@ class AlunoTurmaHistorico:
                 "WHERE t.id = %s FOR UPDATE", (turma_destino_id,))
             destino = cursor.fetchone()
             if not destino or destino["coordenacao_id"] != coordenacao_id:
-                raise LookupError("Turma de destino nao encontrada")
+                raise RecursoNaoEncontrado("Turma de destino nao encontrada")
             if destino["status"] == "encerrado":
                 raise ValueError("Nao e possivel transferir para turma de ano letivo encerrado")
             if aluno["turma_id"] == turma_destino_id:

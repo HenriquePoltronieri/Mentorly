@@ -19,6 +19,7 @@ from services.activity.get_activity import GetActivityService
 from repositories.consultas import buscar_atividades
 from services.activity.update_activity import UpdateActivityService
 from services.entrada import inteiro
+from erros import RecursoNaoEncontrado
 
 
 def _professor_id_ou_none():
@@ -79,7 +80,7 @@ class ActivityController:
                 dados.get("criterio_id"),
                 dados.get("nota_maxima"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except (ValueError, TypeError) as erro:
             return jsonify({"error": str(erro)}), 400
@@ -103,7 +104,7 @@ class ActivityController:
                 dados.get("criterio_id"),
                 dados.get("nota_maxima"),
             )
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except (ValueError, TypeError) as erro:
             return jsonify({"error": str(erro)}), 400
@@ -113,7 +114,7 @@ class ActivityController:
     def delete_activity(self, activity_id):
         try:
             DeleteActivityService().execute(activity_id, usuario_atual_id())
-        except LookupError as erro:
+        except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400

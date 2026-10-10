@@ -6,17 +6,18 @@ from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from services import entrada
 from services.config.anos_letivos import exigir_ano_nao_encerrado
+from erros import RecursoNaoEncontrado
 
 
 def _atividade_do_professor(atividade_id, professor_id):
     """Guarda comum: a atividade precisa ser de uma turma do professor."""
     atividade = Atividade.find_by_id(atividade_id)
     if not atividade:
-        raise LookupError("Atividade nao encontrada")
+        raise RecursoNaoEncontrado("Atividade nao encontrada")
     if not ProfessorTurma.professor_leciona_na_turma(
         professor_id, atividade["turma_id"]
     ):
-        raise LookupError("Atividade nao encontrada")
+        raise RecursoNaoEncontrado("Atividade nao encontrada")
     return atividade
 
 
@@ -107,7 +108,7 @@ class LancarNotasService:
             # 404 e nao 403: confirmar que o aluno existe em outra turma ja
             # seria vazar dado de outra turma (ou de outra escola).
             if aluno_id not in alunos_da_turma:
-                raise LookupError("Aluno nao encontrado nesta turma")
+                raise RecursoNaoEncontrado("Aluno nao encontrado nesta turma")
 
             try:
                 valor = entrada.numero_finito(valor, "A nota")
@@ -156,7 +157,7 @@ class ExcluirNotaService:
     def execute(self, nota_id, professor_id):
         nota = Nota.find_by_id(nota_id)
         if not nota:
-            raise LookupError("Nota nao encontrada")
+            raise RecursoNaoEncontrado("Nota nao encontrada")
 
         atividade = _atividade_do_professor(nota["atividade_id"], professor_id)
 
@@ -165,7 +166,7 @@ class ExcluirNotaService:
         # da nota ainda e da turma da atividade antes de excluir.
         aluno = Aluno.find_by_id(nota["aluno_id"])
         if not aluno or aluno["turma_id"] != atividade["turma_id"]:
-            raise LookupError("Nota nao encontrada")
+            raise RecursoNaoEncontrado("Nota nao encontrada")
         exigir_ano_aberto_da_atividade(atividade)
 
         if atividade.get("etapa_id") and Etapa.esta_fechada(

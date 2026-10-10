@@ -10,6 +10,8 @@ from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from erros import RecursoNaoEncontrado
+
 from services.ia.client import (
     MAX_TOKENS_RESPOSTA,
     MENSAGEM_INDISPONIVEL,
@@ -147,13 +149,13 @@ class GerarInsightsTurmaTest(unittest.TestCase):
 
     def test_turma_sem_vinculo_e_ocultada(self):
         self.mocks[0].return_value = None
-        with self.assertRaises(LookupError):
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(10, 20, 2)
         self.assertIsNone(self.cliente.payload)
 
     def test_turma_de_outra_escola_e_ocultada(self):
         self.turma["coordenacao_id"] = 99
-        with self.assertRaises(LookupError):
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(10, 20, 2)
 
     def test_etapa_ausente_nao_chama_provedor(self):

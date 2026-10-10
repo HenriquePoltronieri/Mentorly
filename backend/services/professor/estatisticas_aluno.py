@@ -12,7 +12,7 @@ class EstatisticasAlunoService:
     central (services/academico/calculo.py) - nunca um valor inventado.
 
     So responde se o aluno estiver em uma turma vinculada ao professor
-    logado - caso contrario levanta LookupError (404).
+    logado - caso contrario levanta RecursoNaoEncontrado (404).
     """
 
     def execute(self, aluno_id, coordenacao_id, professor_id):

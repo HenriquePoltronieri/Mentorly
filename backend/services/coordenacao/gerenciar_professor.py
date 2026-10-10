@@ -14,12 +14,13 @@ from models.professor_model import Professor
 from services import entrada
 from services.rate_limit import limitar_convite
 from services.email_service import enviar_convite_professor, expor_codigos_dev
+from erros import RecursoNaoEncontrado
 
 
 def _professor_da_escola(coordenacao_id, professor_id):
     professor = Professor.find_by_id(professor_id, coordenacao_id)
     if not professor:
-        raise LookupError("Professor nao encontrado")
+        raise RecursoNaoEncontrado("Professor nao encontrado")
     return professor
 
 

@@ -2,6 +2,7 @@ from models.professor_model import Professor
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
 from services import entrada
+from erros import RecursoNaoEncontrado
 
 
 class VincularTurmasService:
@@ -17,7 +18,7 @@ class VincularTurmasService:
     def execute(self, coordenacao_id, professor_id, turma_ids):
         professor = Professor.find_by_id(professor_id, coordenacao_id)
         if not professor:
-            raise LookupError("Professor nao encontrado")
+            raise RecursoNaoEncontrado("Professor nao encontrado")
 
         if turma_ids is None:
             raise ValueError("Informe as turmas")
@@ -31,7 +32,7 @@ class VincularTurmasService:
             except ValueError:
                 raise entrada.EntradaInvalida("Lista de turmas invalida")
             if not Turma.find_by_id(turma_id, coordenacao_id):
-                raise LookupError("Turma %s nao pertence a esta escola" % turma_id)
+                raise RecursoNaoEncontrado("Turma %s nao pertence a esta escola" % turma_id)
             if turma_id not in ids_limpos:
                 ids_limpos.append(turma_id)
 
@@ -50,7 +51,7 @@ class ListarTurmasDoProfessorService:
 
     def execute(self, coordenacao_id, professor_id):
         if not Professor.find_by_id(professor_id, coordenacao_id):
-            raise LookupError("Professor nao encontrado")
+            raise RecursoNaoEncontrado("Professor nao encontrado")
         linhas = ProfessorTurma.turmas_do_professor(professor_id)
         return [Turma.to_dict(linha) for linha in linhas]
 
@@ -60,14 +61,14 @@ class DesvincularTurmaDoProfessorService:
 
     def execute(self, coordenacao_id, professor_id, turma_id):
         if not Professor.find_by_id(professor_id, coordenacao_id):
-            raise LookupError("Professor nao encontrado")
+            raise RecursoNaoEncontrado("Professor nao encontrado")
         if not Turma.find_by_id(turma_id, coordenacao_id):
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
         removidos = ProfessorTurma.desvincular(
             coordenacao_id, professor_id, turma_id
         )
         if not removidos:
-            raise LookupError("Vinculo nao encontrado")
+            raise RecursoNaoEncontrado("Vinculo nao encontrado")
         return {
             "professorId": professor_id,
             "turmaId": turma_id,

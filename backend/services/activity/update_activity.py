@@ -11,6 +11,7 @@ from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
 )
+from erros import RecursoNaoEncontrado
 
 
 class UpdateActivityService:
@@ -27,13 +28,13 @@ class UpdateActivityService:
                 criterio_id=None, nota_maxima=None):
         atual = Atividade.find_by_id(atividade_id)
         if not atual:
-            raise LookupError("Atividade nao encontrada")
+            raise RecursoNaoEncontrado("Atividade nao encontrada")
 
         # A atividade tem que estar em uma turma do professor logado.
         if not ProfessorTurma.professor_leciona_na_turma(
             professor_id, atual["turma_id"]
         ):
-            raise LookupError("Atividade nao encontrada")
+            raise RecursoNaoEncontrado("Atividade nao encontrada")
 
         # Atividade de turma de ano encerrado e historico: nem editar nem mover.
         turma_atual = Turma.find_by_id(atual["turma_id"], coordenacao_id)
@@ -71,7 +72,7 @@ class UpdateActivityService:
             if not ProfessorTurma.professor_leciona_na_turma(
                 professor_id, turma_id
             ):
-                raise LookupError("Turma nao encontrada")
+                raise RecursoNaoEncontrado("Turma nao encontrada")
             # As notas apontam para alunos da turma de origem: mover a
             # atividade deixaria essas notas presas a uma turma onde os
             # alunos nao estao, e sumiriam das listas e do boletim.
@@ -87,7 +88,7 @@ class UpdateActivityService:
         turma_final = turma_id if turma_id is not None else atual["turma_id"]
         turma = Turma.find_by_id(turma_final, coordenacao_id)
         if not turma:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
         exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
 
         # Etapa e criterio: so mexe quando vieram na requisicao, mas quando

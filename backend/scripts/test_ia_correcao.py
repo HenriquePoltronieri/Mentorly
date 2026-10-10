@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from erros import RecursoNaoEncontrado
+
 from services.ia.client import (
     MENSAGEM_INDISPONIVEL,
     AIClient,
@@ -348,8 +350,8 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(caso.max_tokens, MAX_TOKENS_CORRECAO)
 
     def test_sem_vinculo_ou_outra_escola_nao_chama_ia(self):
-        self.mocks["atividade"].side_effect = LookupError("Atividade nao encontrada")
-        with self.assertRaises(LookupError):
+        self.mocks["atividade"].side_effect = RecursoNaoEncontrado("Atividade nao encontrada")
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(5, 1, self.pedido)
         self.assertEqual(self.cliente.chamadas, [])
 

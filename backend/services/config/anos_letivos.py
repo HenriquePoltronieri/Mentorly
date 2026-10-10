@@ -3,7 +3,7 @@
 Convencao de erro, a mesma do resto do projeto:
   ValueError          -> 400 (o dado enviado esta errado)
   AnoLetivoConflito   -> 409 (o pedido e valido, mas conflita com o estado)
-  LookupError         -> 404 (o id nao existe PARA ESTA ESCOLA)
+  RecursoNaoEncontrado -> 404 (o id nao existe PARA ESTA ESCOLA)
 
 So a Coordenacao administra anos letivos; o coordenacao_id vem sempre do
 token. O Professor nao tem rota aqui: ele apenas consome o contexto
@@ -11,6 +11,7 @@ token. O Professor nao tem rota aqui: ele apenas consome o contexto
 """
 
 from models.ano_letivo_model import AnoLetivo, STATUS_VALIDOS
+from erros import RecursoNaoEncontrado
 
 ANO_MINIMO = 2000
 ANO_MAXIMO = 2100
@@ -71,7 +72,7 @@ def _serializar(coordenacao_id, ano_letivo_id):
     for linha in AnoLetivo.find_all_by_coordenacao(coordenacao_id):
         if linha["id"] == ano_letivo_id:
             return AnoLetivo.to_dict(linha)
-    raise LookupError("Ano letivo nao encontrado")
+    raise RecursoNaoEncontrado("Ano letivo nao encontrado")
 
 
 def resolver_ano_letivo(coordenacao_id, ano_letivo=None, permitir_encerrado=False):
@@ -98,7 +99,7 @@ def resolver_ano_letivo(coordenacao_id, ano_letivo=None, permitir_encerrado=Fals
     registro = AnoLetivo.find_by_ano(coordenacao_id, ano)
     # 404 tambem para o ano que so existe em OUTRA escola: nao confirma nada.
     if not registro:
-        raise LookupError("Ano letivo nao encontrado")
+        raise RecursoNaoEncontrado("Ano letivo nao encontrado")
     if registro["status"] == "encerrado" and not permitir_encerrado:
         raise ValueError(
             "O ano letivo %d esta encerrado e nao recebe turmas nem etapas novas"
@@ -163,7 +164,7 @@ class AtualizarAnoLetivoService:
 
         registro = AnoLetivo.find_by_id(ano_letivo_id, coordenacao_id)
         if not registro:
-            raise LookupError("Ano letivo nao encontrado")
+            raise RecursoNaoEncontrado("Ano letivo nao encontrado")
 
         if registro["status"] == status:
             return _serializar(coordenacao_id, registro["id"])
@@ -190,7 +191,7 @@ class ExcluirAnoLetivoService:
     def execute(self, ano_letivo_id, coordenacao_id):
         registro = AnoLetivo.find_by_id(ano_letivo_id, coordenacao_id)
         if not registro:
-            raise LookupError("Ano letivo nao encontrado")
+            raise RecursoNaoEncontrado("Ano letivo nao encontrado")
 
         turmas, etapas = AnoLetivo.contar_dados(coordenacao_id, registro["ano"])
         if turmas or etapas:

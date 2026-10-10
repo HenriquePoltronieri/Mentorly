@@ -6,6 +6,7 @@ from services.config.anos_letivos import (
     validar_ano,
 )
 from services.conflito import excluir_ou_conflito
+from erros import RecursoNaoEncontrado
 
 
 def _descricao(valor):
@@ -55,7 +56,7 @@ def criar_turma(coordenacao_id, nome, descricao=None, disciplina=None,
 
     # Toda turma pertence a um ano letivo DESTA escola. Sem ano informado, vale
     # o ano atual da escola (nunca o do relogio); ano de outra escola, ou nao
-    # cadastrado, vira LookupError (404); ano encerrado nao recebe turma nova.
+    # cadastrado, vira RecursoNaoEncontrado (404); ano encerrado nao recebe turma nova.
     ano = resolver_ano_letivo(coordenacao_id, ano_letivo)["ano"]
 
     turma_id = Turma.create(
@@ -68,7 +69,7 @@ def atualizar_turma(turma_id, coordenacao_id, nome=None, descricao=None,
                     disciplina=None, turno=None, ano_letivo=None):
     atual = Turma.find_by_id(turma_id, coordenacao_id)
     if not atual:
-        raise LookupError("Turma nao encontrada")
+        raise RecursoNaoEncontrado("Turma nao encontrada")
     exigir_ano_nao_encerrado(coordenacao_id, atual["ano_letivo"])
 
     descricao = _descricao(descricao)
@@ -108,7 +109,7 @@ def excluir_turma(turma_id, coordenacao_id):
     """O schema cascateia os alunos, atividades e notas da turma excluida."""
     turma = Turma.find_by_id(turma_id, coordenacao_id)
     if not turma:
-        raise LookupError("Turma nao encontrada")
+        raise RecursoNaoEncontrado("Turma nao encontrada")
     exigir_ano_nao_encerrado(coordenacao_id, turma["ano_letivo"])
     excluir_ou_conflito(
         lambda: Turma.delete(turma_id, coordenacao_id),

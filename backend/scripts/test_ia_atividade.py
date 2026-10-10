@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from erros import RecursoNaoEncontrado
+
 from services.ia.client import (
     INSIGHTS_TURMA,
     MENSAGEM_INDISPONIVEL,
@@ -270,16 +272,16 @@ class ServiceTest(unittest.TestCase):
 
     def test_sem_vinculo_ou_turma_de_outra_escola_nao_chama_ia(self):
         self.mocks[0].return_value = False
-        with self.assertRaises(LookupError):
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(10, 1, 2, self.pedido)
         self.mocks[0].return_value = True
         self.mocks[1].return_value = None
-        with self.assertRaises(LookupError):
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(10, 1, 2, self.pedido)
         self.assertEqual(self.cliente.chamadas, [])
 
     def test_etapa_invalida_nao_chama_ia(self):
-        for erro in (ValueError("Esta etapa ja esta fechada"), LookupError("Etapa nao encontrada")):
+        for erro in (ValueError("Esta etapa ja esta fechada"), RecursoNaoEncontrado("Etapa nao encontrada")):
             self.mocks[2].side_effect = erro
             with self.assertRaises(type(erro)):
                 self.service.execute(10, 1, 2, self.pedido)

@@ -6,7 +6,7 @@ criacao - que e justamente o buraco que a ETAPA 9 pede para fechar.
 
 Convencao de erro:
   ValueError  -> 400 (o dado enviado esta errado)
-  LookupError -> 404 (o id nao existe PARA ESTA ESCOLA)
+  RecursoNaoEncontrado -> 404 (o id nao existe PARA ESTA ESCOLA)
 
 O 404 e proposital no caso de etapa/criterio de outra coordenacao: um 403
 confirmaria que aquele id existe em algum lugar do sistema.
@@ -15,6 +15,7 @@ confirmaria que aquele id existe em algum lugar do sistema.
 from models.criterio_model import Criterio
 from models.etapa_model import Etapa
 from services import entrada
+from erros import RecursoNaoEncontrado
 
 
 def validar_nota_maxima(bruto, obrigatorio=True):
@@ -87,7 +88,7 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
 
     etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
     if not etapa:
-        raise LookupError("Etapa nao encontrada")
+        raise RecursoNaoEncontrado("Etapa nao encontrada")
     validar_ano_da_etapa(etapa, ano_turma)
     if etapa.get("fechada"):
         raise ValueError(
@@ -97,9 +98,9 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
 
     criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
     if not criterio:
-        raise LookupError("Criterio nao encontrado")
+        raise RecursoNaoEncontrado("Criterio nao encontrado")
 
     if criterio["etapa_id"] != etapa["id"]:
-        raise LookupError("Criterio nao encontrado nesta etapa")
+        raise RecursoNaoEncontrado("Criterio nao encontrado nesta etapa")
 
     return etapa["id"], criterio["id"]

@@ -7,6 +7,7 @@ de chamar estes metodos.
 
 from database.connection import execute, insert, query_all, query_one, transacao
 from models.utils import iso
+from erros import RecursoNaoEncontrado
 
 _COLUNAS = "id, turma_id, nome, matricula, email, created_at, updated_at"
 
@@ -100,7 +101,7 @@ class Aluno:
         )
         turma = cursor.fetchone()
         if not turma:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
         cursor.execute(
             "INSERT INTO aluno_turma_historico "
             "(aluno_id, coordenacao_id, turma_id, ano_letivo, data_inicio) "

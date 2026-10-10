@@ -16,6 +16,7 @@ from models.aluno_model import Aluno
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
 from services.ia.client import MENSAGEM_INDISPONIVEL, AIClient, AIResponseError
+from erros import RecursoNaoEncontrado
 
 
 MAX_DETALHES_ALUNOS = 50
@@ -106,7 +107,7 @@ class GerarInsightsTurmaService:
     def execute(self, turma_id, professor_id, coordenacao_id):
         turma = Turma.find_by_id_para_professor(turma_id, professor_id)
         if not turma or turma.get("coordenacao_id") != coordenacao_id:
-            raise LookupError("Turma nao encontrada")
+            raise RecursoNaoEncontrado("Turma nao encontrada")
 
         etapa, regra_etapa = etapa_atual(coordenacao_id, turma["ano_letivo"])
         if not etapa:

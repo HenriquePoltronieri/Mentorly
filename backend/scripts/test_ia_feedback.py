@@ -15,6 +15,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from erros import RecursoNaoEncontrado
+
 from services.ia.client import (
     MENSAGEM_INDISPONIVEL,
     AIClient,
@@ -404,8 +406,8 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(self.escritas(), [])
 
     def test_aluno_inacessivel_nao_chama_ia(self):
-        self.mocks["aluno"].side_effect = LookupError("Aluno nao encontrado")
-        with self.assertRaises(LookupError):
+        self.mocks["aluno"].side_effect = RecursoNaoEncontrado("Aluno nao encontrado")
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(9, 1, 2, {"etapaId": 4})
         self.assertEqual(self.cliente.chamadas, [])
         self.mocks["motor"].assert_not_called()
@@ -414,7 +416,7 @@ class ServiceTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.execute(9, 1, 2, {})
         self.mocks["etapa"].return_value = None
-        with self.assertRaises(LookupError):
+        with self.assertRaises(RecursoNaoEncontrado):
             self.service.execute(9, 1, 2, {"etapaId": 99})
         self.mocks["etapa"].return_value = dict(self.etapa, ano_letivo=2027)
         with self.assertRaises(ValueError) as contexto:

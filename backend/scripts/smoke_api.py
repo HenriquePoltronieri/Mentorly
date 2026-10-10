@@ -4462,6 +4462,155 @@ def main():
         checar(estado_da_escola() == antes_m9,
                "M09-14: depois de todas as tentativas o banco segue identico")
 
+        # ---------------------------------------------------------
+        print("\n[M-10] 404 so para recurso inexistente (RecursoNaoEncontrado)")
+        INEXISTENTE = 99999999
+
+        def eh404(resposta):
+            corpo = resposta.get_json(silent=True) or {}
+            return (resposta.status_code == 404
+                    and re.search(r"nao (encontrad|pertence)", corpo.get("error", "")) is not None
+                    and "Error" not in corpo.get("error", ""))
+
+        chamadas_ia_m10 = [0]
+
+        def _ia_conta(self, payload, caso=None):
+            chamadas_ia_m10[0] += 1
+            raise iaclient.AIProviderError(iaclient.MENSAGEM_INDISPONIVEL)
+
+        # recursos inexistentes, vistos pela Coordenacao
+        casos_coord = (
+            ("turma", "get", "/api/classes/%d" % INEXISTENTE, None),
+            ("turma", "put", "/api/classes/%d" % INEXISTENTE, {"name": "x"}),
+            ("turma", "delete", "/api/classes/%d" % INEXISTENTE, None),
+            ("turma (alunos)", "get", "/api/coordenacao/turmas/%d/alunos" % INEXISTENTE, None),
+            ("turma (cadastrar aluno)", "post", "/api/coordenacao/turmas/%d/alunos" % INEXISTENTE, {"nome": "Ana Lima"}),
+            ("turma (boletim)", "get", "/api/coordenacao/turmas/%d/boletim" % INEXISTENTE, None),
+            ("aluno", "put", "/api/coordenacao/alunos/%d" % INEXISTENTE, {"nome": "Ana Lima"}),
+            ("aluno", "delete", "/api/coordenacao/alunos/%d" % INEXISTENTE, None),
+            ("aluno (transferir)", "post", "/api/coordenacao/alunos/%d/transferir" % INEXISTENTE, {"turma_id": turma_orig["id"]}),
+            ("aluno (historico)", "get", "/api/coordenacao/alunos/%d/historico" % INEXISTENTE, None),
+            ("turma de destino", "post", "/api/coordenacao/alunos/%d/transferir" % aluno_m1, {"turma_id": INEXISTENTE}),
+            ("professor", "put", "/api/coordenacao/professores/%d" % INEXISTENTE, {"nome": "Fulano Tal"}),
+            ("professor (desativar)", "post", "/api/coordenacao/professores/%d/desativar" % INEXISTENTE, None),
+            ("professor (reativar)", "post", "/api/coordenacao/professores/%d/reativar" % INEXISTENTE, None),
+            ("professor (convite)", "post", "/api/coordenacao/professores/%d/reenviar-convite" % INEXISTENTE, None),
+            ("professor (turmas)", "get", "/api/coordenacao/professores/%d/turmas" % INEXISTENTE, None),
+            ("professor (vincular)", "post", "/api/coordenacao/professores/%d/turmas" % INEXISTENTE, {"turma_ids": []}),
+            ("turma no vinculo", "post", "/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"], {"turma_ids": [INEXISTENTE]}),
+            ("vinculo", "delete", "/api/coordenacao/professores/%d/turmas/%d" % (prof_i2_dados["id"], INEXISTENTE), None),
+            ("etapa", "get", "/api/config/etapas/%d" % INEXISTENTE, None),
+            ("etapa", "put", "/api/config/etapas/%d" % INEXISTENTE, {"nome": "x"}),
+            ("etapa", "delete", "/api/config/etapas/%d" % INEXISTENTE, None),
+            ("etapa (notas)", "post", "/api/config/etapas/%d/notas" % INEXISTENTE, {"nota_minima": 1, "nota_maxima": 2}),
+            ("etapa (fechar)", "post", "/api/config/etapas/%d/fechar" % INEXISTENTE, None),
+            ("etapa (reabrir)", "post", "/api/config/etapas/%d/reabrir" % INEXISTENTE, None),
+            ("etapa (criterios)", "get", "/api/config/criterios/etapa/%d" % INEXISTENTE, None),
+            ("etapa (novo criterio)", "post", "/api/config/criterios/etapa/%d" % INEXISTENTE, {"nome": "x", "peso": 1}),
+            ("criterio", "get", "/api/config/criterios/%d" % INEXISTENTE, None),
+            ("criterio", "put", "/api/config/criterios/%d" % INEXISTENTE, {"peso": 1}),
+            ("criterio", "delete", "/api/config/criterios/%d" % INEXISTENTE, None),
+            ("ano letivo", "put", "/api/config/anos-letivos/%d" % INEXISTENTE, {"status": "encerrado"}),
+            ("ano letivo", "delete", "/api/config/anos-letivos/%d" % INEXISTENTE, None),
+        )
+        for rotulo, metodo, url, corpo in casos_coord:
+            r = getattr(coord_a, metodo)(url, corpo) if corpo is not None else getattr(coord_a, metodo)(url)
+            checar(eh404(r), "M10-01: %s inexistente: %s %s -> 404" % (rotulo, metodo.upper(), url[4:60]))
+
+        # recursos inexistentes, vistos pelo Professor
+        casos_prof = (
+            ("atividade", "get", "/api/activities/%d" % INEXISTENTE, None),
+            ("atividade", "put", "/api/activities/%d" % INEXISTENTE, {"title": "x"}),
+            ("atividade", "delete", "/api/activities/%d" % INEXISTENTE, None),
+            ("turma (nova atividade)", "post", "/api/activities", {"title": "x", "class_id": INEXISTENTE,
+                                                                   "etapa_id": etapa_m1["id"], "criterio_id": crit_m1["id"], "nota_maxima": 10}),
+            ("etapa (nova atividade)", "post", "/api/activities", {"title": "x", "class_id": turma_orig["id"],
+                                                                   "etapa_id": INEXISTENTE, "criterio_id": crit_m1["id"], "nota_maxima": 10}),
+            ("criterio (nova atividade)", "post", "/api/activities", {"title": "x", "class_id": turma_orig["id"],
+                                                                      "etapa_id": etapa_m1["id"], "criterio_id": INEXISTENTE, "nota_maxima": 10}),
+            ("atividade (notas)", "get", "/api/atividades/%d/notas" % INEXISTENTE, None),
+            ("atividade (lancar nota)", "post", "/api/atividades/%d/notas" % INEXISTENTE, {"aluno_id": aluno_m1, "valor": 1}),
+            ("aluno fora da turma (nota)", "post", "/api/atividades/%d/notas" % ativ_m1["id"], {"aluno_id": INEXISTENTE, "valor": 1}),
+            ("nota", "delete", "/api/professor/notas/%d" % INEXISTENTE, None),
+            ("turma (alunos)", "get", "/api/professor/turmas/%d/alunos" % INEXISTENTE, None),
+            ("turma (boletim)", "get", "/api/professor/turmas/%d/boletim" % INEXISTENTE, None),
+            ("turma (cadastrar aluno)", "post", "/api/professor/turmas/%d/alunos" % INEXISTENTE, {"nome": "Ana Lima"}),
+            ("aluno (estatisticas)", "get", "/api/professor/alunos/%d/estatisticas" % INEXISTENTE, None),
+            ("aluno", "put", "/api/professor/alunos/%d" % INEXISTENTE, {"nome": "Ana Lima"}),
+            ("aluno", "delete", "/api/professor/alunos/%d" % INEXISTENTE, None),
+            ("ano letivo (dashboard)", "get", "/api/professor/dashboard?ano_letivo=1999", None),
+        )
+        for rotulo, metodo, url, corpo in casos_prof:
+            r = getattr(prof_i2, metodo)(url, corpo) if corpo is not None else getattr(prof_i2, metodo)(url)
+            checar(eh404(r), "M10-02: %s inexistente: %s %s -> 404" % (rotulo, metodo.upper(), url[4:60]))
+
+        # cross-school: a turma/aluno/etapa/etc. da escola A, vistos pela escola B
+        casos_cross = (
+            ("coord B x turma de A", coord_b, "get", "/api/classes/%d" % turma_orig["id"], None),
+            ("coord B x aluno de A", coord_b, "put", "/api/coordenacao/alunos/%d" % aluno_m1, {"nome": "Ana Lima"}),
+            ("coord B x etapa de A", coord_b, "get", "/api/config/etapas/%d" % etapa_m1["id"], None),
+            ("coord B x criterio de A", coord_b, "get", "/api/config/criterios/%d" % crit_m1["id"], None),
+            ("coord B x professor de A", coord_b, "put", "/api/coordenacao/professores/%d" % prof_i2_dados["id"], {"nome": "Fulano Tal"}),
+            ("coord B x ano de A", coord_b, "put", "/api/config/anos-letivos/%d" % ano_a_2026["id"], {"status": "encerrado"}),
+            ("prof B x atividade de A", professor_b, "get", "/api/activities/%d" % ativ_m1["id"], None),
+            ("prof B x notas de A", professor_b, "get", "/api/atividades/%d/notas" % ativ_m1["id"], None),
+            ("prof B x turma de A", professor_b, "get", "/api/professor/turmas/%d/alunos" % turma_orig["id"], None),
+            ("prof B x aluno de A", professor_b, "get", "/api/professor/alunos/%d/estatisticas" % aluno_m1, None),
+        )
+        for rotulo, cliente, metodo, url, corpo in casos_cross:
+            r = getattr(cliente, metodo)(url, corpo) if corpo is not None else getattr(cliente, metodo)(url)
+            checar(eh404(r), "M10-03: cross-school continua 404 (%s)" % rotulo)
+
+        # Professor da escola SEM vinculo com a turma: 404, como antes
+        for rotulo, metodo, url, corpo in (
+            ("atividade", "get", "/api/activities/%d" % ativ_m1["id"], None),
+            ("notas", "get", "/api/atividades/%d/notas" % ativ_m1["id"], None),
+            ("turma", "get", "/api/professor/turmas/%d/boletim" % turma_orig["id"], None),
+            ("aluno", "get", "/api/professor/alunos/%d/estatisticas" % aluno_m1, None),
+        ):
+            r = getattr(prof_sv, metodo)(url)
+            checar(eh404(r), "M10-04: professor sem vinculo continua 404 (%s)" % rotulo)
+
+        # 9A-9D em recurso inacessivel: 404, e o provedor nem e chamado
+        with patch.object(iaclient.AIClient, "gerar", _ia_conta):
+            rate_limit.limiter.reset()
+            for rotulo, cliente in (("sem vinculo", prof_sv), ("outra escola", professor_b),
+                                    ("inexistente", prof_i2)):
+                alvo_turma = INEXISTENTE if rotulo == "inexistente" else turma_orig["id"]
+                alvo_aluno = INEXISTENTE if rotulo == "inexistente" else aluno_m1
+                alvo_ativ = INEXISTENTE if rotulo == "inexistente" else ativ_m1["id"]
+                respostas = (
+                    ("9A", cliente.post("/api/professor/turmas/%d/insights" % alvo_turma, {})),
+                    ("9B", cliente.post("/api/professor/turmas/%d/atividades/gerar" % alvo_turma, {"tema": "Fracoes"})),
+                    ("9C", cliente.post("/api/professor/atividades/%d/correcao-assistida" % alvo_ativ,
+                                        {"questao": "Q?", "respostaEsperada": "R", "respostaAluno": "a b c d"})),
+                    ("9D", cliente.post("/api/professor/alunos/%d/feedback-ia" % alvo_aluno,
+                                        {"etapaId": etapa_m1["id"]})),
+                )
+                for funcao, r in respostas:
+                    checar(eh404(r), "M10-05: %s em recurso %s -> 404" % (funcao, rotulo))
+            checar(chamadas_ia_m10[0] == 0, "M10-06: nenhuma dessas chamadas de IA chegou ao provedor")
+            rate_limit.limiter.reset()
+
+        # bug interno (KeyError/IndexError) num endpoint real: 500 generico, nunca 404
+        app_m10 = app_module.create_app()
+        app_m10.config.update(TESTING=False, PROPAGATE_EXCEPTIONS=False)
+        app_m10.logger.disabled = True
+        cab = {"Authorization": "Bearer %s" % coord_a.token}
+        for erro in (KeyError("coluna_secreta_m10"), IndexError("indice_secreto_m10")):
+            with patch("controllers.class_controller.buscar_turma", side_effect=erro), \
+                    app_m10.test_client() as c10:
+                r = c10.get("/api/classes/%d" % turma_orig["id"], headers=cab)
+            texto10 = r.get_data(as_text=True)
+            checar(r.status_code == 500 and r.get_json() == {"error": "Erro interno do servidor."}
+                   and "secret" not in texto10,
+                   "M10-07: %s interno em endpoint real -> 500 generico, sem detalhe" % type(erro).__name__)
+        # e o recurso inexistente do mesmo endpoint segue 404
+        with app_m10.test_client() as c10:
+            r = c10.get("/api/classes/%d" % INEXISTENTE, headers=cab)
+        checar(r.status_code == 404 and r.get_json() == {"error": "Turma nao encontrada"},
+               "M10-08: o mesmo endpoint, com turma inexistente, segue 404 com a mensagem de sempre")
+
         print("\nLimpando os dados de teste...")
         limpar()
 
