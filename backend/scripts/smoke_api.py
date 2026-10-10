@@ -3582,6 +3582,117 @@ def main():
                "(caminho de promocao) e o historico do ano encerrado e preservado")
 
         # ---------------------------------------------------------
+        print("\n[R1] Fechar/reabrir etapa em ano encerrado (historico nao muda)")
+        ano_r1 = 2044
+        r = coord_a.post("/api/config/anos-letivos", {"ano": ano_r1})
+        id_ano_r1 = r.get_json()["id"]
+        def etapa_ano(nome, ordem):
+            e = coord_a.post("/api/config/etapas", {"nome": nome, "ordem": ordem,
+                                                    "ano_letivo": ano_r1}).get_json()
+            coord_a.post("/api/config/etapas/%d/notas" % e["id"], {"nota_minima": 6, "nota_maxima": 10})
+            return e
+
+        etapa_r1 = etapa_ano("E R1 fechada", 1)
+        etapa_r1b = etapa_ano("E R1 aberta", 2)
+        crit_r1 = criar_criterio(coord_a, etapa_r1["id"], "Provas", 100)
+        criar_criterio(coord_a, etapa_r1b["id"], "Provas", 100)
+        turma_r1 = coord_a.post("/api/classes", {"name": "R1 Turma 2044",
+                                                 "ano_letivo": ano_r1}).get_json()
+        aluno_r1 = coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_r1["id"],
+                                {"nome": "Rita Historica Lima", "matricula": "R1A"}).get_json()
+        vinculadas = [t["id"] for t in coord_a.get(
+            "/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"]).get_json()]
+        coord_a.post("/api/coordenacao/professores/%d/turmas" % prof_i2_dados["id"],
+                     {"turma_ids": vinculadas + [turma_r1["id"]]})
+        ativ_r1 = criar_atividade(prof_i2, turma_r1["id"], etapa_r1["id"], crit_r1["id"], 10, "R1 atividade")
+        checar(lancar(prof_i2, ativ_r1["id"], aluno_r1["id"], 8).status_code == 201,
+               "R1-00: cenario pronto: nota 8 numa atividade da etapa de 2044")
+
+        def consolidado_r1():
+            corpo = coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_r1["id"]).get_json()
+            return corpo["alunos"][0]["consolidado"]
+
+        def foto_r1():
+            return {
+                "etapa": query_all("SELECT * FROM etapa WHERE coordenacao_id = %s ORDER BY id", (cid_a,)),
+                "nota": query_all("SELECT n.* FROM nota n INNER JOIN atividade a ON a.id = n.atividade_id "
+                                  "WHERE a.coordenacao_id = %s ORDER BY n.id", (cid_a,)),
+                "ano": query_all("SELECT * FROM ano_letivo WHERE coordenacao_id = %s ORDER BY id", (cid_a,)),
+            }
+
+        # 1-2: ano nao encerrado (planejamento) segue igual
+        r = coord_a.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
+        checar(r.status_code == 200 and r.get_json()["fechada"] is True,
+               "R1-01: fechar etapa em ano em PLANEJAMENTO continua 200")
+        r = coord_a.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"])
+        checar(r.status_code == 200 and r.get_json()["fechada"] is False,
+               "R1-02: reabrir etapa em ano em PLANEJAMENTO continua 200")
+        coord_a.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
+        etapa_atual = criar_etapa(coord_a, "E R1 ano atual", 195, 6, 10)
+        criar_criterio(coord_a, etapa_atual["id"], "Provas", 100)
+        checar(ano_por_numero(coord_a, ANO)["status"] == "atual"
+               and coord_a.post("/api/config/etapas/%d/fechar" % etapa_atual["id"]).status_code == 200
+               and coord_a.post("/api/config/etapas/%d/reabrir" % etapa_atual["id"]).status_code == 200,
+               "R1-03: fechar e reabrir etapa em ano ATUAL continuam 200")
+
+        # encerra o ano com UMA etapa fechada (consolidado 80%) e outra aberta
+        consolidado_aberto = consolidado_r1()
+        checar(consolidado_aberto["percentual"] == 80.0 and consolidado_aberto["etapas_consideradas"] == 1,
+               "R1-04: antes de encerrar o consolidado e 80%% com 1 etapa fechada (%s)" % consolidado_aberto)
+        checar(coord_a.put("/api/config/anos-letivos/%d" % id_ano_r1,
+                           {"status": "encerrado"}).status_code == 200,
+               "R1-05: coordenacao encerra o ano 2044")
+        antes_r1 = foto_r1()
+        consolidado_antes = consolidado_r1()
+
+        # 3-5: fechar e reabrir em ano encerrado -> 400 com a mensagem do M-02
+        tentativas = (
+            ("reabrir etapa FECHADA", "reabrir", etapa_r1),
+            ("fechar etapa ABERTA", "fechar", etapa_r1b),
+            ("fechar etapa ja fechada", "fechar", etapa_r1),
+            ("reabrir etapa ja aberta", "reabrir", etapa_r1b),
+        )
+        for rotulo, acao, etapa_alvo in tentativas:
+            # uma de cada vez: o consolidado e conferido logo depois de cada tentativa
+            r = coord_a.post("/api/config/etapas/%d/%s" % (etapa_alvo["id"], acao))
+            corpo = r.get_json(silent=True) or {}
+            checar(r.status_code == 400
+                   and corpo.get("error") == "O ano letivo %d esta encerrado e nao permite alteracoes." % ano_r1,
+                   "R1-06: %s em ano encerrado -> 400 com a mensagem do M-02 (%s)" % (rotulo, corpo.get("error")))
+            checar(consolidado_r1() == consolidado_antes,
+                   "R1-06b: depois de '%s' o consolidado do ano encerrado segue o mesmo" % rotulo)
+
+        # 6-8: nada mudou
+        checar(foto_r1() == antes_r1,
+               "R1-07: etapa, notas e ano identicos depois das tentativas (nem updated_at mudou)")
+        checar(consolidado_r1() == consolidado_antes == consolidado_aberto,
+               "R1-08: consolidado do ano encerrado continua o mesmo (80%%, 1 etapa)")
+        checar(query_one("SELECT fechada FROM etapa WHERE id = %s", (etapa_r1["id"],))["fechada"] == 1
+               and query_one("SELECT fechada FROM etapa WHERE id = %s", (etapa_r1b["id"],))["fechada"] == 0,
+               "R1-09: a etapa fechada segue fechada e a aberta segue aberta")
+
+        # 9: cross-school continua 404 e nao revela o status do ano
+        for rotulo, r in (("fechar", coord_b.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])),
+                          ("reabrir", coord_b.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"]))):
+            texto = r.get_data(as_text=True).lower()
+            checar(r.status_code == 404 and "encerrado" not in texto and str(ano_r1) not in texto,
+                   "R1-10: outra escola %s a etapa -> 404 sem revelar o ano encerrado" % rotulo)
+        checar(prof_i2.post("/api/config/etapas/%d/fechar" % etapa_r1["id"]).status_code == 403,
+               "R1-11: Professor continua recebendo 403 (autorizacao antes do ano)")
+        checar(coord_a.post("/api/config/etapas/99999999/fechar").status_code == 404
+               and coord_a.post("/api/config/etapas/99999999/reabrir").status_code == 404,
+               "R1-12: etapa inexistente continua 404")
+
+        # 10: o resto do M-02 segue valendo
+        checar(bloqueado(coord_a.put("/api/classes/%d" % turma_r1["id"], {"name": "Renomeada"}))
+               and bloqueado(coord_a.put("/api/config/etapas/%d" % etapa_r1["id"], {"nome": "X"}))
+               and bloqueado(lancar(prof_i2, ativ_r1["id"], aluno_r1["id"], 9)),
+               "R1-13: M-02 intacto: turma, etapa e nota do ano encerrado continuam bloqueadas (400)")
+        checar(coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_r1["id"]).status_code == 200
+               and coord_a.get("/api/config/etapas?ano_letivo=%d" % ano_r1).status_code == 200,
+               "R1-14: leituras do ano encerrado continuam 200")
+
+        # ---------------------------------------------------------
         print("\n[M-03] Atividade com notas: etapa, criterio e valor ficam congelados")
         etapa_m3 = criar_etapa(coord_a, "E M03", 109, 6, 10)
         etapa_m3b = criar_etapa(coord_a, "E M03 b", 110, 6, 10)

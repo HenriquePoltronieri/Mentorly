@@ -279,6 +279,9 @@ class FecharEtapaService:
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
             raise RecursoNaoEncontrado("Etapa nao encontrada")
+        # Ano encerrado e historico somente leitura: fechar tambem mudaria o
+        # consolidado dele (so etapas fechadas entram). Vem depois do 404.
+        exigir_ano_nao_encerrado(etapa["coordenacao_id"], etapa["ano_letivo"])
         if etapa.get("fechada"):
             raise ValueError("Etapa ja esta fechada")
 
@@ -297,6 +300,8 @@ class ReabrirEtapaService:
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
             raise RecursoNaoEncontrado("Etapa nao encontrada")
+        # Mesma regra do fechamento: reabrir mudaria o consolidado do ano encerrado.
+        exigir_ano_nao_encerrado(etapa["coordenacao_id"], etapa["ano_letivo"])
         if not etapa.get("fechada"):
             raise ValueError("Etapa ja esta aberta")
         Etapa.reabrir(etapa_id, coordenacao_id)
