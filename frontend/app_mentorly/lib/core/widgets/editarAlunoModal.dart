@@ -2,16 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/apiService.dart';
 import 'adicionarAlunosModal.dart' show PapelAluno;
 
-// Modal de editar um aluno ja cadastrado (Marco 4).
-//
-// Os dois papeis usam este mesmo widget, igual ao AdicionarAlunosModal:
-//   Coordenacao -> PUT /api/coordenacao/alunos/{alunoId}
-//   Professor   -> PUT /api/professor/alunos/{alunoId}
-// Quem valida se o usuario pode editar este aluno e o backend (escola do
-// aluno, e vinculo com a turma quando for Professor); aqui so escolhemos
-// o caminho certo pelo papel.
-//
-// Retorna true via Navigator.pop quando a edicao foi salva, pra tela recarregar.
+// Gerenciamento exclusivo da Coordenação.
 class EditarAlunoModal extends StatefulWidget {
   final Map<String, dynamic> aluno;
   final PapelAluno papel;
@@ -36,9 +27,7 @@ class _EditarAlunoModalState extends State<EditarAlunoModal> {
   bool _salvando = false;
   String? _mensagemErro;
 
-  String get _endpoint => widget.papel == PapelAluno.coordenacao
-      ? '/coordenacao/alunos/${widget.aluno['id']}'
-      : '/professor/alunos/${widget.aluno['id']}';
+  String get _endpoint => '/coordenacao/alunos/${widget.aluno['id']}';
 
   @override
   void initState() {
@@ -82,6 +71,12 @@ class _EditarAlunoModalState extends State<EditarAlunoModal> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.papel == PapelAluno.professor || !ApiService().ehCoordenacao) {
+      return const AlertDialog(
+          title: Text('Acesso restrito'),
+          content: Text('Somente a Coordenação gerencia os alunos.'));
+    }
+
     return AlertDialog(
       title: const Text('Editar aluno'),
       content: SingleChildScrollView(
@@ -99,7 +94,8 @@ class _EditarAlunoModalState extends State<EditarAlunoModal> {
             const SizedBox(height: 12),
             TextField(
               controller: _matriculaController,
-              decoration: const InputDecoration(labelText: 'Matrícula (opcional)'),
+              decoration:
+                  const InputDecoration(labelText: 'Matrícula (opcional)'),
             ),
             const SizedBox(height: 12),
             TextField(

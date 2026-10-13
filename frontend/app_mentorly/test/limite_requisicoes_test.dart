@@ -34,7 +34,7 @@ void main() {
       final campos = find.byType(TextFormField);
       await tester.enterText(campos.at(0), 'professor@escola.test');
       await tester.enterText(campos.at(1), 'senha123');
-      await tester.tap(find.text('Entrar'));
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Entrar'));
       await tester.pumpAndSettle();
 
       expect(find.text(_mensagem), findsOneWidget);
@@ -50,7 +50,7 @@ void main() {
       final campos = find.byType(TextFormField);
       await tester.enterText(campos.at(0), 'coord@escola.test');
       await tester.enterText(campos.at(1), 'senha123');
-      await tester.tap(find.text('Entrar'));
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Entrar'));
       await tester.pumpAndSettle();
 
       expect(find.text(_mensagem), findsOneWidget);

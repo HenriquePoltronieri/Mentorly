@@ -1,7 +1,7 @@
 """Controller da configuracao do ano letivo (anos, etapas e criterios).
 
-Configurar o ano letivo e ato da Coordenacao: todas as rotas de escrita
-usam @coordenacao_required. O que e salvo aqui vale como PADRAO DA ESCOLA
+Configurar o ano letivo e ato da Coordenacao. Fechar e reabrir etapas sao
+atos do Professor. O que e salvo aqui vale como PADRAO DA ESCOLA
 e e lido depois pelo dashboard do professor (nota minima) e pelas
 atividades.
 """
@@ -38,6 +38,19 @@ from erros import RecursoNaoEncontrado
 
 
 class ConfigController:
+    def salvar_configuracao_ano(self, ano):
+        from services.config.configuracao_ano import SalvarConfiguracaoAnoService
+        dados = request.get_json(silent=True) or {}
+        try:
+            return jsonify(SalvarConfiguracaoAnoService().execute(
+                coordenacao_atual(), ano, dados.get("etapas"), dados.get("criterios")))
+        except RecursoNaoEncontrado as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        except ConflitoDeIntegridade as erro:
+            return jsonify({"error": str(erro)}), 409
+
     # -----------------------------------------------------------------
     # Anos letivos (so a Coordenacao; o id da escola vem do token)
     # -----------------------------------------------------------------
@@ -169,7 +182,8 @@ class ConfigController:
 
     def fechar_etapa(self, etapa_id):
         try:
-            etapa = FecharEtapaService().execute(etapa_id, coordenacao_atual())
+            from auth.decorators import usuario_atual_id
+            etapa = FecharEtapaService().execute(etapa_id, coordenacao_atual(), usuario_atual_id())
         except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:
@@ -178,7 +192,8 @@ class ConfigController:
 
     def reabrir_etapa(self, etapa_id):
         try:
-            etapa = ReabrirEtapaService().execute(etapa_id, coordenacao_atual())
+            from auth.decorators import usuario_atual_id
+            etapa = ReabrirEtapaService().execute(etapa_id, coordenacao_atual(), usuario_atual_id())
         except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
         except ValueError as erro:

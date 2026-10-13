@@ -1,3 +1,6 @@
+import '../core/services/apiService.dart';
+import '../features/coordenacao/controllers/configAnoLetivoController.dart';
+import '../core/widgets/estrutura_pagina.dart';
 import 'package:flutter/material.dart';
 
 // telas de autenticacao
@@ -19,16 +22,12 @@ import '../features/coordenacao/screens/professores/listaProfessoresScreen.dart'
 import '../features/coordenacao/screens/turmas/gerenciarTurmasScreen.dart';
 import '../features/coordenacao/screens/turmas/listaTurmasProfessorScreen.dart';
 import '../features/coordenacao/screens/alunos/listaAlunosTurmaScreen.dart';
-import '../features/coordenacao/screens/relatorios/relatorioTurmasScreen.dart';
-import '../features/coordenacao/screens/academico/boletimTurmasScreen.dart';
-import '../features/coordenacao/screens/academico/boletimTurmaScreen.dart'
-    as coordenacao_boletim;
-
 // telas professor
 import '../features/professor/screens/dashboardScreen.dart';
+import '../features/professor/screens/chat_ia_screen.dart';
 import '../features/professor/screens/turmas/listaTurmasScreen.dart';
 import '../features/professor/screens/turmas/turmaAlunosScreen.dart';
-import '../features/professor/screens/turmas/alunoDetailScreen.dart';
+import '../features/professor/screens/turmas/estatisticas_aluno_screen.dart';
 import '../features/professor/screens/turmas/boletimTurmaScreen.dart';
 import '../features/professor/screens/turmas/insightsTurmaScreen.dart';
 import '../features/professor/screens/atividades/listaAtividadesScreen.dart';
@@ -59,11 +58,9 @@ class AppRoutes {
   static const String gerenciarTurmas = '/coordenacao/gerenciar-turmas';
   static const String listaTurmasProfessor = '/coordenacao/turmas';
   static const String listaAlunosTurma = '/coordenacao/alunos';
-  static const String relatorioTurmas = '/coordenacao/relatorio-turmas';
-  static const String boletimTurmas = '/coordenacao/boletim-turmas';
-  static const String boletimTurmaCoordenacao = '/coordenacao/boletim-turma';
 
   // professor
+  static const String chatIa = '/professor/ia-chat';
   static const String dashboard = '/professor/dashboard';
   static const String listaTurmas = '/professor/turmas';
   static const String turmaAlunos = '/professor/turma-alunos';
@@ -75,7 +72,40 @@ class AppRoutes {
   static const String atividadeNotas = '/professor/atividade-notas';
   static const String buscarAtividades = '/professor/buscar-atividades';
 
-  static Map<String, WidgetBuilder> routes = {
+  static Map<String, WidgetBuilder> get routes =>
+      _telas.map((nome, tela) => MapEntry(nome, (context) {
+            final tipo = ApiService().tipoUsuario;
+            final privado = nome.startsWith('/coordenacao/') ||
+                nome.startsWith('/professor/');
+            final esperado =
+                nome.startsWith('/coordenacao/') ? 'coordenacao' : 'professor';
+            if (privado && tipo != esperado) {
+              return Scaffold(
+                  appBar: AppBar(title: const Text('Acesso restrito')),
+                  body: Center(
+                    child: FilledButton(
+                        onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                            context, perfilSelection, (_) => false),
+                        child: const Text('Voltar ao acesso')),
+                  ));
+            }
+            if ((nome == configNotasEtapa || nome == configCriterios) &&
+                !ConfigAnoLetivoController().temRascunhoDaSessao) {
+              return Scaffold(
+                  appBar: AppBar(title: const Text('Configurar ano letivo')),
+                  body: EstadoPagina(
+                    titulo: 'Comece pela escolha das etapas',
+                    mensagem:
+                        'Abra o assistente para carregar a configuração da sua escola.',
+                    acao: 'Abrir configuração',
+                    onPressed: () =>
+                        Navigator.pushReplacementNamed(context, configEtapas),
+                  ));
+            }
+            return tela(context);
+          }));
+
+  static final Map<String, WidgetBuilder> _telas = {
     perfilSelection: (context) => PerfilSelectionScreen(),
     login: (context) => LoginScreen(),
     cadastro: (context) => CadastroScreen(),
@@ -93,16 +123,13 @@ class AppRoutes {
     gerenciarTurmas: (context) => GerenciarTurmasScreen(),
     listaTurmasProfessor: (context) => ListaTurmasProfessorScreen(),
     listaAlunosTurma: (context) => ListaAlunosTurmaScreen(),
-    relatorioTurmas: (context) => RelatorioTurmasScreen(),
-    boletimTurmas: (context) => BoletimTurmasScreen(),
-    boletimTurmaCoordenacao: (context) =>
-        coordenacao_boletim.BoletimTurmaScreen(),
 
     // professor
+    chatIa: (context) => const ChatIaScreen(),
     dashboard: (context) => DashboardScreen(),
     listaTurmas: (context) => ListaTurmasScreen(),
     turmaAlunos: (context) => TurmaAlunosScreen(),
-    alunoDetail: (context) => AlunoDetailScreen(),
+    alunoDetail: (context) => const EstatisticasAlunoScreen(),
     boletimTurma: (context) => BoletimTurmaScreen(),
     insightsTurma: (context) => InsightsTurmaScreen(),
     listaAtividades: (context) => ListaAtividadesScreen(),

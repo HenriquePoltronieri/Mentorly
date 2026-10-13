@@ -1,6 +1,6 @@
 from flask import Blueprint
 
-from auth.decorators import auth_required, coordenacao_required
+from auth.decorators import auth_required, coordenacao_required, professor_required
 from controllers.class_controller import ClassController
 
 class_blueprint = Blueprint("classes", __name__, url_prefix="/api/classes")
@@ -16,7 +16,7 @@ def list_classes():
 
 
 @class_blueprint.get("/relatorio/atividades")
-@coordenacao_required
+@professor_required
 def relatorio_turmas_atividades():
     return class_controller.relatorio_turmas_atividades()
 

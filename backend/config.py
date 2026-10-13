@@ -31,7 +31,9 @@ _carregar_env()
 # Conexao com o MySQL. Tudo vem de variavel de ambiente (ou de backend/.env),
 # com um default que funciona em um MySQL local de root sem senha.
 DB_CONFIG = {
-    "host": os.environ.get("DB_HOST", "localhost"),
+    # No Windows, localhost pode tentar ::1 antes do MySQL IPv4 e gastar
+    # dois segundos por conexão. O alias local usa IPv4 diretamente.
+    "host": "127.0.0.1" if os.environ.get("DB_HOST", "localhost").lower() == "localhost" else os.environ["DB_HOST"],
     "port": int(os.environ.get("DB_PORT", 3306)),
     "user": os.environ.get("DB_USER", "root"),
     "password": os.environ.get("DB_PASSWORD", ""),
@@ -59,7 +61,7 @@ if not SECRET_KEY:
 
 # Validade do token de login e do convite que o professor recebe por email.
 TOKEN_EXPIRACAO_HORAS = int(os.environ.get("TOKEN_EXPIRACAO_HORAS", 12))
-CONVITE_EXPIRACAO_HORAS = int(os.environ.get("CONVITE_EXPIRACAO_HORAS", 72))
+CONVITE_EXPIRACAO_HORAS = int(os.environ.get("CONVITE_EXPIRACAO_HORAS", 48))
 CODIGO_EXPIRACAO_MINUTOS = int(os.environ.get("CODIGO_EXPIRACAO_MINUTOS", 15))
 
 def _booleano_env(nome):
@@ -85,20 +87,22 @@ def _booleano_env(nome):
 DEBUG = _booleano_env("FLASK_DEBUG")
 DEV_EXPOSE_AUTH_CODES = _booleano_env("DEV_EXPOSE_AUTH_CODES")
 
-# Envio de email. Sem SMTP_HOST o email nao e enviado (o envio devolve False e
-# a API responde conviteEnviado/enviado = false); isso NAO libera nenhum codigo
-# ou token na resposta: quem decide e DEV_EXPOSE_AUTH_CODES.
+# Sem MAIL_SERVER/SMTP_HOST o envio devolve False. Na emissao de convite,
+# a coordenacao autenticada recebe o link para copiar, mesmo sem SMTP.
+# Codigos de verificacao e tokens legados exigem DEV_EXPOSE_AUTH_CODES.
 SMTP_CONFIG = {
-    "host": os.environ.get("SMTP_HOST", ""),
-    "port": int(os.environ.get("SMTP_PORT", 587)),
-    "user": os.environ.get("SMTP_USER", ""),
-    "password": os.environ.get("SMTP_PASSWORD", ""),
-    "remetente": os.environ.get("SMTP_FROM", "nao-responda@mentorly.local"),
+    "host": os.environ.get("MAIL_SERVER", os.environ.get("SMTP_HOST", "")),
+    "port": int(os.environ.get("MAIL_PORT", os.environ.get("SMTP_PORT", 587))),
+    "user": os.environ.get("MAIL_USERNAME", os.environ.get("SMTP_USER", "")),
+    "password": os.environ.get("MAIL_PASSWORD", os.environ.get("SMTP_PASSWORD", "")).replace(" ", ""),
+    "remetente": os.environ.get("MAIL_FROM", os.environ.get("SMTP_FROM", "mentorly.noreply@gmail.com")),
     "usar_tls": os.environ.get("SMTP_TLS", "1") == "1",
+    "usar_ssl": os.environ.get("MAIL_USE_SSL", "false").lower() == "true",
+    "timeout": min(3, max(1, float(os.environ.get("MAIL_TIMEOUT", 3)))),
 }
 
 # Base do app Flutter, usada para montar o link do convite do professor.
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:3000")
+APP_BASE_URL = os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000"))
 
 
 def _float_positivo_env(nome, padrao):
@@ -118,5 +122,5 @@ AI_CONFIG = {
     ).rstrip("/"),
     "api_key": os.environ.get("AI_API_KEY", ""),
     "model": os.environ.get("AI_MODEL") or "openai/gpt-oss-20b",
-    "timeout": _float_positivo_env("AI_TIMEOUT", 15),
+    "timeout": min(20, _float_positivo_env("AI_TIMEOUT", 15)),
 }

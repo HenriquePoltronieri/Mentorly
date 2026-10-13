@@ -10,6 +10,7 @@ from services.rate_limit import limitar_por_origem
 
 from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
 from services.auth.criar_senha_professor import CriarSenhaProfessorService
+from services.auth.consultar_convite import ConsultarConviteService
 from services.auth.login_coordenacao import LoginCoordenacaoService
 from services.auth.login_professor import LoginProfessorService
 from services.auth.verificacao_duas_etapas import (
@@ -19,6 +20,17 @@ from services.auth.verificacao_duas_etapas import (
 
 
 class AuthController:
+    def consultar_convite(self):
+        dados = request.get_json(silent=True) or {}
+        # O token vai no corpo para não aparecer no log de URLs.
+        limitar_por_origem("convite_consultar", request.remote_addr, "")
+        try:
+            return jsonify(ConsultarConviteService().execute(dados.get("token")))
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+        except PermissionError as erro:
+            return jsonify({"error": str(erro)}), 403
+
     def cadastro_coordenacao(self):
         dados = request.get_json(silent=True) or {}
         try:

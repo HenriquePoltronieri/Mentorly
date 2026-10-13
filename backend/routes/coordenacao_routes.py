@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
 from auth.decorators import coordenacao_required, token_na_url_so_neste_download
 from controllers.coordenacao_controller import CoordenacaoController
@@ -45,6 +45,12 @@ def reativar_professor(professor_id):
 @coordenacao_required
 def reenviar_convite_professor(professor_id):
     return coordenacao_controller.reenviar_convite_professor(professor_id)
+
+
+@coordenacao_blueprint.post("/professores/<int:professor_id>/link-convite")
+@coordenacao_required
+def link_convite_professor(professor_id):
+    return coordenacao_controller.reenviar_convite_professor(professor_id, enviar=False)
 
 
 @coordenacao_blueprint.get("/professores/<int:professor_id>/turmas")
@@ -117,4 +123,4 @@ def importar_alunos(turma_id):
 @coordenacao_blueprint.get("/turmas/<int:turma_id>/boletim")
 @coordenacao_required
 def boletim_turma(turma_id):
-    return coordenacao_controller.boletim_turma(turma_id)
+    return jsonify({"error": "O boletim é exclusivo do Professor."}), 403

@@ -6,4 +6,5 @@ from repositories.consultas import resumo_da_escola
 
 class DashboardController:
     def resumo_sistema(self):
+        # A Coordenação só recebe números administrativos, sem atividades/notas.
         return jsonify(resumo_da_escola(coordenacao_atual()))

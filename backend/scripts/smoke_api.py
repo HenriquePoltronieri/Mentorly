@@ -36,6 +36,7 @@ from services import rate_limit
 LIMITES_REAIS = dict(rate_limit.LIMITES)
 rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
 from database.connection import execute, insert, query_all, query_one
+from models.professor_model import hash_convite
 
 SUFIXO = "smoke-api@mentorly.local"
 
@@ -243,9 +244,8 @@ def main():
             {"turma_ids": [turma_a["id"]]},
         ).status_code == 404, "vincular professor de B pelo token de A e recusado")
 
-        relatorio_a = coord_a.get("/api/classes/relatorio/atividades").get_json()
-        checar(all(l["id"] != turma_b["id"] for l in relatorio_a),
-               "relatorio da escola A nao inclui turma da B")
+        checar(coord_a.get("/api/classes/relatorio/atividades").status_code == 403,
+               "coordenacao nao consulta relatorio de atividades")
 
         # ---------------------------------------------------------
         print("\n[3] Professor ve so as turmas vinculadas")
@@ -323,7 +323,7 @@ def main():
             "etapa_id": config_a["etapa"]["id"],
             "criterio_id": config_a["criterio"]["id"],
             "nota_maxima": 10,
-        }).status_code == 404, "professor nao cria atividade em turma nao vinculada")
+        }).status_code == 403, "professor nao cria atividade em turma nao vinculada")
 
         checar(coord_a.post("/api/config/etapas", {
             "nome": "1 Etapa", "ordem": 1, "ano_letivo": 2026,
@@ -409,14 +409,19 @@ def main():
             "alunos.csv",
             "nome;matricula\nPedro Henrique Alves;2026006\n".encode("utf-8"),
         )
-        checar(prof_importacao.status_code == 201
-               and prof_importacao.get_json()["adicionados"] == 1,
-               "PROFESSOR tambem importa alunos na turma dele")
+        checar(prof_importacao.status_code == 403,
+               "PROFESSOR nao importa alunos, mesmo na turma vinculada")
+        importacao_coord = coord_a.upload(
+            "/api/coordenacao/turmas/%d/alunos/importar" % turma_a["id"],
+            "alunos.csv", "nome;matricula\nPedro Henrique Alves;2026006\n".encode("utf-8"),
+        )
+        checar(importacao_coord.status_code == 201 and importacao_coord.get_json()["adicionados"] == 1,
+               "COORDENACAO importa o quarto aluno da turma")
 
         checar(professor_a.upload(
             "/api/professor/turmas/%d/alunos/importar" % turma_a2["id"],
             "alunos.csv", "nome\nZe da Silva\n".encode("utf-8"),
-        ).status_code == 404, "professor nao importa em turma nao vinculada")
+        ).status_code == 403, "professor nao importa em turma nao vinculada")
 
         modelo = coord_a.get(
             "/api/coordenacao/turmas/%d/alunos/modelo-planilha" % turma_a["id"]
@@ -472,16 +477,16 @@ def main():
         print("\n[8] Busca e resumo, filtrados por escola")
         busca_b = coord_b.get(
             "/api/activities/buscar?termo=Prova&ordenar_por=title&direcao=ASC"
-        ).get_json()
-        checar(busca_b == [], "escola B nao encontra a atividade da escola A")
+        )
+        checar(busca_b.status_code == 403, "coordenacao B nao acessa atividades")
 
-        busca_a = coord_a.get(
+        busca_a = professor_a.get(
             "/api/activities/buscar?termo=Prova&ordenar_por=title&direcao=ASC"
         ).get_json()
         checar(len(busca_a) == 1, "escola A encontra a propria atividade")
 
         resumo = coord_a.get("/api/dashboard/resumo").get_json()
-        checar(resumo["total_turmas"] == 2 and resumo["total_atividades"] == 1,
+        checar(resumo["total_turmas"] == 2 and "total_atividades" not in resumo,
                "resumo conta so a escola A: %s" % resumo)
 
         # ---------------------------------------------------------
@@ -544,12 +549,12 @@ def main():
                "T5d: atividade sem etapa e sem criterio responde 400")
 
         # TESTE 6 - turma de outro professor / de outra escola
-        checar(criar(class_id=turma_a2["id"]).status_code == 404,
-               "T6: turma nao vinculada ao professor responde 404")
+        checar(criar(class_id=turma_a2["id"]).status_code == 403,
+               "T6: turma nao vinculada ao professor responde 403")
         checar(professor_a.post("/api/activities", {
             "title": "Invasao", "class_id": turma_b["id"],
             "etapa_id": etapa_b, "criterio_id": criterio_b, "nota_maxima": 10,
-        }).status_code == 404, "T6b: turma de outra escola responde 404")
+        }).status_code == 403, "T6b: turma de outra escola responde 403")
 
         # TESTE 7 - Coordenacao nao cria atividade
         checar(coord_a.post("/api/activities", {
@@ -632,7 +637,7 @@ def main():
                                {"nota_maxima": 25}).status_code == 400,
                "T16: aumentar o valor de atividade com nota lancada responde 400 (M-03)")
 
-        checar(coord_b.get("/api/activities/%d" % nova).status_code == 404,
+        checar(coord_b.get("/api/activities/%d" % nova).status_code == 403,
                "T17: escola B nao acessa a atividade da escola A")
 
         # ---------------------------------------------------------
@@ -944,6 +949,11 @@ def main():
         ).get_json()
         lancar(professor_a, ativ_risco["id"], aluno_14["id"], 14)
         lancar(professor_a, ativ_risco["id"], aluno_16["id"], 16)
+        painel_inicial = professor_a.get("/api/professor/dashboard").get_json()
+        checar(aluno_14["nome"] not in [a["nome"] for a in painel_inicial["alunosEmRisco"]],
+               "T14a: nota baixa sem datas nao antecipa alerta na etapa aberta")
+        checar(professor_a.post("/api/config/etapas/%d/fechar" % etapa_risco["id"]).status_code == 200,
+               "T14b: professor fecha etapa para avaliar pontuacao final")
         # aluno_joao/zero/parcial/sem_nota nao tem nota nesta atividade:
         # ficam em_andamento na Etapa Risco, entao nao contam como risco.
 
@@ -970,6 +980,8 @@ def main():
             {"nome": "Risco Escola B"},
         ).get_json()
         lancar(professor_b, ativ_b_risco["id"], aluno_b_risco["id"], 5)
+        checar(professor_b.post("/api/config/etapas/%d/fechar" % etapa_b_risco["id"]).status_code == 200,
+               "T13a: escola B fecha sua etapa antes de emitir alerta")
 
         painel_b = professor_b.get("/api/professor/dashboard").get_json()
         nomes_risco_b = [a["nome"] for a in painel_b["alunosEmRisco"]]
@@ -1005,27 +1017,27 @@ def main():
 
         checar(coord_a.get(
             "/api/coordenacao/turmas/%d/boletim" % turma_c["id"]
-        ).status_code == 200, "coordenacao tambem consulta o boletim")
+        ).status_code == 403, "coordenacao nao consulta o boletim")
 
         checar(professor_a.get(
             "/api/professor/turmas/%d/boletim" % turma_b["id"]
         ).status_code == 404, "professor nao ve boletim de turma de outra escola")
         checar(coord_b.get(
             "/api/coordenacao/turmas/%d/boletim" % turma_c["id"]
-        ).status_code == 404, "coordenacao B nao ve boletim de turma da escola A")
+        ).status_code == 403, "coordenacao B nao ve boletim de turma da escola A")
 
         est_joao_antes = estatisticas_de(professor_a, aluno_joao["id"])
         checar(est_joao_antes["consolidado"]["situacao"] == "em_andamento",
                "consolidado sem nenhuma etapa fechada fica em_andamento")
 
-        checar(professor_a.post(
+        checar(coord_a.post(
             "/api/config/etapas/%d/fechar" % etapa_c["id"]
         ).status_code == 403, "PROFESSOR recebe 403 ao fechar etapa")
 
-        fechar = coord_a.post("/api/config/etapas/%d/fechar" % etapa_c["id"])
+        fechar = professor_a.post("/api/config/etapas/%d/fechar" % etapa_c["id"])
         checar(fechar.status_code == 200 and fechar.get_json()["fechada"] is True,
                "COORDENACAO fecha a etapa")
-        checar(coord_a.post(
+        checar(professor_a.post(
             "/api/config/etapas/%d/fechar" % etapa_c["id"]
         ).status_code == 400, "fechar etapa ja fechada responde 400")
 
@@ -1056,14 +1068,14 @@ def main():
                and est_joao_fechada["consolidado"]["etapas_consideradas"] == 1,
                "consolidado passa a considerar a etapa fechada")
 
-        checar(professor_a.post(
+        checar(coord_a.post(
             "/api/config/etapas/%d/reabrir" % etapa_c["id"]
         ).status_code == 403, "PROFESSOR recebe 403 ao reabrir etapa")
 
-        reabrir = coord_a.post("/api/config/etapas/%d/reabrir" % etapa_c["id"])
+        reabrir = professor_a.post("/api/config/etapas/%d/reabrir" % etapa_c["id"])
         checar(reabrir.status_code == 200 and reabrir.get_json()["fechada"] is False,
                "COORDENACAO reabre a etapa")
-        checar(coord_a.post(
+        checar(professor_a.post(
             "/api/config/etapas/%d/reabrir" % etapa_c["id"]
         ).status_code == 400, "reabrir etapa ja aberta responde 400")
 
@@ -1078,7 +1090,7 @@ def main():
         checar(etapa_c_reaberta["nota_calculada"] != 21.5,
                "nota da etapa reflete a nota alterada apos a reabertura")
 
-        checar(coord_a.post(
+        checar(professor_a.post(
             "/api/config/etapas/%d/fechar" % etapa_b_risco["id"]
         ).status_code == 404, "fechar etapa de outra escola responde 404")
 
@@ -1188,7 +1200,7 @@ def main():
         lancar(professor_a, ativ_zero_incompletos["id"], aluno_completo["id"], 7)
         lancar(professor_a, ativ_zero_incompletos["id"], aluno_incompleto["id"], 9)
 
-        fechar_zero = coord_a.post(
+        fechar_zero = professor_a.post(
             "/api/config/etapas/%d/fechar" % etapa_zero_incompletos["id"]
         )
         checar(fechar_zero.status_code == 200, "fecha etapa sem alunos incompletos")
@@ -1208,7 +1220,7 @@ def main():
         lancar(professor_a, ativ_incompletos["id"], aluno_completo["id"], 8)
         # aluno_incompleto NAO recebe nota nesta atividade de proposito.
 
-        fechar_com_incompletos = coord_a.post(
+        fechar_com_incompletos = professor_a.post(
             "/api/config/etapas/%d/fechar" % etapa_com_incompletos["id"]
         )
         checar(fechar_com_incompletos.status_code == 200,
@@ -1251,21 +1263,23 @@ def main():
             {"nome": "Tentativa De Invasao Aqui"},
         ).status_code == 404, "2: Coordenacao nao edita aluno de outra escola")
 
-        # 3. Professor edita aluno de turma vinculada a ele.
+        # 3. Professor consulta alunos, mas somente a Coordenacao os edita.
         editado_prof = professor_a.put(
             "/api/professor/alunos/%d" % aluno_editar["id"],
             {"matricula": "EDIT-002"},
         )
-        checar(editado_prof.status_code == 200
-               and editado_prof.get_json()["matricula"] == "EDIT-002",
-               "3: Professor edita aluno de turma vinculada a ele")
+        checar(editado_prof.status_code == 403,
+               "3: Professor nao edita aluno, mesmo em turma vinculada")
+        editado_coord = coord_a.put("/api/coordenacao/alunos/%d" % aluno_editar["id"], {"matricula": "EDIT-002"})
+        checar(editado_coord.status_code == 200 and editado_coord.get_json()["matricula"] == "EDIT-002",
+               "3b: Coordenacao altera a matricula do aluno")
 
         # 4. Professor tenta editar aluno de turma NAO vinculada a ele
         #    (mesma escola - turma_a2 nunca foi vinculada a professor_a).
         checar(professor_a.put(
             "/api/professor/alunos/%d" % aluno_turma_nao_vinculada["id"],
             {"nome": "Tentativa Sem Vinculo Aqui"},
-        ).status_code == 404,
+        ).status_code == 403,
                "4: Professor nao edita aluno de turma nao vinculada a ele")
 
         # Validacoes continuam as mesmas do cadastro (nao inventa regra nova).
@@ -1301,7 +1315,7 @@ def main():
         # 7. Professor tenta excluir aluno de turma nao vinculada.
         checar(professor_a.delete(
             "/api/professor/alunos/%d" % aluno_turma_nao_vinculada["id"]
-        ).status_code == 404,
+        ).status_code == 403,
                "7: Professor nao exclui aluno de turma nao vinculada a ele")
         checar(coord_a.get(
             "/api/coordenacao/turmas/%d/alunos" % turma_a2["id"]
@@ -1360,13 +1374,13 @@ def main():
                "nota continua intacta depois das tentativas recusadas")
 
         # --- Etapa fechada bloqueia a exclusao ---
-        coord_a.post("/api/config/etapas/%d/fechar" % etapa_del_nota["id"])
+        professor_a.post("/api/config/etapas/%d/fechar" % etapa_del_nota["id"])
         bloqueado = professor_a.delete("/api/professor/notas/%d" % nota_joao["id"])
         checar(bloqueado.status_code == 400,
                "excluir nota de etapa fechada responde 400")
         checar(_nota_do_joao(ativ_del_nota["id"])["valor"] == 7.0,
                "nota continua existindo depois da tentativa bloqueada por etapa fechada")
-        coord_a.post("/api/config/etapas/%d/reabrir" % etapa_del_nota["id"])
+        professor_a.post("/api/config/etapas/%d/reabrir" % etapa_del_nota["id"])
 
         # --- Funcionamento: professor exclui a propria nota, etapa aberta ---
         excluida = professor_a.delete("/api/professor/notas/%d" % nota_joao["id"])
@@ -1644,6 +1658,9 @@ def main():
                              {"nome": "Aluno Risco 2027"}).get_json()
         lancar(professor_6, ativ_26["id"], al_26["id"], 2)
         lancar(professor_6, ativ_27["id"], al_27["id"], 3)
+        for etapa_contexto in (etapa_26, etapa_27):
+            checar(professor_6.post("/api/config/etapas/%d/fechar" % etapa_contexto["id"]).status_code == 200,
+                   "M6-47b: etapa do contexto anual fechada antes de avaliar o risco")
 
         def nomes_em_risco(painel):
             return [a["nome"] for a in painel["alunosEmRisco"]]
@@ -1666,6 +1683,8 @@ def main():
                and nomes_em_risco(painel) == ["Aluno Risco 2027"],
                "M6-51: na virada do ano o dashboard passa para 2027, sem misturar os dois")
         virar_para(coord_a, ano_a_2026["id"], "atual", encerrar_atual=True)
+        checar(professor_6.post("/api/config/etapas/%d/reabrir" % etapa_26["id"]).status_code == 200,
+               "M6-51b: reabre etapa 2026 para os testes posteriores de novas atividades")
 
         ids_26 = {e["id"] for e in
                   coord_a.get("/api/config/etapas?ano_letivo=2026").get_json()}
@@ -1695,7 +1714,7 @@ def main():
                "M6-55: o boletim da turma de 2026 traz so etapas de 2026")
         checar(bol_27["ano_letivo"] == 2027 and etapas_do_boletim(bol_27) == [ids_27],
                "M6-56: o boletim da turma de 2027 traz so etapas de 2027")
-        bol_coord = coord_a.get("/api/coordenacao/turmas/%d/boletim" % t27["id"]).get_json()
+        bol_coord = professor_6.get("/api/professor/turmas/%d/boletim" % t27["id"]).get_json()
         checar(bol_coord["ano_letivo"] == 2027 and etapas_do_boletim(bol_coord) == [ids_27],
                "M6-57: o boletim da Coordenacao tambem usa o ano da propria turma")
 
@@ -2132,7 +2151,7 @@ def main():
 
         etapa_fech = criar_etapa(coord_a, "E26 Fechada IA", 96, 6, 10)
         crit_fech = criar_criterio(coord_a, etapa_fech["id"], "Provas", 100)
-        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_fech["id"]
+        checar(professor_a.post("/api/config/etapas/%d/fechar" % etapa_fech["id"]
                             ).status_code == 200, "M9B-00: etapa de teste fechada")
 
         pedido_ok = {
@@ -2347,7 +2366,7 @@ def main():
         crit_c9 = criar_criterio(coord_a, etapa_c9["id"], "Provas", 100)
         ativ_fech = nova_atividade(professor_6, t26["id"], etapa_c9["id"],
                                    crit_c9["id"], "Prova 9C fechada").get_json()
-        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_c9["id"]
+        checar(professor_a.post("/api/config/etapas/%d/fechar" % etapa_c9["id"]
                             ).status_code == 200, "M9C-00b: etapa da outra atividade fechada")
         row_b = query_one("SELECT coordenacao_id FROM turma WHERE id = %s", (turma_b["id"],))
         id_ativ_b = insert(
@@ -2553,7 +2572,7 @@ def main():
         crit_f = criar_criterio(coord_a, etapa_f["id"], "Provas", 100)
         ativ_f = nova_atividade(professor_6, t26["id"], etapa_f["id"], crit_f["id"], "Prova FB fechada").get_json()
         lancar(professor_6, ativ_f["id"], al_ok["id"], 9)
-        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_f["id"]).status_code == 200,
+        checar(professor_a.post("/api/config/etapas/%d/fechar" % etapa_f["id"]).status_code == 200,
                "M9D-00: etapa de teste fechada")
         # etapa sem pesos validos (soma 50): configuracao invalida
         etapa_inv = criar_etapa(coord_a, "E26 FB pesos", 100, 6, 10)
@@ -2791,7 +2810,7 @@ def main():
                "I02-13: depois das tentativas cross-school nada mudou (turmas e notas)")
 
         # 7. etapa fechada: comportamento existente intacto
-        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_i2["id"]
+        checar(professor_a.post("/api/config/etapas/%d/fechar" % etapa_i2["id"]
                             ).status_code == 200, "I02-14: coordenacao fecha a etapa do teste")
         checar(prof_i2.put("/api/activities/%d" % ativ_com["id"],
                            {"title": "na etapa fechada"}).status_code == 400,
@@ -2833,7 +2852,7 @@ def main():
                "I03-02: etapa ABERTA aceita notas minima/maxima e edicao de criterio")
 
         # fecha a etapa e guarda o estado exato
-        checar(coord_a.post(ep + "/fechar").status_code == 200,
+        checar(professor_a.post(ep + "/fechar").status_code == 200,
                "I03-03: coordenacao fecha a etapa")
         antes_i3 = config_da_etapa(etapa_i3["id"])
 
@@ -2916,7 +2935,7 @@ def main():
                "I03-20: nada mudou depois das tentativas cross-school e do professor")
 
         # 9 e 10. reabrir restaura a edicao
-        checar(coord_a.post(ep + "/reabrir").status_code == 200
+        checar(professor_a.post(ep + "/reabrir").status_code == 200
                and coord_a.get(ep).get_json()["fechada"] is False,
                "I03-21: coordenacao reabre a etapa")
         r = coord_a.put(ep, {"nome": "E I03 reaberta"})
@@ -2937,12 +2956,12 @@ def main():
                               ).status_code == 204,
                "I03-26: apos reabrir, excluir criterio volta a funcionar")
         # 13. fechar de novo e conferir que congela de novo
-        checar(coord_a.post(ep + "/fechar").status_code == 200
+        checar(professor_a.post(ep + "/fechar").status_code == 200
                and bloqueada(coord_a.put(ep, {"nome": "outra vez"})),
                "I03-27: fechar de novo congela de novo")
-        checar(coord_a.post(ep + "/fechar").status_code == 400
-               and coord_a.post(ep + "/reabrir").status_code == 200
-               and coord_a.post(ep + "/reabrir").status_code == 400,
+        checar(professor_a.post(ep + "/fechar").status_code == 400
+               and professor_a.post(ep + "/reabrir").status_code == 200
+               and professor_a.post(ep + "/reabrir").status_code == 400,
                "I03-28: fechar/reabrir mantem as regras de estado (fechar fechada e reabrir aberta -> 400)")
 
         # ---------------------------------------------------------
@@ -3013,7 +3032,7 @@ def main():
         crit_fech_i4 = criar_criterio(coord_a, etapa_fech_i4["id"], "Provas", 100)
         criar_atividade(prof_i2, turma_orig["id"], etapa_fech_i4["id"],
                         crit_fech_i4["id"], 10, "I04 em etapa fechada")
-        coord_a.post("/api/config/etapas/%d/fechar" % etapa_fech_i4["id"])
+        professor_a.post("/api/config/etapas/%d/fechar" % etapa_fech_i4["id"])
         r = coord_a.delete("/api/config/etapas/%d" % etapa_fech_i4["id"])
         checar(r.status_code == 400 and "fechada" in r.get_json()["error"].lower(),
                "I04-11: etapa FECHADA (com dependencia) continua 400 por etapa fechada, nao 409")
@@ -3440,7 +3459,7 @@ def main():
             ("atividades", prof_i2.get("/api/activities?class_id=%d" % turma_m2["id"])),
             ("atividade", prof_i2.get("/api/activities/%d" % ativ_m2["id"])),
             ("notas da atividade", prof_i2.get("/api/atividades/%d/notas" % ativ_m2["id"])),
-            ("boletim (coordenacao)", coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_m2["id"])),
+            ("boletim (coordenacao)", prof_i2.get("/api/professor/turmas/%d/boletim" % turma_m2["id"])),
             ("boletim (professor)", prof_i2.get("/api/professor/turmas/%d/boletim" % turma_m2["id"])),
             ("desempenho do aluno", prof_i2.get("/api/professor/alunos/%d/estatisticas" % alunos_m2[0]["id"])),
             ("etapas do ano", coord_a.get("/api/config/etapas?ano_letivo=%d" % ano_m2)),
@@ -3466,9 +3485,9 @@ def main():
         checar(bloqueado(coord_a.post("/api/coordenacao/turmas/%d/alunos" % turma_m2["id"],
                                       {"nome": "Novo Aluno Teste"})),
                "M02-09: cadastrar aluno em turma de ano encerrado (coordenacao) -> 400")
-        checar(bloqueado(prof_i2.post("/api/professor/turmas/%d/alunos" % turma_m2["id"],
-                                      {"nome": "Novo Aluno Teste"})),
-               "M02-10: cadastrar aluno em turma de ano encerrado (professor) -> 400")
+        checar(prof_i2.post("/api/professor/turmas/%d/alunos" % turma_m2["id"],
+                            {"nome": "Novo Aluno Teste"}).status_code == 403,
+               "M02-10: professor nao cadastra alunos, inclusive em ano encerrado -> 403")
         checar(bloqueado(coord_a.upload("/api/coordenacao/turmas/%d/alunos/importar" % turma_m2["id"],
                                         "alunos.csv", b"nome\nAluno Importado Teste\n")),
                "M02-11: importar alunos para turma de ano encerrado -> 400")
@@ -3477,12 +3496,12 @@ def main():
                "M02-12: editar aluno (nome) de turma de ano encerrado -> 400 (decisao: aluno e historico)")
         checar(bloqueado(coord_a.put("/api/coordenacao/alunos/%d" % alunos_m2[0]["id"],
                                      {"matricula": "H9"}))
-               and bloqueado(prof_i2.put("/api/professor/alunos/%d" % alunos_m2[0]["id"],
-                                         {"email": "ana@escola.com"})),
-               "M02-13: editar matricula/e-mail do aluno (coordenacao e professor) -> 400")
+               and prof_i2.put("/api/professor/alunos/%d" % alunos_m2[0]["id"],
+                               {"email": "ana@escola.com"}).status_code == 403,
+               "M02-13: editar aluno em ano encerrado: coordenacao -> 400, professor -> 403")
         checar(bloqueado(coord_a.delete("/api/coordenacao/alunos/%d" % alunos_m2[1]["id"]))
-               and bloqueado(prof_i2.delete("/api/professor/alunos/%d" % alunos_m2[1]["id"])),
-               "M02-14: excluir aluno de turma de ano encerrado (coordenacao e professor) -> 400")
+               and prof_i2.delete("/api/professor/alunos/%d" % alunos_m2[1]["id"]).status_code == 403,
+               "M02-14: excluir aluno em ano encerrado: coordenacao -> 400, professor -> 403")
 
         # ---- etapa e criterio (etapa ABERTA: o ano encerrado vale mesmo assim)
         ep_m2 = "/api/config/etapas/%d" % etapa_m2["id"]
@@ -3609,7 +3628,7 @@ def main():
                "R1-00: cenario pronto: nota 8 numa atividade da etapa de 2044")
 
         def consolidado_r1():
-            corpo = coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_r1["id"]).get_json()
+            corpo = prof_i2.get("/api/professor/turmas/%d/boletim" % turma_r1["id"]).get_json()
             return corpo["alunos"][0]["consolidado"]
 
         def foto_r1():
@@ -3621,18 +3640,18 @@ def main():
             }
 
         # 1-2: ano nao encerrado (planejamento) segue igual
-        r = coord_a.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
+        r = prof_i2.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
         checar(r.status_code == 200 and r.get_json()["fechada"] is True,
                "R1-01: fechar etapa em ano em PLANEJAMENTO continua 200")
-        r = coord_a.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"])
+        r = prof_i2.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"])
         checar(r.status_code == 200 and r.get_json()["fechada"] is False,
                "R1-02: reabrir etapa em ano em PLANEJAMENTO continua 200")
-        coord_a.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
+        prof_i2.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])
         etapa_atual = criar_etapa(coord_a, "E R1 ano atual", 195, 6, 10)
         criar_criterio(coord_a, etapa_atual["id"], "Provas", 100)
         checar(ano_por_numero(coord_a, ANO)["status"] == "atual"
-               and coord_a.post("/api/config/etapas/%d/fechar" % etapa_atual["id"]).status_code == 200
-               and coord_a.post("/api/config/etapas/%d/reabrir" % etapa_atual["id"]).status_code == 200,
+               and prof_i2.post("/api/config/etapas/%d/fechar" % etapa_atual["id"]).status_code == 200
+               and prof_i2.post("/api/config/etapas/%d/reabrir" % etapa_atual["id"]).status_code == 200,
                "R1-03: fechar e reabrir etapa em ano ATUAL continuam 200")
 
         # encerra o ano com UMA etapa fechada (consolidado 80%) e outra aberta
@@ -3654,7 +3673,7 @@ def main():
         )
         for rotulo, acao, etapa_alvo in tentativas:
             # uma de cada vez: o consolidado e conferido logo depois de cada tentativa
-            r = coord_a.post("/api/config/etapas/%d/%s" % (etapa_alvo["id"], acao))
+            r = prof_i2.post("/api/config/etapas/%d/%s" % (etapa_alvo["id"], acao))
             corpo = r.get_json(silent=True) or {}
             checar(r.status_code == 400
                    and corpo.get("error") == "O ano letivo %d esta encerrado e nao permite alteracoes." % ano_r1,
@@ -3672,15 +3691,15 @@ def main():
                "R1-09: a etapa fechada segue fechada e a aberta segue aberta")
 
         # 9: cross-school continua 404 e nao revela o status do ano
-        for rotulo, r in (("fechar", coord_b.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])),
-                          ("reabrir", coord_b.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"]))):
+        for rotulo, r in (("fechar", professor_b.post("/api/config/etapas/%d/fechar" % etapa_r1["id"])),
+                          ("reabrir", professor_b.post("/api/config/etapas/%d/reabrir" % etapa_r1["id"]))):
             texto = r.get_data(as_text=True).lower()
             checar(r.status_code == 404 and "encerrado" not in texto and str(ano_r1) not in texto,
                    "R1-10: outra escola %s a etapa -> 404 sem revelar o ano encerrado" % rotulo)
-        checar(prof_i2.post("/api/config/etapas/%d/fechar" % etapa_r1["id"]).status_code == 403,
+        checar(coord_a.post("/api/config/etapas/%d/fechar" % etapa_r1["id"]).status_code == 403,
                "R1-11: Professor continua recebendo 403 (autorizacao antes do ano)")
-        checar(coord_a.post("/api/config/etapas/99999999/fechar").status_code == 404
-               and coord_a.post("/api/config/etapas/99999999/reabrir").status_code == 404,
+        checar(prof_i2.post("/api/config/etapas/99999999/fechar").status_code == 404
+               and prof_i2.post("/api/config/etapas/99999999/reabrir").status_code == 404,
                "R1-12: etapa inexistente continua 404")
 
         # 10: o resto do M-02 segue valendo
@@ -3688,7 +3707,7 @@ def main():
                and bloqueado(coord_a.put("/api/config/etapas/%d" % etapa_r1["id"], {"nome": "X"}))
                and bloqueado(lancar(prof_i2, ativ_r1["id"], aluno_r1["id"], 9)),
                "R1-13: M-02 intacto: turma, etapa e nota do ano encerrado continuam bloqueadas (400)")
-        checar(coord_a.get("/api/coordenacao/turmas/%d/boletim" % turma_r1["id"]).status_code == 200
+        checar(prof_i2.get("/api/professor/turmas/%d/boletim" % turma_r1["id"]).status_code == 200
                and coord_a.get("/api/config/etapas?ano_letivo=%d" % ano_r1).status_code == 200,
                "R1-14: leituras do ano encerrado continuam 200")
 
@@ -3848,11 +3867,11 @@ def main():
         # 17. etapa fechada continua bloqueando (I-03)
         fech = nova_m3("M03 em etapa a fechar", etapa=etapa_m3b, crit=crit_m3b)
         lancar(prof_i2, fech["id"], al_m3[0]["id"], 6)
-        coord_a.post("/api/config/etapas/%d/fechar" % etapa_m3b["id"])
+        professor_a.post("/api/config/etapas/%d/fechar" % etapa_m3b["id"])
         r = put_m3(fech, {"title": "titulo em etapa fechada"})
         checar(r.status_code == 400 and "fechada" in msg_m3(r).lower(),
                "M03-29: etapa fechada continua bloqueando ate o titulo (mensagem da etapa fechada)")
-        coord_a.post("/api/config/etapas/%d/reabrir" % etapa_m3b["id"])
+        professor_a.post("/api/config/etapas/%d/reabrir" % etapa_m3b["id"])
         checar(put_m3(fech, {"title": "titulo apos reabrir"}).status_code == 200
                and bloqueou_m3(put_m3(fech, {"nota_maxima": 30})),
                "M03-30: reaberta a etapa, o titulo volta a ser editavel e o valor segue congelado pelas notas")
@@ -3897,7 +3916,10 @@ def main():
             def __exit__(self, *args):
                 return False
 
-            def starttls(self):
+            def ehlo(self):
+                pass
+
+            def starttls(self, **kwargs):
                 pass
 
             def login(self, *args):
@@ -3928,7 +3950,7 @@ def main():
                              "ORDER BY id DESC LIMIT 1", (email,))["codigo"]
 
         def corpo_de(mensagem):
-            return mensagem.get_content()
+            return mensagem.get_body(preferencelist=("plain",)).get_content() if mensagem.is_multipart() else mensagem.get_content()
 
         def rodar_cenario(rotulo, dev, smtp, falhar=False):
             """Cadastra professor, reenvia o convite e pede um codigo. Devolve tudo."""
@@ -3956,7 +3978,9 @@ def main():
 
         def segredos_no_texto(r):
             """Convite e codigo vigentes (do banco) procurados em TODAS as respostas."""
-            token = convite_no_banco(r["email_professor"])
+            from urllib.parse import urlparse, parse_qs
+            token = parse_qs(urlparse(urlparse(r["edicao"].get_json()["conviteLink"]).fragment).query)["token"][0]
+            checar(convite_no_banco(r["email_professor"]) == hash_convite(token), "convite guarda somente hash no banco")
             codigo = codigo_no_banco(r["email_codigo"])
             respostas = " ".join(r[k].get_data(as_text=True)
                                  for k in ("cadastro", "reenvio", "codigo", "edicao"))
@@ -3968,7 +3992,7 @@ def main():
         checar(r["cadastro"].status_code == 201 and r["reenvio"].status_code == 200
                and r["codigo"].status_code == 200 and r["edicao"].status_code == 200,
                "M06-01: sem SMTP e sem modo dev os fluxos respondem normalmente (201/200)")
-        checar("conviteToken" not in respostas and token not in respostas,
+        checar("conviteToken" not in respostas and hash_convite(token) not in respostas,
                "M06-02: sem SMTP e sem modo dev: o conviteToken NAO aparece (cadastro, reenvio e troca de e-mail)")
         checar('"codigo"' not in r["codigo"].get_data(as_text=True)
                and "modo" not in r["codigo"].get_json() and codigo not in respostas,
@@ -4006,7 +4030,7 @@ def main():
         # 9. SMTP configurado e modo dev desligado: fluxo normal, sem segredo na resposta
         r = rodar_cenario("c", dev=False, smtp=True)
         token, codigo, respostas = segredos_no_texto(r)
-        checar("conviteToken" not in respostas and token not in respostas
+        checar("conviteToken" not in respostas and hash_convite(token) not in respostas
                and '"codigo"' not in r["codigo"].get_data(as_text=True)
                and codigo not in respostas,
                "M06-12: com SMTP e sem modo dev a resposta nao traz conviteToken nem codigo")
@@ -4032,7 +4056,7 @@ def main():
                and r["codigo"].get_json() == {"enviado": False}
                and r["reenvio"].status_code == 200,
                "M06-17: falha do SMTP: 201/200 com enviado=false (o professor foi cadastrado), sem erro 500")
-        checar("conviteToken" not in respostas and token not in respostas
+        checar("conviteToken" not in respostas and hash_convite(token) not in respostas
                and codigo not in respostas,
                "M06-18: falha do SMTP nao vaza codigo nem token")
 
@@ -4178,10 +4202,14 @@ def main():
         checar(req("get", "/api/professor/turmas?token=%s" % tok_expirado).status_code == 401,
                "M07-13: token EXPIRADO na query (endpoint normal) -> 401")
 
-        # excecao real e restrita: os 3 downloads de modelo de planilha (GET)
+        # Professor nao gerencia alunos: seu antigo modelo tambem e restrito.
+        modelo_prof = "/api/professor/turmas/%d/alunos/modelo-planilha" % turma_q
+        checar(req("get", "%s?token=%s" % (modelo_prof, tok_prof_a)).status_code == 403
+               and req("get", modelo_prof, tok_prof_a).status_code == 403,
+               "M07-14a: modelo de alunos do professor e bloqueado por URL e header")
+        # Excecao real e restrita: modelos de alunos da Coordenacao e de notas.
         downloads = (
             ("/api/coordenacao/turmas/%d/alunos/modelo-planilha" % turma_q, tok_coord_a, tok_prof_a),
-            ("/api/professor/turmas/%d/alunos/modelo-planilha" % turma_q, tok_prof_a, tok_coord_a),
             ("/api/atividades/%d/notas/modelo-planilha" % ativ_m1["id"], tok_prof_a, tok_coord_a),
         )
         for url, certo, errado in downloads:
@@ -4626,7 +4654,7 @@ def main():
         )
         for rotulo, metodo, url, corpo in casos_coord:
             r = getattr(coord_a, metodo)(url, corpo) if corpo is not None else getattr(coord_a, metodo)(url)
-            checar(eh404(r), "M10-01: %s inexistente: %s %s -> 404" % (rotulo, metodo.upper(), url[4:60]))
+            checar(r.status_code == 403 if ("/boletim" in url or url.endswith(("/fechar", "/reabrir"))) else eh404(r), "M10-01: %s inexistente: %s %s -> 404" % (rotulo, metodo.upper(), url[4:60]))
 
         # recursos inexistentes, vistos pelo Professor
         casos_prof = (
@@ -4653,7 +4681,9 @@ def main():
         )
         for rotulo, metodo, url, corpo in casos_prof:
             r = getattr(prof_i2, metodo)(url, corpo) if corpo is not None else getattr(prof_i2, metodo)(url)
-            checar(eh404(r), "M10-02: %s inexistente: %s %s -> 404" % (rotulo, metodo.upper(), url[4:60]))
+            proibido = rotulo in ("turma (nova atividade)", "turma (cadastrar aluno)", "aluno")
+            checar(r.status_code == 403 if proibido else eh404(r),
+                   "M10-02: %s inexistente: %s %s -> %d" % (rotulo, metodo.upper(), url[4:60], 403 if proibido else 404))
 
         # cross-school: a turma/aluno/etapa/etc. da escola A, vistos pela escola B
         casos_cross = (

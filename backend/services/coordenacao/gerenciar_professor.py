@@ -13,7 +13,7 @@ from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
 from services import entrada
 from services.rate_limit import limitar_convite
-from services.email_service import enviar_convite_professor, expor_codigos_dev
+from services.email_service import enviar_convite_professor, expor_codigos_dev, link_convite
 from erros import RecursoNaoEncontrado
 
 
@@ -24,7 +24,7 @@ def _professor_da_escola(coordenacao_id, professor_id):
     return professor
 
 
-def _novo_convite(coordenacao_id, professor, contar=True):
+def _novo_convite(coordenacao_id, professor, contar=True, enviar=True):
     # Reenviar o convite e trocar o e-mail de um professor pendente mandam um
     # e-mail novo: o limite e por escola + professor (a Coordenacao trabalha
     # normalmente; so o martelar do mesmo professor e barrado).
@@ -34,12 +34,13 @@ def _novo_convite(coordenacao_id, professor, contar=True):
     expira_em = datetime.now() + timedelta(hours=CONVITE_EXPIRACAO_HORAS)
     Professor.atualizar_convite(professor["id"], token, expira_em)
     escola = Coordenacao.find_by_id(coordenacao_id)
-    enviado = enviar_convite_professor(
+    enviado = enviar and enviar_convite_professor(
         professor["nome"], professor["email"], token,
         escola["nome"] if escola else "sua escola",
     )
     resposta = Professor.to_dict(Professor.find_by_id(professor["id"], coordenacao_id))
     resposta["conviteEnviado"] = enviado
+    resposta["conviteLink"] = link_convite(token)
     if expor_codigos_dev():
         resposta["conviteToken"] = token
     return resposta
@@ -103,10 +104,10 @@ class ReativarProfessorService:
 
 
 class ReenviarConviteProfessorService:
-    def execute(self, coordenacao_id, professor_id):
+    def execute(self, coordenacao_id, professor_id, enviar=True):
         professor = _professor_da_escola(coordenacao_id, professor_id)
         if not professor.get("habilitado", True):
             raise ValueError("Professor desativado nao pode receber convite")
         if professor.get("senha_hash"):
             raise ValueError("Este professor ja criou a senha")
-        return _novo_convite(coordenacao_id, professor)
+        return _novo_convite(coordenacao_id, professor, enviar=enviar)

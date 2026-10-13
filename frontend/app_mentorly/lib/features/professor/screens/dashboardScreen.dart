@@ -1,271 +1,200 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../app/routes.dart';
 import '../../../core/services/apiService.dart';
+import '../../../core/widgets/estrutura_pagina.dart';
+import '../../../core/widgets/identidade_visual.dart';
 import '../widgets/professorTopBar.dart';
+import '../../../features/coordenacao/models/turmaModel.dart';
+import '../services/professorTurmasService.dart';
+import 'atividades/adicionarAtividadeModal.dart';
 import '../services/professorDashboardService.dart';
 
-// dashboard do professor - so numeros/resumo, sem acao nenhuma aqui
-// IMPORTANTE PRO BACKEND:
-// endpoint esperado -> GET {baseUrl}/api/professor/dashboard
-// resposta esperada (200) ->
-// {
-//   "nome": "...",
-//   "email": "...",
-//   "totalTurmas": 1,
-//   "totalAlunos": 8,
-//   "alunosEmRisco": [
-//     { "nome": "...", "turma": "...", "media": 4.2 }, ...
-//   ]
-// }
-// "alunos em risco" = alunos com media abaixo da nota minima configurada
-// pela coordenacao (ver configEtapasScreen/configNotasEtapaScreen)
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
-
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final ProfessorDashboardService _dashboardService = ProfessorDashboardService();
-
   bool _carregando = true;
-  String? _mensagemErro;
-  Map<String, dynamic>? _dados;
-
+  String? _erro;
+  Map<String, dynamic> _dados = {};
   @override
   void initState() {
     super.initState();
-    _buscarDados();
+    _carregar();
   }
 
-  Future<void> _buscarDados() async {
+  Future<void> _carregar() async {
+    if (!mounted) return;
     setState(() {
       _carregando = true;
-      _mensagemErro = null;
+      _erro = null;
     });
-
     try {
-      final dados = await _dashboardService.buscarDashboard();
-      setState(() {
-        _dados = dados;
-      });
-    } on ApiException catch (e) {
-      setState(() => _mensagemErro = 'Erro ao buscar dados do dashboard: ${e.mensagem}');
+      final dados = await ProfessorDashboardService().buscarDashboard();
+      if (mounted) setState(() => _dados = dados);
     } catch (e) {
-      setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
-    } finally {
       if (mounted) {
-        setState(() => _carregando = false);
+        setState(() => _erro = e is ApiException
+            ? e.mensagem
+            : 'Não foi possível conectar ao servidor.');
+      }
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  Future<void> _novaAtividade() async {
+    try {
+      final lista = await ProfessorTurmasService().listarTurmas();
+      if (!mounted) return;
+      await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+              builder: (_) => AdicionarAtividadeModal(
+                  turmas: lista
+                      .map((t) => TurmaModel.fromJson(
+                          Map<String, dynamic>.from(t as Map)))
+                      .toList())));
+      if (mounted) _carregar();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e is ApiException
+                ? e.mensagem
+                : 'Não foi possível carregar as turmas.')));
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: ProfessorTopBar(
-        abaAtiva: 'dashboard',
-        emailProfessor: _dados?['email'],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _buscarDados,
-        child: Stack(
-          children: [
-            _construirFundoDecorativo(),
-            _construirCorpo(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // um "borrao" colorido no fundo, so decorativo, igual o mockup
-  Widget _construirFundoDecorativo() {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-          child: Stack(
-            children: [
-              Positioned(
-                left: 100,
-                top: 150,
-                child: Container(
-                  width: 220,
-                  height: 220,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0x552DD4BF),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 40,
-                top: 80,
-                child: Container(
-                  width: 260,
-                  height: 260,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0x553B82F6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _construirCorpo() {
-    if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(
-              _mensagemErro!,
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      );
-    }
-
-    final nome = _dados?['nome'] ?? '';
-    final anoLetivo = _dados?['anoLetivo'];
-    final totalTurmas = _dados?['totalTurmas'] ?? 0;
-    final totalAlunos = _dados?['totalAlunos'] ?? 0;
-    final alunosEmRisco = _dados?['alunosEmRisco'] as List<dynamic>? ?? [];
-
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Text(
-          'Olá Professor(a) $nome.',
-          style: const TextStyle(fontSize: 22),
-        ),
-        const SizedBox(height: 8),
-        // Os numeros abaixo sao do ano letivo atual da escola (definido pela
-        // Coordenacao); sem ano atual, o resumo vem zerado e a tela avisa.
-        Text(
-          anoLetivo != null
-              ? 'Ano letivo $anoLetivo'
-              : 'A Coordenação ainda não definiu o ano letivo atual.',
-          style: TextStyle(color: Colors.grey[700]),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _CardNumero(
-                titulo: 'Quantidade de turmas total',
-                numero: totalTurmas.toString(),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _CardNumero(
-                titulo: 'Quantidade de alunos total',
-                numero: totalAlunos.toString(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Alunos em risco',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const Text(
-                'Todas as turmas e todas as salas',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-              const SizedBox(height: 16),
-              if (alunosEmRisco.isEmpty)
-                const Text('Nenhum aluno em risco no momento 🎉')
-              else
-                ...alunosEmRisco.map((aluno) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text('${aluno['nome']} — ${aluno['turma']}'),
-                        ),
+  Widget build(BuildContext context) => Scaffold(
+      appBar: const ProfessorTopBar(abaAtiva: 'dashboard'),
+      body: ConteudoPagina(
+          vidro: false,
+          child: RefreshIndicator(
+              onRefresh: _carregar,
+              child: _carregando
+                  ? const CarregamentoPagina()
+                  : _erro != null
+                      ? VidroCard(
+                          child: EstadoPagina(
+                              titulo: 'Falha ao carregar o painel',
+                              mensagem: _erro!,
+                              acao: 'Tentar novamente',
+                              onPressed: _carregar))
+                      : _corpo())));
+  Widget _corpo() {
+    final ano = _dados['anoLetivo'];
+    final risco = _dados['alunosEmRisco'] as List? ?? [];
+    return ListView(padding: const EdgeInsets.all(12), children: [
+      const SizedBox(height: 16),
+      Text('Olá Professor(a) ${_dados['nome']?.toString() ?? 'Professor'}.',
+          style: Theme.of(context).textTheme.headlineMedium),
+      const SizedBox(height: 8),
+      Text(
+          ano == null
+              ? 'Peça à Coordenação para definir o ano letivo atual.'
+              : 'Ano letivo $ano',
+          style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 16),
+      Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+              onPressed: _novaAtividade,
+              icon: const Icon(Icons.add),
+              label: const Text('+ Nova atividade'))),
+      const SizedBox(height: 12),
+      Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.chatIa),
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Conversar com IA'))),
+      const SizedBox(height: 32),
+      LayoutBuilder(builder: (context, tamanho) {
+        final cards = [
+          _numero('Quantidade de turmas total', _dados['totalTurmas'] ?? 0),
+          _numero('Quantidade de alunos total', _dados['totalAlunos'] ?? 0)
+        ];
+        return tamanho.maxWidth < 560
+            ? Column(children: [cards[0], const SizedBox(height: 16), cards[1]])
+            : Row(children: [
+                Expanded(child: cards[0]),
+                const SizedBox(width: 24),
+                Expanded(child: cards[1])
+              ]);
+      }),
+      const SizedBox(height: 24),
+      VidroCard(
+          padding: const EdgeInsets.all(24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('Alunos em risco',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text('Todas as turmas e todas as salas',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 8),
+            const Text(
+                'Alertas no período final da etapa, considerando os pesos dos critérios e os pontos ainda possíveis nas atividades cadastradas. Notas pendentes precisam ser conferidas.',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 20),
+            if (risco.isEmpty)
+              const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('Nenhum aluno em risco agora.')),
+            ...risco.map((a) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextButton(
+                          onPressed: () => Navigator.pushNamed(
+                              context, AppRoutes.alunoDetail,
+                              arguments: Map<String, dynamic>.from(a as Map)),
+                          child: Text(a['nome']?.toString() ?? '',
+                              style: Theme.of(context).textTheme.titleMedium)),
+                      Text('Risco ${a['risco']}'),
+                      const SizedBox(height: 4),
+                      Text(a['turma']?.toString() ?? ''),
+                      Text(
+                          'Pontos avaliados: ${_nota(a['pontos_obtidos'])}/${_nota(a['pontos_avaliados'])}',
+                          style: const TextStyle(fontWeight: FontWeight.w500)),
+                      if (a['acompanhamento'] != null)
                         Text(
-                          'média ${aluno['media']}',
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-            ],
-          ),
-        ),
-      ],
-    );
+                            '${a['acompanhamento']['etapa']} · Pontos com os pesos: ${_nota(a['acompanhamento']['pontos_ponderados'])} · Mínimo: ${_nota(a['acompanhamento']['nota_minima'])}'),
+                      ...((a['motivos'] as List?) ?? [])
+                          .map((m) => Text(m.toString())),
+                      const Divider(height: 24),
+                    ]))),
+            Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.listaTurmas),
+                    icon: const Icon(Icons.grading_outlined),
+                    label: const Text('Ver boletins'))),
+          ])),
+    ]);
   }
-}
 
-class _CardNumero extends StatelessWidget {
-  final String titulo;
-  final String numero;
-
-  const _CardNumero({required this.titulo, required this.numero});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      height: 160,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(16),
-      ),
+  String _nota(dynamic valor) =>
+      valor is num ? valor.toStringAsFixed(1).replaceAll('.', ',') : '—';
+  Widget _numero(String titulo, dynamic valor) => VidroCard(
+      padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            titulo,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
-          ),
-          const Spacer(),
-          Center(
-            child: Text(
-              numero,
-              style: const TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3B82F6),
-              ),
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(titulo,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 20),
+            Text('$valor',
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 48, fontWeight: FontWeight.w500)),
+          ]));
 }

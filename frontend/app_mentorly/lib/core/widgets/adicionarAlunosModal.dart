@@ -1,22 +1,11 @@
+import '../../app/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/apiService.dart';
 
-// Modal de adicionar alunos a uma turma, por planilha ou manualmente.
-//
-// Os dois papeis usam este mesmo widget; muda so o prefixo das rotas:
-//   Coordenacao -> /coordenacao/turmas/{id}/alunos...  (qualquer turma da escola)
-//   Professor   -> /professor/turmas/{id}/alunos...    (so turmas vinculadas)
-// Quem valida a posse da turma e o backend; aqui so escolhemos o caminho.
-//
-// Endpoints usados:
-//   GET  {base}/turmas/{turmaId}/alunos/modelo-planilha   (abre no navegador)
-//   POST {base}/turmas/{turmaId}/alunos/importar          (multipart, campo "arquivo")
-//   POST {base}/turmas/{turmaId}/alunos                   (cadastro manual)
-//
-// Retorna true via Navigator.pop quando algum aluno entrou, pra tela recarregar.
+// Gerenciamento exclusivo da Coordenação.
 enum PapelAluno { coordenacao, professor }
 
 class AdicionarAlunosModal extends StatefulWidget {
@@ -45,9 +34,7 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
   // [{ "linha": 4, "motivo": "nome incompleto" }, ...]
   List<dynamic> _errosDaPlanilha = [];
 
-  String get _base => widget.papel == PapelAluno.coordenacao
-      ? '/coordenacao/turmas/${widget.turmaId}/alunos'
-      : '/professor/turmas/${widget.turmaId}/alunos';
+  String get _base => '/coordenacao/turmas/${widget.turmaId}/alunos';
 
   void _limparMensagens() {
     _mensagemErro = null;
@@ -74,11 +61,12 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
       withData: true,
     );
 
-    if (resultado == null || resultado.files.isEmpty) return;
+    if (!mounted || resultado == null || resultado.files.isEmpty) return;
     final arquivo = resultado.files.first;
 
     if (arquivo.bytes == null) {
-      setState(() => _mensagemErro = 'Não foi possível ler o arquivo selecionado');
+      setState(
+          () => _mensagemErro = 'Não foi possível ler o arquivo selecionado');
       return;
     }
 
@@ -97,6 +85,7 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
       final adicionados = dados['adicionados'] ?? 0;
       final erros = (dados['erros'] as List?) ?? [];
 
+      if (!mounted) return;
       setState(() {
         _errosDaPlanilha = erros;
         _adicionouAlgum = _adicionouAlgum || adicionados > 0;
@@ -110,8 +99,10 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
         }
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = e.mensagem);
     } catch (_) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) setState(() => _enviando = false);
@@ -138,8 +129,11 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
                   helperText: 'Informe nome e sobrenome',
                 ),
               ),
+              const SizedBox(height: 16),
               TextField(
                 controller: matriculaController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => Navigator.pop(context, true),
                 decoration: const InputDecoration(
                   labelText: 'Matrícula (opcional)',
                 ),
@@ -178,8 +172,10 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
         _mensagemSucesso = 'Aluno adicionado com sucesso';
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = e.mensagem);
     } catch (_) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) setState(() => _enviando = false);
@@ -188,12 +184,19 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.papel == PapelAluno.professor || !ApiService().ehCoordenacao) {
+      return const AlertDialog(
+          title: Text('Acesso restrito'),
+          content: Text('Somente a Coordenação gerencia os alunos.'));
+    }
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppVisual.raioCard)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460, maxHeight: 620),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -201,7 +204,9 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Adicionar Alunos', style: TextStyle(fontSize: 22)),
+                  const Expanded(
+                      child: Text('Adicionar Alunos',
+                          style: TextStyle(fontSize: 22))),
                   IconButton(
                     onPressed: () => Navigator.pop(context, _adicionouAlgum),
                     icon: const Icon(Icons.close),
@@ -236,7 +241,8 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
               ],
               if (_mensagemSucesso != null) ...[
                 const SizedBox(height: 16),
-                _aviso(_mensagemSucesso!, Colors.green, Icons.check_circle_outline),
+                _aviso(_mensagemSucesso!, Colors.green,
+                    Icons.check_circle_outline),
               ],
               if (_mensagemErro != null) ...[
                 const SizedBox(height: 12),

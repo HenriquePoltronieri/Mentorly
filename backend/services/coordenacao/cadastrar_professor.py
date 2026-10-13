@@ -1,11 +1,15 @@
 from datetime import datetime, timedelta
+import re
+from database.connection import transacao
+from models.turma_model import Turma
+from models.professor_model import hash_convite
 
 from auth.jwt_utils import gerar_token_convite
 from config import CONVITE_EXPIRACAO_HORAS
 from models.coordenacao_model import Coordenacao
 from models.professor_model import Professor
 from services import entrada
-from services.email_service import enviar_convite_professor, expor_codigos_dev
+from services.email_service import enviar_convite_professor, expor_codigos_dev, link_convite
 
 
 class CadastrarProfessorService:
@@ -16,7 +20,7 @@ class CadastrarProfessorService:
     senha.
     """
 
-    def execute(self, coordenacao_id, nome, email, disciplina=None):
+    def execute(self, coordenacao_id, nome, email, disciplina=None, turma_ids=None):
         nome = entrada.texto(nome, "O nome do professor", entrada.LIMITE_NOME)
         email = entrada.texto(
             email, "O email do professor", entrada.LIMITE_EMAIL
@@ -30,6 +34,17 @@ class CadastrarProfessorService:
         if not email:
             raise ValueError("O email do professor e obrigatorio")
 
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise entrada.EntradaInvalida("Informe um e-mail válido")
+        if turma_ids is None:
+            turma_ids = []
+        if not isinstance(turma_ids, list):
+            raise entrada.EntradaInvalida("Seleção de turmas inválida")
+        ids = list(dict.fromkeys(entrada.inteiro(t, "Turma") for t in turma_ids))
+        for turma_id in ids:
+            if not Turma.find_by_id(turma_id, coordenacao_id):
+                raise entrada.EntradaInvalida("Escolha somente turmas da sua escola")
+
         existente = Professor.find_by_email(email)
         if existente:
             if existente["coordenacao_id"] == coordenacao_id:
@@ -40,9 +55,13 @@ class CadastrarProfessorService:
         token = gerar_token_convite()
         expira_em = datetime.now() + timedelta(hours=CONVITE_EXPIRACAO_HORAS)
 
-        professor_id = Professor.create(
-            coordenacao_id, nome, email, disciplina, token, expira_em
-        )
+        with transacao() as cursor:
+            cursor.execute("INSERT INTO professor (coordenacao_id,nome,email,disciplina,convite_token,convite_expira_em) VALUES (%s,%s,%s,%s,%s,%s)",
+                           (coordenacao_id, nome, email, disciplina, hash_convite(token), expira_em))
+            professor_id = cursor.lastrowid
+            for turma_id in ids:
+                cursor.execute("INSERT INTO professor_turma (coordenacao_id,professor_id,turma_id) VALUES (%s,%s,%s)",
+                               (coordenacao_id, professor_id, turma_id))
 
         escola = Coordenacao.find_by_id(coordenacao_id)
         enviado = enviar_convite_professor(
@@ -51,6 +70,7 @@ class CadastrarProfessorService:
 
         resposta = Professor.to_dict(Professor.find_by_id(professor_id))
         resposta["conviteEnviado"] = enviado
+        resposta["conviteLink"] = link_convite(token)
         if expor_codigos_dev():
             # So com DEV_EXPOSE_AUTH_CODES ligado (uso local): a tela mostra o
             # link para passar o primeiro acesso sem depender de email.

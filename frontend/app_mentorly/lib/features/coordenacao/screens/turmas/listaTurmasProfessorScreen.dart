@@ -1,4 +1,6 @@
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/services/apiService.dart';
 import '../../services/professorTurmasService.dart';
 
@@ -22,11 +24,14 @@ class ListaTurmasProfessorScreen extends StatefulWidget {
   const ListaTurmasProfessorScreen({super.key});
 
   @override
-  State<ListaTurmasProfessorScreen> createState() => _ListaTurmasProfessorScreenState();
+  State<ListaTurmasProfessorScreen> createState() =>
+      _ListaTurmasProfessorScreenState();
 }
 
-class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen> {
-  final ProfessorTurmasService _professorTurmasService = ProfessorTurmasService();
+class _ListaTurmasProfessorScreenState
+    extends State<ListaTurmasProfessorScreen> {
+  final ProfessorTurmasService _professorTurmasService =
+      ProfessorTurmasService();
 
   bool _carregando = true;
   String? _mensagemErro;
@@ -40,22 +45,30 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
   }
 
   Future<void> _buscarDados() async {
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
     });
 
     try {
-      final professores = await _professorTurmasService.listarProfessores();
-      final turmas = await _professorTurmasService.listarTurmas();
+      final resultados = await Future.wait([
+        _professorTurmasService.listarProfessores(),
+        _professorTurmasService.listarTurmas(),
+      ]);
+      final professores = resultados[0];
+      final turmas = resultados[1];
+      if (!mounted) return;
 
       setState(() {
         _professores = professores;
         _turmas = turmas;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Erro ao buscar dados: ${e.mensagem}');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -100,14 +113,16 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
                   shrinkWrap: true,
                   children: _turmas.map((turma) {
                     final turmaId = turma['id'] as int;
-                    final vinculadaComOutro = _isTurmaVinculadaComOutro(turmaId, professor['id']);
+                    final vinculadaComOutro =
+                        _isTurmaVinculadaComOutro(turmaId, professor['id']);
 
                     return CheckboxListTile(
                       title: Text(turma['nome'] ?? ''),
                       subtitle: vinculadaComOutro
                           ? const Text(
                               'Já vinculada a outro professor',
-                              style: TextStyle(color: Colors.orange, fontSize: 12),
+                              style:
+                                  TextStyle(color: Colors.orange, fontSize: 12),
                             )
                           : null,
                       value: selecionadas.contains(turmaId),
@@ -176,33 +191,29 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Turmas por Professor')),
+      appBar: const BarraMentorly(
+          professor: false, aba: 'professores', titulo: 'Turmas por Professor'),
       body: RefreshIndicator(
-        onRefresh: _buscarDados,
-        child: _construirCorpo(),
+        onRefresh: () {
+          ApiService().invalidarCache();
+          return _buscarDados();
+        },
+        child: ConteudoPagina(child: _construirCorpo()),
       ),
     );
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(
-              _mensagemErro!,
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarDados);
     }
 
     if (_professores.isEmpty) {
@@ -216,14 +227,16 @@ class _ListaTurmasProfessorScreenState extends State<ListaTurmasProfessorScreen>
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      separatorBuilder: (_, indice) => const Divider(height: 1),
       itemCount: _professores.length,
       itemBuilder: (context, index) {
         final professor = _professores[index];
         final turmasDoProfessor = _turmasDoProfessor(professor['id']);
 
         return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.person)),
+          leading: const Icon(Icons.person_outline),
           title: Text(professor['nome'] ?? ''),
           subtitle: Text(
             turmasDoProfessor.isEmpty

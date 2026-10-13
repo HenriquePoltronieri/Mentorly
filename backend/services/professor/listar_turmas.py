@@ -45,6 +45,7 @@ class ListarAlunosDaTurmaService:
 
     def execute(self, turma_id, professor_id):
         from models.aluno_model import Aluno
+        from models.dados_academicos_model import carregar_dados_turma
         from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
 
         turma = Turma.find_by_id_para_professor(turma_id, professor_id)
@@ -53,13 +54,14 @@ class ListarAlunosDaTurmaService:
 
         # Etapa atual dentro do ano da propria turma.
         etapa, _regra = etapa_atual(turma["coordenacao_id"], turma["ano_letivo"])
+        dados = carregar_dados_turma(turma_id, turma["coordenacao_id"], turma["ano_letivo"]) if etapa else None
 
         alunos = []
         for linha in Aluno.find_all_by_turma(turma_id):
             aluno = Aluno.to_dict(linha)
             media = None
             if etapa is not None:
-                calculo = calcular_desempenho_etapa(aluno["id"], turma_id, etapa)
+                calculo = calcular_desempenho_etapa(aluno["id"], turma_id, etapa, dados)
                 if calculo["completo"]:
                     media = calculo["nota_calculada"]
             aluno["media"] = media

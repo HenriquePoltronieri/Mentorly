@@ -75,14 +75,17 @@ Future<void> _tocarEExcluir(WidgetTester tester) async {
 
 void main() {
   group('texto das confirmacoes (schema: cascatas reais)', () {
-    test('turma avisa alunos, atividades e notas, sem prometer o que o banco recusa', () {
+    test(
+        'turma avisa alunos, atividades e notas, sem prometer o que o banco recusa',
+        () {
       expect(AvisosDeExclusao.turma, contains('alunos'));
       expect(AvisosDeExclusao.turma, contains('atividades'));
       expect(AvisosDeExclusao.turma, contains('notas'));
       expect(AvisosDeExclusao.turma, contains('pode excluir'));
       expect(AvisosDeExclusao.turma, contains('não pode ser desfeita'));
       // historico protegido por FK RESTRICT nao e prometido como apagado
-      expect(AvisosDeExclusao.turma.toLowerCase(), isNot(contains('histórico')));
+      expect(
+          AvisosDeExclusao.turma.toLowerCase(), isNot(contains('histórico')));
     });
 
     test('atividade avisa as notas vinculadas', () {
@@ -91,7 +94,8 @@ void main() {
       expect(AvisosDeExclusao.atividade, contains('não pode ser desfeita'));
     });
 
-    test('aluno avisa notas e historico de turmas (ambos em cascata no schema)', () {
+    test('aluno avisa notas e historico de turmas (ambos em cascata no schema)',
+        () {
       expect(AvisosDeExclusao.aluno, contains('notas'));
       expect(AvisosDeExclusao.aluno, contains('histórico de turmas'));
       expect(AvisosDeExclusao.aluno, contains('não pode ser desfeita'));
@@ -99,8 +103,11 @@ void main() {
   });
 
   group('turma (coordenacao)', () {
-    testWidgets('confirmacao mostra o aviso; cancelar NAO exclui', (tester) async {
-      final api = _Api({'/api/classes': [_turma]});
+    testWidgets('confirmacao mostra o aviso; cancelar NAO exclui',
+        (tester) async {
+      final api = _Api({
+        '/api/classes': [_turma]
+      });
       await _executar(tester, api, () async {
         await tester.pumpWidget(_app(const GerenciarTurmasScreen()));
         await tester.pumpAndSettle();
@@ -108,7 +115,9 @@ void main() {
         await tester.tap(find.byTooltip('Excluir'));
         await tester.pumpAndSettle();
         expect(find.text('Excluir turma?'), findsOneWidget);
-        expect(find.textContaining('alunos, atividades e notas vinculados a esta turma'),
+        expect(
+            find.textContaining(
+                'alunos, atividades e notas vinculados a esta turma'),
             findsOneWidget);
         expect(find.textContaining('Turma 7A'), findsWidgets);
         expect(find.text('Cancelar'), findsOneWidget);
@@ -119,8 +128,11 @@ void main() {
       });
     });
 
-    testWidgets('confirmar chama a mesma exclusao (DELETE /api/classes/7)', (tester) async {
-      final api = _Api({'/api/classes': [_turma]});
+    testWidgets('confirmar chama a mesma exclusao (DELETE /api/classes/7)',
+        (tester) async {
+      final api = _Api({
+        '/api/classes': [_turma]
+      });
       await _executar(tester, api, () async {
         await tester.pumpWidget(_app(const GerenciarTurmasScreen()));
         await tester.pumpAndSettle();
@@ -133,8 +145,11 @@ void main() {
       });
     });
 
-    testWidgets('409 do backend aparece com a mensagem amigavel', (tester) async {
-      final api = _Api({'/api/classes': [_turma]})
+    testWidgets('409 do backend aparece com a mensagem amigavel',
+        (tester) async {
+      final api = _Api({
+        '/api/classes': [_turma]
+      })
         ..statusExclusao = 409
         ..corpoExclusao = jsonEncode({
           'error':
@@ -162,17 +177,22 @@ void main() {
   group('atividade (professor)', () {
     final turma = TurmaModel.fromJson(Map<String, dynamic>.from(_turma));
 
-    testWidgets('confirmacao menciona as notas vinculadas; cancelar NAO exclui', (tester) async {
-      final api = _Api({'/api/activities': [_atividade]});
+    testWidgets('confirmacao menciona as notas vinculadas; cancelar NAO exclui',
+        (tester) async {
+      final api = _Api({
+        '/api/activities': [_atividade]
+      });
       await _executar(tester, api, () async {
-        await tester.pumpWidget(
-            _app(const TurmaAtividadesScreen(), argumentos: turma));
+        await tester
+            .pumpWidget(_app(const TurmaAtividadesScreen(), argumentos: turma));
         await tester.pumpAndSettle();
 
         await tester.tap(find.byTooltip('Excluir'));
         await tester.pumpAndSettle();
         expect(find.text('Excluir atividade?'), findsOneWidget);
-        expect(find.textContaining('As notas vinculadas a esta atividade também serão excluídas'),
+        expect(
+            find.textContaining(
+                'As notas vinculadas a esta atividade também serão excluídas'),
             findsOneWidget);
         expect(find.textContaining('Prova 1'), findsWidgets);
 
@@ -182,11 +202,14 @@ void main() {
       });
     });
 
-    testWidgets('confirmar chama a mesma exclusao (DELETE /api/activities/9)', (tester) async {
-      final api = _Api({'/api/activities': [_atividade]});
+    testWidgets('confirmar chama a mesma exclusao (DELETE /api/activities/9)',
+        (tester) async {
+      final api = _Api({
+        '/api/activities': [_atividade]
+      });
       await _executar(tester, api, () async {
-        await tester.pumpWidget(
-            _app(const TurmaAtividadesScreen(), argumentos: turma));
+        await tester
+            .pumpWidget(_app(const TurmaAtividadesScreen(), argumentos: turma));
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Excluir'));
         await tester.pumpAndSettle();
@@ -197,22 +220,27 @@ void main() {
       });
     });
 
-    testWidgets('erro do backend (etapa fechada, 400) continua aparecendo', (tester) async {
-      final api = _Api({'/api/activities': [_atividade]})
+    testWidgets('erro do backend (etapa fechada, 400) continua aparecendo',
+        (tester) async {
+      final api = _Api({
+        '/api/activities': [_atividade]
+      })
         ..statusExclusao = 400
         ..corpoExclusao = jsonEncode({
           'error': 'Esta atividade pertence a uma etapa fechada. Peca a '
               'coordenacao para reabri-la antes de excluir.'
         });
       await _executar(tester, api, () async {
-        await tester.pumpWidget(
-            _app(const TurmaAtividadesScreen(), argumentos: turma));
+        await tester
+            .pumpWidget(_app(const TurmaAtividadesScreen(), argumentos: turma));
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Excluir'));
         await tester.pumpAndSettle();
         await _tocarEExcluir(tester);
 
-        expect(find.textContaining('Erro ao excluir: Esta atividade pertence a uma etapa fechada'),
+        expect(
+            find.textContaining(
+                'Erro ao excluir: Esta atividade pertence a uma etapa fechada'),
             findsOneWidget);
       });
     });
@@ -220,22 +248,32 @@ void main() {
 
   group('aluno', () {
     Future<void> abrirMenuExcluir(WidgetTester tester) async {
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.tap(find
+          .descendant(
+              of: find.byType(ListTile),
+              matching: find.byType(PopupMenuButton<String>))
+          .last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Excluir').last);
       await tester.pumpAndSettle();
     }
 
-    testWidgets('coordenacao: aviso de notas e historico; cancelar NAO exclui', (tester) async {
-      final api = _Api({'/api/coordenacao/turmas/7/alunos': [_aluno]});
+    testWidgets('coordenacao: aviso de notas e historico; cancelar NAO exclui',
+        (tester) async {
+      final api = _Api({
+        '/api/coordenacao/turmas/7/alunos': [_aluno]
+      });
       await _executar(tester, api, () async {
         await tester.pumpWidget(_app(const ListaAlunosTurmaScreen(),
-            argumentos: TurmaModel.fromJson(Map<String, dynamic>.from(_turma))));
+            argumentos:
+                TurmaModel.fromJson(Map<String, dynamic>.from(_turma))));
         await tester.pumpAndSettle();
 
         await abrirMenuExcluir(tester);
         expect(find.text('Excluir aluno?'), findsOneWidget);
-        expect(find.textContaining('As notas e o histórico de turmas deste aluno também serão excluídos'),
+        expect(
+            find.textContaining(
+                'As notas e o histórico de turmas deste aluno também serão excluídos'),
             findsOneWidget);
         expect(find.textContaining('Ana Souza'), findsWidgets);
 
@@ -245,11 +283,15 @@ void main() {
       });
     });
 
-    testWidgets('coordenacao: confirmar chama DELETE /api/coordenacao/alunos/3', (tester) async {
-      final api = _Api({'/api/coordenacao/turmas/7/alunos': [_aluno]});
+    testWidgets('coordenacao: confirmar chama DELETE /api/coordenacao/alunos/3',
+        (tester) async {
+      final api = _Api({
+        '/api/coordenacao/turmas/7/alunos': [_aluno]
+      });
       await _executar(tester, api, () async {
         await tester.pumpWidget(_app(const ListaAlunosTurmaScreen(),
-            argumentos: TurmaModel.fromJson(Map<String, dynamic>.from(_turma))));
+            argumentos:
+                TurmaModel.fromJson(Map<String, dynamic>.from(_turma))));
         await tester.pumpAndSettle();
         await abrirMenuExcluir(tester);
         await _tocarEExcluir(tester);
@@ -259,23 +301,28 @@ void main() {
       });
     });
 
-    testWidgets('professor: mesmo aviso; cancelar nao exclui e confirmar chama DELETE /api/professor/alunos/3', (tester) async {
-      final api = _Api({'/api/professor/turmas/7/alunos': [_aluno]});
+    testWidgets('professor somente visualiza alunos sem ações de exclusão',
+        (tester) async {
+      final api = _Api({
+        '/api/professor/turmas/7/alunos': [_aluno],
+        '/api/professor/turmas/7/estatisticas': {
+          'alunos': [
+            {..._aluno, 'risco': 'Baixo'}
+          ]
+        }
+      });
       await _executar(tester, api, () async {
-        await tester.pumpWidget(
-            _app(const TurmaAlunosScreen(), argumentos: {'id': 7, 'nome': 'Turma 7A'}));
+        await tester.pumpWidget(_app(const TurmaAlunosScreen(),
+            argumentos: {'id': 7, 'nome': 'Turma 7A'}));
         await tester.pumpAndSettle();
-
-        await abrirMenuExcluir(tester);
-        expect(find.textContaining('As notas e o histórico de turmas deste aluno também serão excluídos'),
-            findsOneWidget);
-        await tester.tap(find.text('Cancelar'));
-        await tester.pumpAndSettle();
+        expect(find.text('Ana Souza'), findsOneWidget);
+        expect(find.text('Adicionar alunos'), findsNothing);
+        expect(
+            find.descendant(
+                of: find.byType(ListTile),
+                matching: find.byType(PopupMenuButton<String>)),
+            findsNothing);
         expect(api.exclusoes, isEmpty);
-
-        await abrirMenuExcluir(tester);
-        await _tocarEExcluir(tester);
-        expect(api.exclusoes, ['DELETE /api/professor/alunos/3']);
       });
     });
   });

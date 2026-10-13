@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // Botao padrao usado em quase todas as telas
 class CustomButton extends StatelessWidget {
   final String texto;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool carregando;
 
   const CustomButton({

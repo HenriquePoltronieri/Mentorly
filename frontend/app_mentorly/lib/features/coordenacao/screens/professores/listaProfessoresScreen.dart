@@ -1,8 +1,12 @@
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/utils/mensagensConvite.dart';
 import '../../../../app/routes.dart';
 import '../../models/professorModel.dart';
 import '../../services/professoresService.dart';
+import '../../../../core/widgets/convite_dialog.dart';
+import '../../../../core/services/apiService.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 
 // tela que lista os professores cadastrados pela coordenacao
 // IMPORTANTE PRO BACKEND:
@@ -21,7 +25,9 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
 
   bool _carregando = true;
   String? _mensagemErro;
+  String _busca = '';
   List<dynamic> _professores = [];
+  final Set<int> _enviando = {};
 
   @override
   void initState() {
@@ -37,12 +43,16 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
 
     try {
       final professores = await _professoresService.listarProfessores();
+      if (!mounted) return;
       setState(() {
         _professores = professores;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _mensagemErro = 'Não foi possível conectar ao servidor';
+        _mensagemErro = e is ApiException
+            ? e.mensagem
+            : 'Não foi possível conectar ao servidor';
       });
     } finally {
       if (mounted) {
@@ -54,7 +64,8 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
   }
 
   Future<void> _abrirCadastro() async {
-    final resultado = await Navigator.pushNamed(context, AppRoutes.cadastroProfessor);
+    final resultado =
+        await Navigator.pushNamed(context, AppRoutes.cadastroProfessor);
     // se voltou true, quer dizer que cadastrou um professor novo, entao recarrega a lista
     if (resultado == true) {
       _buscarProfessores();
@@ -62,40 +73,72 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
   }
 
   Future<void> _editarProfessor(Map<String, dynamic> professor) async {
-    final nome = TextEditingController(text: professor['nome']?.toString() ?? '');
-    final email = TextEditingController(text: professor['email']?.toString() ?? '');
-    final disciplina = TextEditingController(text: professor['disciplina']?.toString() ?? '');
+    final nome =
+        TextEditingController(text: professor['nome']?.toString() ?? '');
+    final email =
+        TextEditingController(text: professor['email']?.toString() ?? '');
+    final disciplina =
+        TextEditingController(text: professor['disciplina']?.toString() ?? '');
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Editar professor'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nome, decoration: const InputDecoration(labelText: 'Nome')),
-          TextField(controller: email, decoration: const InputDecoration(labelText: 'E-mail')),
-          TextField(controller: disciplina, decoration: const InputDecoration(labelText: 'Disciplina')),
-        ]),
+        content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: nome,
+              decoration: const InputDecoration(labelText: 'Nome')),
+          const SizedBox(height: 16),
+          TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'E-mail')),
+          const SizedBox(height: 16),
+          TextField(
+              controller: disciplina,
+              decoration: const InputDecoration(labelText: 'Disciplina')),
+        ])),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Salvar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Salvar')),
         ],
       ),
     );
-    if (confirmar != true) return;
+    if (confirmar != true) {
+      nome.dispose();
+      email.dispose();
+      disciplina.dispose();
+      return;
+    }
     try {
       final resposta = await _professoresService.editarProfessor(
         professorId: professor['id'] as int,
-        nome: nome.text.trim(), email: email.text.trim(), disciplina: disciplina.text.trim(),
+        nome: nome.text.trim(),
+        email: email.text.trim(),
+        disciplina: disciplina.text.trim(),
       );
       // Trocar o e-mail de quem ainda nao abriu o convite gera um convite novo.
       final aviso = MensagensConvite.edicao(resposta);
-      if (aviso != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(aviso)));
+      if (resposta['conviteLink'] != null && mounted) {
+        await mostrarConvite(context, resposta);
+      } else if (aviso != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(aviso)));
       }
       await _buscarProfessores();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível editar: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Não foi possível editar: $e')));
+      }
     } finally {
-      nome.dispose(); email.dispose(); disciplina.dispose();
+      nome.dispose();
+      email.dispose();
+      disciplina.dispose();
     }
   }
 
@@ -110,8 +153,12 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
             ? 'Ele voltará a acessar o sistema com os vínculos já existentes.'
             : 'Ele não poderá acessar o sistema. Atividades, notas e vínculos existentes serão preservados.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(reativar ? 'Reativar' : 'Desativar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(reativar ? 'Reativar' : 'Desativar')),
         ],
       ),
     );
@@ -124,22 +171,51 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
       }
       await _buscarProfessores();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível alterar o status: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Não foi possível alterar o status: $e')));
+      }
     }
   }
 
-  Future<void> _reenviarConvite(Map<String, dynamic> professor) async {
+  Future<void> _reenviarConvite(Map<String, dynamic> professor,
+      {bool soLink = false}) async {
+    final id = professor['id'] as int;
+    if (_enviando.contains(id)) return;
+    if (soLink) {
+      final confirmar = await showDialog<bool>(
+          context: context,
+          builder: (contexto) => AlertDialog(
+                title: const Text('Gerar novo link do convite?'),
+                content: const Text(
+                    'O link anterior deixará de funcionar. Compartilhe o novo link com o professor.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(contexto, false),
+                      child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(contexto, true),
+                      child: const Text('Gerar link'))
+                ],
+              ));
+      if (confirmar != true || !mounted) return;
+    }
+    setState(() => _enviando.add(id));
     try {
-      final resposta = await _professoresService.reenviarConvite(professor['id'] as int);
+      final resposta = soLink
+          ? await _professoresService.gerarLinkConvite(id)
+          : await _professoresService.reenviarConvite(id);
       if (!mounted) return;
-      final token = resposta['conviteToken'] as String?;
-      final mensagem = token == null
-          ? MensagensConvite.reenvio(resposta)
-          : 'Convite renovado. Ambiente de desenvolvimento: token $token';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+      await mostrarConvite(context, resposta);
+      if (!mounted) return;
       await _buscarProfessores();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível reenviar: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Não foi possível reenviar: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _enviando.remove(id));
     }
   }
 
@@ -149,8 +225,14 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Turmas de ${professor['nome']}'),
-        content: Text(turmas.isEmpty ? 'Nenhuma turma vinculada.' : turmas.map((t) => t['nome']).join('\n')),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar'))],
+        content: Text(turmas.isEmpty
+            ? 'Nenhuma turma vinculada.'
+            : turmas.map((t) => t['nome']).join('\n')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'))
+        ],
       ),
     );
   }
@@ -158,21 +240,38 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Professores')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _abrirCadastro,
-        child: const Icon(Icons.add),
-      ),
+      appBar: const BarraMentorly(
+          professor: false, aba: 'professores', titulo: 'Professores'),
       body: RefreshIndicator(
         onRefresh: _buscarProfessores,
-        child: _construirCorpo(),
+        child: ConteudoPagina(
+            child: Column(children: [
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                        onPressed: _abrirCadastro,
+                        icon: const Icon(Icons.add),
+                        label: const Text('+ Novo professor')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        decoration: const InputDecoration(
+                            labelText: 'Buscar por nome',
+                            prefixIcon: Icon(Icons.search)),
+                        onChanged: (v) =>
+                            setState(() => _busca = v.trim().toLowerCase())),
+                  ])),
+          Expanded(child: _construirCorpo()),
+        ])),
       ),
     );
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
@@ -187,6 +286,10 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
               style: const TextStyle(color: Colors.red),
             ),
           ),
+          Center(
+              child: TextButton(
+                  onPressed: _buscarProfessores,
+                  child: const Text('Tentar novamente'))),
         ],
       );
     }
@@ -198,35 +301,70 @@ class _ListaProfessoresScreenState extends State<ListaProfessoresScreen> {
           Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
           const Center(child: Text('Nenhum professor cadastrado ainda')),
+          Center(
+              child: FilledButton(
+                  onPressed: _abrirCadastro,
+                  child: const Text('Cadastrar professor'))),
         ],
       );
     }
 
+    final filtrados = _professores
+        .where((p) => p['nome'].toString().toLowerCase().contains(_busca))
+        .toList();
+    if (filtrados.isEmpty) {
+      return const Center(child: Text('Nenhum professor encontrado.'));
+    }
     return ListView.builder(
-      itemCount: _professores.length,
+      itemCount: filtrados.length,
       itemBuilder: (context, index) {
-        final professor = Map<String, dynamic>.from(_professores[index] as Map);
+        final professor = Map<String, dynamic>.from(filtrados[index] as Map);
         final modelo = ProfessorModel.fromJson(professor);
         return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.person)),
+          leading: const Icon(Icons.person_outline),
           title: Text(modelo.nome),
-          subtitle: Text('${modelo.email}\n${modelo.disciplina ?? 'Sem disciplina'} · ${modelo.totalTurmas} turma(s)'),
-          isThreeLine: true,
+          subtitle:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+                '${modelo.email}\n${modelo.disciplina ?? 'Sem disciplina'} · ${modelo.totalTurmas} turma(s)'),
+            const SizedBox(height: 8),
+            Text(modelo.rotuloStatus,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (modelo.status == ProfessorModel.convitePendente)
+              TextButton(
+                  onPressed: _enviando.contains(modelo.id)
+                      ? null
+                      : () => _reenviarConvite(professor),
+                  child: Text(_enviando.contains(modelo.id)
+                      ? 'Enviando convite…'
+                      : 'Reenviar convite')),
+          ]),
           trailing: PopupMenuButton<String>(
             onSelected: (acao) {
               if (acao == 'editar') _editarProfessor(professor);
-              if (acao == 'turmas') Navigator.pushNamed(context, AppRoutes.listaTurmasProfessor);
+              if (acao == 'turmas') {
+                Navigator.pushNamed(context, AppRoutes.listaTurmasProfessor);
+              }
               if (acao == 'ver_turmas') _verTurmas(professor);
               if (acao == 'convite') _reenviarConvite(professor);
+              if (acao == 'link') _reenviarConvite(professor, soLink: true);
               if (acao == 'status') _confirmarStatus(professor);
             },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'editar', child: Text('Editar')),
-              const PopupMenuItem(value: 'ver_turmas', child: Text('Ver turmas')),
-              const PopupMenuItem(value: 'turmas', child: Text('Gerenciar turmas')),
+              const PopupMenuItem(
+                  value: 'ver_turmas', child: Text('Ver turmas')),
+              const PopupMenuItem(
+                  value: 'turmas', child: Text('Gerenciar turmas')),
               if (modelo.status == ProfessorModel.convitePendente)
-                const PopupMenuItem(value: 'convite', child: Text('Reenviar convite')),
-              PopupMenuItem(value: 'status', child: Text(modelo.habilitado ? 'Desativar' : 'Reativar')),
+                const PopupMenuItem(
+                    value: 'convite', child: Text('Reenviar convite')),
+              if (modelo.status == ProfessorModel.convitePendente)
+                const PopupMenuItem(
+                    value: 'link', child: Text('Copiar link do convite')),
+              PopupMenuItem(
+                  value: 'status',
+                  child: Text(modelo.habilitado ? 'Desativar' : 'Reativar')),
             ],
           ),
           onTap: () => _verTurmas(professor),

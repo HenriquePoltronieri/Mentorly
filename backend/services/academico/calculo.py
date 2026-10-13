@@ -44,9 +44,10 @@ def resumo_pesos(criterios):
     return round(soma, 2), valido
 
 
-def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
+def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None):
     """Criterio sem atividade ou com nota pendente permanece incompleto."""
-    atividades = Atividade.find_por_criterio(turma_id, etapa_id, criterio["id"])
+    atividades = (dados["atividades"].get((etapa_id, criterio["id"]), []) if dados is not None
+                  else Atividade.find_por_criterio(turma_id, etapa_id, criterio["id"]))
 
     resultado = {
         "criterio_id": criterio["id"],
@@ -67,7 +68,7 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
         return resultado
 
     ids = [a["id"] for a in atividades]
-    valores = Nota.valores_por_atividade(aluno_id, ids)
+    valores = dados["notas"].get(aluno_id, {}) if dados is not None else Nota.valores_por_atividade(aluno_id, ids)
 
     avaliadas = [a for a in atividades if a["id"] in valores]
     resultado["atividades_avaliadas"] = len(avaliadas)
@@ -98,19 +99,20 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio):
     return resultado
 
 
-def calcular_desempenho_etapa(aluno_id, turma_id, etapa):
+def calcular_desempenho_etapa(aluno_id, turma_id, etapa, dados=None):
     """Desempenho completo de um aluno em uma etapa.
 
     'etapa' e o dict de Etapa.to_dict (precisa de id, nota_minima,
     nota_maxima). Quem valida que o aluno pertence a escola/turma e o
     chamador (aluno_acessivel) - esta funcao so calcula.
     """
-    criterios = Criterio.find_all_by_etapa(etapa["id"], etapa["coordenacao_id"])
+    criterios = (dados["criterios"].get(etapa["id"], []) if dados is not None
+                 else Criterio.find_all_by_etapa(etapa["id"], etapa["coordenacao_id"]))
 
     soma_pesos, pesos_validos = resumo_pesos(criterios)
 
     criterios_calc = [
-        _calcular_criterio(aluno_id, turma_id, etapa["id"], c)
+        _calcular_criterio(aluno_id, turma_id, etapa["id"], c, dados)
         for c in criterios
     ]
 
@@ -190,15 +192,15 @@ def _exigir_ano(ano_letivo):
         raise ValueError("ano_letivo e obrigatorio para localizar etapas")
 
 
-def calcular_todas_etapas(aluno_id, turma_id, coordenacao_id, ano_letivo):
+def calcular_todas_etapas(aluno_id, turma_id, coordenacao_id, ano_letivo, dados=None):
     """Desempenho do aluno em cada etapa do ano letivo da turma, em ordem."""
     _exigir_ano(ano_letivo)
-    etapas = Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
+    etapas = dados["etapas"] if dados is not None else Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
     resultado = []
     for linha in etapas:
         etapa = Etapa.to_dict(linha)
         etapa["coordenacao_id"] = coordenacao_id
-        resultado.append(calcular_desempenho_etapa(aluno_id, turma_id, etapa))
+        resultado.append(calcular_desempenho_etapa(aluno_id, turma_id, etapa, dados))
     resultado.sort(key=lambda e: e["ordem"] or 0)
     return resultado
 

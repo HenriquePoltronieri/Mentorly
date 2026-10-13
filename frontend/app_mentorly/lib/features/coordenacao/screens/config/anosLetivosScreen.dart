@@ -1,4 +1,6 @@
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../app/routes.dart';
 import '../../../../core/services/apiService.dart';
 import '../../controllers/configAnoLetivoController.dart';
@@ -35,12 +37,14 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
   }
 
   Future<void> _buscarAnos() async {
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
     });
     try {
       final anos = await _service.listarAnos();
+      if (!mounted) return;
       if (!mounted) return;
       setState(() => _anos = anos);
     } on ApiException catch (e) {
@@ -62,7 +66,8 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
   }
 
   void _avisar(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
   Future<bool> _confirmar({
@@ -92,7 +97,8 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
 
   // Roda uma operacao da lista com protecao contra duplo toque e mostra o
   // erro que o backend devolver (409, 404...).
-  Future<void> _executar(AnoLetivoModel ano, Future<void> Function() acao) async {
+  Future<void> _executar(
+      AnoLetivoModel ano, Future<void> Function() acao) async {
     setState(() => _alterandoId = ano.id);
     try {
       await acao();
@@ -141,7 +147,8 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
     if (!confirmou) return;
     await _executar(
       ano,
-      () => _service.alterarStatus(id: ano.id, status: AnoLetivoModel.encerrado),
+      () =>
+          _service.alterarStatus(id: ano.id, status: AnoLetivoModel.encerrado),
     );
   }
 
@@ -158,7 +165,8 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
   Future<void> _excluir(AnoLetivoModel ano) async {
     final confirmou = await _confirmar(
       titulo: 'Excluir ano letivo',
-      texto: 'Excluir o ano letivo ${ano.ano}? Essa ação não pode ser desfeita.',
+      texto:
+          'Excluir o ano letivo ${ano.ano}? Essa ação não pode ser desfeita.',
       rotuloConfirmar: 'Excluir',
     );
     if (!confirmou) return;
@@ -204,32 +212,33 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Anos Letivos')),
+      appBar: const BarraMentorly(
+          professor: false, aba: 'ano', titulo: 'Anos Letivos'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _carregando ? null : _novoAno,
         icon: const Icon(Icons.add),
         label: const Text('Novo ano letivo'),
       ),
-      body: RefreshIndicator(onRefresh: _buscarAnos, child: _corpo()),
+      body: RefreshIndicator(
+          onRefresh: () {
+            ApiService().invalidarCache();
+            return _buscarAnos();
+          },
+          child: _corpo()),
     );
   }
 
   Widget _corpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarAnos);
     }
 
     if (_anos.isEmpty) {
@@ -237,7 +246,8 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
         padding: const EdgeInsets.all(32),
         children: [
           const SizedBox(height: 48),
-          Icon(Icons.calendar_month_outlined, size: 56, color: Colors.grey[400]),
+          Icon(Icons.calendar_month_outlined,
+              size: 56, color: Colors.grey[400]),
           const SizedBox(height: 16),
           const Text(
             'Nenhum ano letivo cadastrado.',
@@ -254,8 +264,9 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+    return ListView.separated(
+      separatorBuilder: (_, indice) => const Divider(height: 1),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       itemCount: _anos.length + 1,
       itemBuilder: (context, indice) {
         if (indice == 0) return const _Explicacao();
@@ -267,65 +278,61 @@ class _AnosLetivosScreenState extends State<AnosLetivosScreen> {
   Widget _cartaoDoAno(AnoLetivoModel ano) {
     final ocupado = _alterandoId == ano.id;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.calendar_today, size: 20)),
-        title: Text('Ano letivo ${ano.ano}'),
-        subtitle: Text(
-          '${ano.totalTurmas} turma(s) • ${ano.totalEtapas} etapa(s)',
-        ),
-        onTap: ano.estaEncerrado ? null : () => _configurar(ano),
-        trailing: ocupado
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _EtiquetaStatus(ano: ano),
-                  PopupMenuButton<String>(
-                    tooltip: 'Ações do ano ${ano.ano}',
-                    onSelected: (acao) {
-                      if (acao == 'configurar') _configurar(ano);
-                      if (acao == 'atual') _tornarAtual(ano);
-                      if (acao == 'encerrar') _encerrar(ano);
-                      if (acao == 'reabrir') _reabrir(ano);
-                      if (acao == 'excluir') _excluir(ano);
-                    },
-                    itemBuilder: (context) => [
-                      if (!ano.estaEncerrado)
-                        const PopupMenuItem(
-                          value: 'configurar',
-                          child: Text('Configurar etapas e critérios'),
-                        ),
-                      if (ano.estaEmPlanejamento)
-                        const PopupMenuItem(
-                          value: 'atual',
-                          child: Text('Tornar o ano atual'),
-                        ),
-                      if (ano.ehAtual)
-                        const PopupMenuItem(
-                          value: 'encerrar',
-                          child: Text('Encerrar ano'),
-                        ),
-                      if (ano.estaEncerrado)
-                        const PopupMenuItem(
-                          value: 'reabrir',
-                          child: Text('Reabrir em planejamento'),
-                        ),
-                      if (!ano.temDados)
-                        const PopupMenuItem(
-                          value: 'excluir',
-                          child: Text('Excluir'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+    return ListTile(
+      leading: const Icon(Icons.calendar_today_outlined),
+      title: Text('Ano letivo ${ano.ano}'),
+      subtitle: Text(
+        '${ano.rotuloStatus}\n${ano.totalTurmas} turma(s) • ${ano.totalEtapas} etapa(s)',
       ),
+      onTap: ano.estaEncerrado ? null : () => _configurar(ano),
+      trailing: ocupado
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PopupMenuButton<String>(
+                  tooltip: 'Ações do ano ${ano.ano}',
+                  onSelected: (acao) {
+                    if (acao == 'configurar') _configurar(ano);
+                    if (acao == 'atual') _tornarAtual(ano);
+                    if (acao == 'encerrar') _encerrar(ano);
+                    if (acao == 'reabrir') _reabrir(ano);
+                    if (acao == 'excluir') _excluir(ano);
+                  },
+                  itemBuilder: (context) => [
+                    if (!ano.estaEncerrado)
+                      const PopupMenuItem(
+                        value: 'configurar',
+                        child: Text('Configurar etapas e critérios'),
+                      ),
+                    if (ano.estaEmPlanejamento)
+                      const PopupMenuItem(
+                        value: 'atual',
+                        child: Text('Tornar o ano atual'),
+                      ),
+                    if (ano.ehAtual)
+                      const PopupMenuItem(
+                        value: 'encerrar',
+                        child: Text('Encerrar ano'),
+                      ),
+                    if (ano.estaEncerrado)
+                      const PopupMenuItem(
+                        value: 'reabrir',
+                        child: Text('Reabrir em planejamento'),
+                      ),
+                    if (!ano.temDados)
+                      const PopupMenuItem(
+                        value: 'excluir',
+                        child: Text('Excluir'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 }
@@ -342,35 +349,6 @@ class _Explicacao extends StatelessWidget {
         'Anos em planejamento já aceitam turmas e etapas. Anos encerrados '
         'mantêm os dados, mas não recebem turmas nem etapas novas.',
         style: TextStyle(color: Colors.grey[700], fontSize: 13),
-      ),
-    );
-  }
-}
-
-class _EtiquetaStatus extends StatelessWidget {
-  final AnoLetivoModel ano;
-
-  const _EtiquetaStatus({required this.ano});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color cor;
-    if (ano.ehAtual) {
-      cor = Colors.green;
-    } else if (ano.estaEncerrado) {
-      cor = Colors.grey;
-    } else {
-      cor = Colors.orange;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: cor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        ano.rotuloStatus,
-        style: TextStyle(color: cor, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -441,7 +419,8 @@ class _NovoAnoDialogState extends State<_NovoAnoDialog> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               value: _marcarAtual,
-              onChanged: (valor) => setState(() => _marcarAtual = valor ?? false),
+              onChanged: (valor) =>
+                  setState(() => _marcarAtual = valor ?? false),
               title: const Text('Marcar como ano atual'),
               controlAffinity: ListTileControlAffinity.leading,
             ),

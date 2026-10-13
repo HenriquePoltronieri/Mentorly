@@ -32,6 +32,7 @@ JANELA_PADRAO = 15 * 60  # 15 minutos
 # escopo -> (maximo de requisicoes, janela em segundos). Constantes simples:
 # sem variavel de ambiente, para os padroes funcionarem em dev e na demo.
 LIMITES = {
+    "convite_consultar": (30, JANELA_PADRAO),
     # Login: IP + e-mail digitado.
     "login": (10, JANELA_PADRAO),
     # Confirmar codigo: o codigo tem so 6 digitos, limite mais apertado.

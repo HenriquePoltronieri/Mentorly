@@ -9,7 +9,9 @@ from services.activity.validacao import (
     validar_etapa_e_criterio,
     validar_nota_maxima,
 )
-from erros import RecursoNaoEncontrado
+from erros import RecursoNaoEncontrado, AcessoNegado
+from models.criterio_model import Criterio
+from models.etapa_model import Etapa
 
 
 def parse_data(valor):
@@ -56,7 +58,7 @@ class CreateActivityService:
         # uma escola (FK composta), entao isto ja barra turma de outra
         # coordenacao tambem.
         if not ProfessorTurma.professor_leciona_na_turma(professor_id, turma_id):
-            raise RecursoNaoEncontrado("Turma nao encontrada")
+            raise AcessoNegado("Você só pode criar atividades nas suas turmas vinculadas.")
 
         # A etapa precisa ser do mesmo ano letivo da turma.
         turma = Turma.find_by_id(turma_id, coordenacao_id)
@@ -66,6 +68,17 @@ class CreateActivityService:
 
         # Etapa e criterio precisam ser da escola do token. Nunca confiar no
         # id que chegou do cliente.
+        # O formulério essencial usa o critério de maior peso já configurado.
+        # Nenhum critério novo ? criado e a validação da escola continua obrigatória.
+        if criterio_id is None and etapa_id is not None:
+            etapa = Etapa.find_by_id(entrada.inteiro(etapa_id, "Etapa"), coordenacao_id)
+            if not etapa:
+                raise RecursoNaoEncontrado("Etapa nao encontrada")
+            criterios = Criterio.find_all_by_etapa(etapa["id"], coordenacao_id)
+            ativos = [c for c in criterios if float(c.get("peso") or 0) > 0]
+            if not ativos:
+                raise ValueError("Peça ? Coordenação para configurar os critérios desta etapa.")
+            criterio_id = sorted(ativos, key=lambda c: (-float(c["peso"]), c["id"]))[0]["id"]
         etapa_id, criterio_id = validar_etapa_e_criterio(
             coordenacao_id, etapa_id, criterio_id, ano_turma=turma["ano_letivo"]
         )

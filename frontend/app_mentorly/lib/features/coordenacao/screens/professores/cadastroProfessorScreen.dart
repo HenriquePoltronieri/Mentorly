@@ -1,241 +1,148 @@
 import 'package:flutter/material.dart';
-import '../../../../core/utils/mensagensConvite.dart';
-import 'package:flutter/services.dart';
+import '../../../../core/widgets/barra_mentorly.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
+import '../../../../core/widgets/convite_dialog.dart';
 import '../../../../core/services/apiService.dart';
 import '../../services/professoresService.dart';
+import '../../../../core/utils/mensagensConvite.dart';
 
-// Cadastro de professor pela Coordenacao.
-//
-// O professor nao cria a propria conta: a Coordenacao o cadastra e ele
-// recebe por email um convite para definir a senha.
-//
-// POST /api/coordenacao/professores
-//   body -> { "nome", "email", "disciplina" }
-//   201  -> { "id", "nome", "email", "disciplina", "conviteEnviado", ... }
-//
-// Quando o backend esta sem SMTP configurado (modo dev), a resposta traz
-// tambem "conviteToken" - a tela mostra o link para que o primeiro acesso
-// do professor possa ser feito localmente.
 class CadastroProfessorScreen extends StatefulWidget {
   const CadastroProfessorScreen({super.key});
-
   @override
-  State<CadastroProfessorScreen> createState() => _CadastroProfessorScreenState();
+  State<CadastroProfessorScreen> createState() =>
+      _CadastroProfessorScreenState();
 }
 
 class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nomeController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _disciplinaController = TextEditingController();
-  final ProfessoresService _professoresService = ProfessoresService();
+  final _form = GlobalKey<FormState>();
+  final _nome = TextEditingController(), _email = TextEditingController();
+  final _selecionadas = <int>{};
+  List<dynamic> _turmas = [];
+  bool _salvando = false;
+  String? _erro, _erroTurmas;
+  @override
+  void initState() {
+    super.initState();
+    _carregarTurmas();
+  }
 
-  bool _carregando = false;
-  String? _mensagemErro;
-  String? _conviteToken;
-  bool _conviteEnviado = false;
-
-  Future<void> _cadastrarProfessor() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _carregando = true;
-      _mensagemErro = null;
-    });
-
+  Future<void> _carregarTurmas() async {
     try {
-      final professor = await _professoresService.cadastrarProfessor(
-        nome: _nomeController.text.trim(),
-        email: _emailController.text.trim(),
-        disciplina: _disciplinaController.text.trim(),
-      );
-
-      if (!mounted) return;
-
-      final token = professor['conviteToken'] as String?;
-      if (token != null) {
-        // Modo de desenvolvimento (DEV_EXPOSE_AUTH_CODES): o backend devolveu o
-        // token; mostra o link em vez de fechar a tela.
-        setState(() {
-          _conviteToken = token;
-          _conviteEnviado = professor['conviteEnviado'] == true;
-        });
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(MensagensConvite.cadastro(professor))),
-      );
-      Navigator.pop(context, true); // volta pra lista avisando que deu certo
-    } on ApiException catch (e) {
-      setState(() => _mensagemErro = e.mensagem);
-    } catch (e) {
-      setState(() {
-        _mensagemErro = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
+      final turmas = await ApiService().get('/classes');
       if (mounted) {
         setState(() {
-          _carregando = false;
+          _turmas = turmas as List;
+          _erroTurmas = null;
         });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _erroTurmas = 'Não foi possível carregar as turmas.');
       }
     }
   }
 
-  // Mostrado so quando o backend esta em modo dev (DEV_EXPOSE_AUTH_CODES).
-  Widget _blocoConvite() {
-    // Uri.base.origin so existe em http/https (Flutter Web); em outras
-    // plataformas cai no endereco padrao do app em desenvolvimento.
-    final base = Uri.base;
-    final origem = (base.scheme == 'http' || base.scheme == 'https')
-        ? base.origin
-        : 'http://localhost:3000';
-    final link = '$origem/#/definir-senha?token=${_conviteToken ?? ''}';
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.amber.withValues(alpha: 0.10),
-          border: Border.all(color: Colors.amber.shade300),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Professor cadastrado',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _conviteEnviado
-                  ? 'O convite foi enviado por e-mail. Em desenvolvimento, '
-                      'este link tambem serve para o primeiro acesso:'
-                  : 'O e-mail com o convite não pôde ser enviado. Passe este '
-                      'link para o professor fazer o primeiro acesso:',
-              style: const TextStyle(fontSize: 12),
-            ),
-            const SizedBox(height: 10),
-            SelectableText(link, style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: link));
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Link copiado')),
-                    );
-                  },
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Copiar link'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Concluir'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _salvar() async {
+    if (_salvando || !_form.currentState!.validate()) return;
+    setState(() {
+      _salvando = true;
+      _erro = null;
+    });
+    try {
+      final resultado = await ProfessoresService().cadastrarProfessor(
+          nome: _nome.text.trim(),
+          email: _email.text.trim(),
+          turmaIds: _selecionadas.toList());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(MensagensConvite.cadastro(resultado))));
+      if (resultado['conviteEnviado'] != true &&
+          resultado['conviteLink'] != null) {
+        await mostrarConvite(context, resultado);
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _erro = e is ApiException
+            ? e.mensagem
+            : 'Não foi possível cadastrar. Tente novamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
   }
 
   @override
   void dispose() {
-    _nomeController.dispose();
-    _emailController.dispose();
-    _disciplinaController.dispose();
+    _nome.dispose();
+    _email.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cadastrar Professor')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _nomeController,
-                decoration: const InputDecoration(
-                  labelText: 'Nome completo',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (valor) {
-                  if (valor == null || valor.isEmpty) {
-                    return 'Digite o nome';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (valor) {
-                  if (valor == null || valor.isEmpty) {
-                    return 'Digite o email';
-                  }
-                  if (!valor.contains('@')) {
-                    return 'Email inválido';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _disciplinaController,
-                decoration: const InputDecoration(
-                  labelText: 'Disciplina',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (valor) {
-                  if (valor == null || valor.isEmpty) {
-                    return 'Digite a disciplina';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              if (_mensagemErro != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _mensagemErro!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              ElevatedButton(
-                onPressed: _carregando || _conviteToken != null
-                    ? null
-                    : _cadastrarProfessor,
-                child: _carregando
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Cadastrar'),
-              ),
-              if (_conviteToken != null) _blocoConvite(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Scaffold(
+      appBar: const BarraMentorly(
+          professor: false, aba: 'professores', titulo: 'Novo professor'),
+      bottomNavigationBar: SafeArea(
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton(
+                  onPressed: _salvando ? null : _salvar,
+                  child: Text(_salvando
+                      ? 'Cadastrando…'
+                      : 'Cadastrar e enviar convite')))),
+      body: ConteudoPagina(
+          largura: 640,
+          child: Form(
+              key: _form,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: ListView(padding: const EdgeInsets.all(24), children: [
+                TextFormField(
+                    controller: _nome,
+                    textInputAction: TextInputAction.next,
+                    decoration:
+                        const InputDecoration(labelText: 'Nome completo'),
+                    validator: (v) => (v ?? '').trim().isEmpty
+                        ? 'Informe o nome completo.'
+                        : null),
+                const SizedBox(height: 16),
+                TextFormField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'E-mail'),
+                    validator: (v) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                            .hasMatch((v ?? '').trim())
+                        ? null
+                        : 'Informe um e-mail válido.'),
+                const SizedBox(height: 24),
+                const Text('Turmas (opcional)'),
+                Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _turmas
+                        .map((t) => FilterChip(
+                            label: Text(t['nome'].toString()),
+                            selected: _selecionadas.contains(t['id']),
+                            onSelected: _salvando
+                                ? null
+                                : (v) => setState(() {
+                                      if (v) {
+                                        _selecionadas.add(t['id'] as int);
+                                      } else {
+                                        _selecionadas.remove(t['id']);
+                                      }
+                                    })))
+                        .toList()),
+                if (_erroTurmas != null) ...[
+                  Text(_erroTurmas!),
+                  TextButton(
+                      onPressed: _carregarTurmas,
+                      child: const Text('Tentar novamente'))
+                ],
+                if (_erro != null)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(_erro!,
+                          style: const TextStyle(color: Colors.red))),
+              ]))));
 }

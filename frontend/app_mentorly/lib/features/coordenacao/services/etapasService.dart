@@ -5,12 +5,13 @@ class EtapasService {
   final ApiService _api = ApiService();
 
   // GET {baseUrl}/api/config/etapas
-  Future<List<dynamic>> listarEtapas({int? anoLetivo}) async {
+  Future<List<dynamic>> listarEtapas(
+      {int? anoLetivo, bool atualizar = false}) async {
     String endpoint = '/config/etapas';
     if (anoLetivo != null) {
       endpoint += '?ano_letivo=$anoLetivo';
     }
-    final resposta = await _api.get(endpoint);
+    final resposta = await _api.get(endpoint, atualizar: atualizar);
     return resposta as List;
   }
 
@@ -67,7 +68,7 @@ class EtapasService {
 
   // POST {baseUrl}/api/config/etapas/{etapaId}/fechar
   // Congela o resultado da etapa: professor deixa de poder lançar nota ou
-  // criar/editar atividade nela até a coordenação reabrir.
+  // criar/editar atividade nela até um professor reabrir.
   Future<Map<String, dynamic>> fecharEtapa(int etapaId) async {
     final resposta = await _api.post('/config/etapas/$etapaId/fechar', {});
     return resposta as Map<String, dynamic>;

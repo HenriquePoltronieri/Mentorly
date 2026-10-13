@@ -1,5 +1,6 @@
 from models.atividade_model import Atividade
 from models.etapa_model import Etapa
+from models.criterio_model import Criterio
 from models.nota_model import Nota
 from models.professor_turma_model import ProfessorTurma
 from models.turma_model import Turma
@@ -94,6 +95,12 @@ class UpdateActivityService:
         # Etapa e criterio: so mexe quando vieram na requisicao, mas quando
         # vieram passam pela validacao completa de escola e de ano.
         if etapa_id is not None or criterio_id is not None:
+            if criterio_id is None and etapa_id is not None and etapa_id != atual.get("etapa_id"):
+                criterios = Criterio.find_all_by_etapa(entrada.inteiro(etapa_id, "Etapa"), coordenacao_id)
+                ativos = [c for c in criterios if float(c.get("peso") or 0) > 0]
+                if not ativos:
+                    raise ValueError("Peça à Coordenação para configurar os critérios desta etapa.")
+                criterio_id = sorted(ativos, key=lambda c: (-float(c["peso"]), c["id"]))[0]["id"]
             etapa_id, criterio_id = validar_etapa_e_criterio(
                 coordenacao_id,
                 etapa_id if etapa_id is not None else atual.get("etapa_id"),

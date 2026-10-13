@@ -1,6 +1,9 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify, request
 
-from auth.decorators import professor_required, token_na_url_so_neste_download
+from auth.decorators import professor_required, token_na_url_so_neste_download, usuario_atual_id, coordenacao_atual
+from services.professor.estatisticas_turma import EstatisticasTurmaService
+from erros import RecursoNaoEncontrado
+from services.entrada import inteiro
 from controllers.professor_controller import ProfessorController
 
 professor_blueprint = Blueprint(
@@ -34,20 +37,20 @@ def listar_alunos(turma_id):
 @professor_blueprint.post("/turmas/<int:turma_id>/alunos")
 @professor_required
 def cadastrar_aluno(turma_id):
-    return professor_controller.cadastrar_aluno(turma_id)
+    return jsonify({"error": "Somente a Coordenação gerencia os alunos da turma."}), 403
 
 
 @professor_blueprint.get("/turmas/<int:turma_id>/alunos/modelo-planilha")
 @professor_required
 @token_na_url_so_neste_download
 def modelo_planilha_alunos(turma_id):
-    return professor_controller.modelo_planilha_alunos(turma_id)
+    return jsonify({"error": "Somente a Coordenação gerencia os alunos da turma."}), 403
 
 
 @professor_blueprint.post("/turmas/<int:turma_id>/alunos/importar")
 @professor_required
 def importar_alunos(turma_id):
-    return professor_controller.importar_alunos(turma_id)
+    return jsonify({"error": "Somente a Coordenação gerencia os alunos da turma."}), 403
 
 
 @professor_blueprint.get("/dashboard")
@@ -65,13 +68,13 @@ def estatisticas_aluno(aluno_id):
 @professor_blueprint.put("/alunos/<int:aluno_id>")
 @professor_required
 def atualizar_aluno(aluno_id):
-    return professor_controller.atualizar_aluno(aluno_id)
+    return jsonify({"error": "Somente a Coordenação gerencia os alunos da turma."}), 403
 
 
 @professor_blueprint.delete("/alunos/<int:aluno_id>")
 @professor_required
 def excluir_aluno(aluno_id):
-    return professor_controller.excluir_aluno(aluno_id)
+    return jsonify({"error": "Somente a Coordenação gerencia os alunos da turma."}), 403
 
 
 @professor_blueprint.get("/turmas/<int:turma_id>/boletim")
@@ -144,3 +147,41 @@ def modelo_planilha_notas(atividade_id):
 @professor_required
 def importar_notas(atividade_id):
     return professor_controller.importar_notas(atividade_id)
+
+
+def _estatisticas(turma_id, aluno_id=None):
+    try:
+        etapa = request.args.get("etapa_id")
+        etapa = inteiro(etapa, "Etapa") if etapa is not None else None
+        return jsonify(EstatisticasTurmaService().execute(usuario_atual_id(), coordenacao_atual(), turma_id, etapa, aluno_id))
+    except RecursoNaoEncontrado as erro:
+        return jsonify({"error": str(erro)}), 404
+    except ValueError as erro:
+        return jsonify({"error": str(erro)}), 400
+
+
+@professor_blueprint.get("/turmas/<int:turma_id>/estatisticas")
+@professor_required
+def estatisticas_turma(turma_id):
+    return _estatisticas(turma_id)
+
+
+@professor_blueprint.get("/turmas/<int:turma_id>/alunos/<int:aluno_id>/estatisticas")
+@professor_required
+def estatisticas_aluno_turma(turma_id, aluno_id):
+    return _estatisticas(turma_id, aluno_id)
+
+
+@professor_blueprint.post("/ia/chat")
+@professor_required
+def chat_professor():
+    from services.ia.chat_professor import ChatProfessorService
+    from services.ia.client import AIError
+    try:
+        return jsonify(ChatProfessorService().execute(usuario_atual_id(), coordenacao_atual(), request.get_json(silent=True) or {}))
+    except AIError:
+        return jsonify({"error": "Não foi possível consultar a IA agora. Tente novamente em instantes."}), 503
+    except RecursoNaoEncontrado as erro:
+        return jsonify({"error": str(erro)}), 404
+    except ValueError as erro:
+        return jsonify({"error": str(erro)}), 400

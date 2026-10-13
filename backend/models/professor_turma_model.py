@@ -12,6 +12,15 @@ class ProfessorTurma:
     TABELA = "professor_turma"
 
     @staticmethod
+    def vinculos_da_escola(coordenacao_id):
+        return query_all(
+            "SELECT pt.professor_id, t.id, t.nome, t.descricao, t.disciplina, t.turno, "
+            "t.ano_letivo, t.created_at, t.updated_at FROM professor_turma pt "
+            "JOIN turma t ON t.id=pt.turma_id WHERE pt.coordenacao_id=%s ORDER BY t.nome",
+            (coordenacao_id,),
+        )
+
+    @staticmethod
     def turmas_do_professor(professor_id):
         return query_all(
             "SELECT t.id, t.coordenacao_id, t.nome, t.descricao, t.disciplina, "

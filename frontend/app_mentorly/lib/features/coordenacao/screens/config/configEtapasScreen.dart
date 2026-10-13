@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/barra_mentorly.dart';
 import '../../../../app/routes.dart';
 import '../../controllers/configAnoLetivoController.dart';
 import 'passoAnoLetivo.dart';
+import '../../../../core/services/apiService.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 
 // Passo 1 de 3: quantidade de etapas do ano letivo.
 //
@@ -34,6 +37,10 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
   // A configuracao e padrao da escola: se ja existe, o fluxo abre como
   // edicao em vez de comecar do zero toda vez.
   Future<void> _carregarExistente() async {
+    setState(() {
+      _carregandoExistente = true;
+      _mensagemErro = null;
+    });
     try {
       // Entrando pelo menu, nao ha ano escolhido: configura o ano ATUAL da
       // escola. Vindo de Anos Letivos, o ano ja foi escolhido la.
@@ -46,7 +53,10 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
         setState(() => _quantidadeSelecionada = _controller.etapas.length);
       }
     } catch (_) {
-      // Sem configuracao anterior (ou servidor fora): segue com o padrao.
+      if (mounted) {
+        setState(() => _mensagemErro =
+            'Não foi possível carregar a configuração. Tente novamente.');
+      }
     } finally {
       if (mounted) setState(() => _carregandoExistente = false);
     }
@@ -63,9 +73,9 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
       if (!mounted) return;
       Navigator.pushNamed(context, AppRoutes.configNotasEtapa);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _mensagemErro =
-            'Não foi possível salvar. Verifique sua conexão com o servidor.';
+        _mensagemErro = e is ApiException ? e.mensagem : e.toString();
       });
     } finally {
       if (mounted) setState(() => _carregando = false);
@@ -148,123 +158,135 @@ class _ConfigEtapasScreenState extends State<ConfigEtapasScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _controller.anoLetivo == null
-              ? 'Ano letivo · Passo 1 de 3'
-              : 'Ano letivo ${_controller.anoLetivo} · Passo 1 de 3',
-        ),
-        // Sai do fluxo e volta ao painel. O AppBar ja da o botao de voltar
-        // automatico; este e so o rotulo do passo.
+      appBar: BarraMentorly(
+        professor: false,
+        aba: 'ano',
+        titulo: _controller.anoLetivo == null
+            ? 'Ano letivo · Passo 1 de 3'
+            : 'Ano letivo ${_controller.anoLetivo} · Passo 1 de 3',
       ),
       body: _carregandoExistente
-          ? const Center(child: CircularProgressIndicator())
-          : _controller.anoLetivo == null
-          ? _semAnoLetivo()
-          : Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const PassoAnoLetivo(passoAtual: 1),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Quantas etapas o ano letivo ${_controller.anoLetivo} tem?',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Essa configuração vale como padrão para toda a escola.',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ...[1, 2, 3, 4].map((quantidade) {
-                        return ChoiceChip(
-                          label: Text(
-                            '$quantidade Etapa${quantidade > 1 ? 's' : ''}',
-                          ),
-                          selected: quantidade == _quantidadeSelecionada,
-                          onSelected: (_) => setState(
-                            () => _quantidadeSelecionada = quantidade,
-                          ),
-                        );
-                      }),
-                      ActionChip(
-                        label: Text(
-                          _quantidadeSelecionada > 4
-                              ? '$_quantidadeSelecionada Etapas'
-                              : 'Personalizado',
-                        ),
-                        avatar: const Icon(Icons.edit, size: 16),
-                        onPressed: _escolherQuantidadePersonalizada,
-                      ),
-                    ],
-                  ),
-                  if (_controller.jaConfigurado) ...[
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Sua escola já tem ${_controller.etapas.length} '
-                              'etapa(s) configurada(s). Continuar edita o que '
-                              'já existe, sem duplicar.',
-                              style: const TextStyle(fontSize: 12),
+          ? const CarregamentoPagina()
+          : _mensagemErro != null
+              ? EstadoPagina(
+                  titulo: 'Não foi possível abrir a configuração',
+                  mensagem: _mensagemErro!,
+                  acao: 'Tentar novamente',
+                  onPressed: _carregarExistente)
+              : _controller.anoLetivo == null
+                  ? _semAnoLetivo()
+                  : ConteudoPagina(
+                      largura: 680,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: ListView(
+                          children: [
+                            const PassoAnoLetivo(passoAtual: 1),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Quantas etapas o ano letivo ${_controller.anoLetivo} tem?',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (_mensagemErro != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        _mensagemErro!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: _carregando
-                            ? null
-                            : () => Navigator.pop(context),
-                        child: const Text('Cancelar'),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: _carregando ? null : _salvarEContinuar,
-                        child: _carregando
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Salvar e continuar'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Essa configuração vale como padrão para toda a escola.',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ...[1, 2, 3, 4].map((quantidade) {
+                                  return ChoiceChip(
+                                    label: Text(
+                                      '$quantidade Etapa${quantidade > 1 ? 's' : ''}',
+                                    ),
+                                    selected:
+                                        quantidade == _quantidadeSelecionada,
+                                    onSelected: (_) => setState(
+                                      () => _quantidadeSelecionada = quantidade,
+                                    ),
+                                  );
+                                }),
+                                ActionChip(
+                                  label: Text(
+                                    _quantidadeSelecionada > 4
+                                        ? '$_quantidadeSelecionada Etapas'
+                                        : 'Personalizado',
+                                  ),
+                                  avatar: const Icon(Icons.edit, size: 16),
+                                  onPressed: _escolherQuantidadePersonalizada,
+                                ),
+                              ],
+                            ),
+                            if (_controller.jaConfigurado) ...[
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.info_outline, size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Sua escola já tem ${_controller.etapas.length} '
+                                        'etapa(s) configurada(s). Continuar edita o que '
+                                        'já existe, sem duplicar.',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (_mensagemErro != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Text(
+                                  _mensagemErro!,
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            const SizedBox(height: 24),
+                            if (_mensagemErro != null)
+                              TextButton(
+                                  onPressed: _carregarExistente,
+                                  child: const Text('Tentar novamente')),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                TextButton(
+                                  onPressed: _carregando
+                                      ? null
+                                      : () => Navigator.pop(context),
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  onPressed:
+                                      _carregando ? null : _salvarEContinuar,
+                                  child: _carregando
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Text('Salvar e continuar'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )),
     );
   }
 }

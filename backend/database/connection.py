@@ -8,6 +8,7 @@ insert, transacao) e escrevem SQL direto.
 import os
 
 import pymysql
+from flask import g, has_request_context
 from pymysql.cursors import DictCursor
 
 from config import DB_CONFIG
@@ -32,6 +33,9 @@ def get_connection(com_banco=True):
         "charset": "utf8mb4",
         "cursorclass": DictCursor,
         "autocommit": False,
+        "connect_timeout": 5,
+        "read_timeout": 10,
+        "write_timeout": 10,
     }
     if com_banco:
         parametros["database"] = DB_CONFIG["database"]
@@ -45,26 +49,49 @@ def get_connection(com_banco=True):
 # e concatenado na string de SQL.
 # ---------------------------------------------------------------------
 
+def _conexao_de_consulta():
+    if not has_request_context():
+        return get_connection()
+    if not getattr(g, "conexao_db", None):
+        g.conexao_db = get_connection()
+        # Leituras seguintes precisam enxergar os commits feitos pelos Models.
+        g.conexao_db.autocommit(True)
+    g.consultas_db = getattr(g, "consultas_db", 0) + 1
+    return g.conexao_db
+
+
+def _liberar_consulta(conexao):
+    if not has_request_context():
+        conexao.close()
+
+
+def encerrar_conexao_requisicao(_erro=None):
+    conexao = g.pop("conexao_db", None)
+    if conexao:
+        conexao.rollback()
+        conexao.close()
+
+
 def query_all(sql, params=None):
     """Roda um SELECT e devolve uma lista de dicts."""
-    conexao = get_connection()
+    conexao = _conexao_de_consulta()
     try:
         with conexao.cursor() as cursor:
             cursor.execute(sql, params or ())
             return cursor.fetchall()
     finally:
-        conexao.close()
+        _liberar_consulta(conexao)
 
 
 def query_one(sql, params=None):
     """Roda um SELECT e devolve o primeiro dict, ou None."""
-    conexao = get_connection()
+    conexao = _conexao_de_consulta()
     try:
         with conexao.cursor() as cursor:
             cursor.execute(sql, params or ())
             return cursor.fetchone()
     finally:
-        conexao.close()
+        _liberar_consulta(conexao)
 
 
 def execute(sql, params=None):

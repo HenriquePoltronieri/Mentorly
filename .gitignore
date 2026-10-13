@@ -15,3 +15,6 @@ venv/
 # Segredos locais: senha do MySQL de desenvolvimento, SMTP.
 # Nunca versionado. Ver docs/como-executar.md.
 backend/.env
+.env
+.env.*
+!.env.example

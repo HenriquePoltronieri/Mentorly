@@ -36,7 +36,7 @@ class AtividadesService {
     required String turmaId,
     required String nome,
     required int etapaId,
-    required int criterioId,
+    int? criterioId,
     required double notaMaxima,
     String descricao = '',
     String dataEntrega = '',
@@ -58,7 +58,7 @@ class AtividadesService {
     required String turmaId,
     required String nome,
     required int etapaId,
-    required int criterioId,
+    int? criterioId,
     required double notaMaxima,
     String descricao = '',
     String dataEntrega = '',
@@ -80,7 +80,7 @@ class AtividadesService {
   }
 
   // Busca vinda da procedure sp_buscar_atividades.
-  // GET /api/activities/buscar?termo=...&ordenar_por=...&direcao=...
+  // GET /api/activities/buscarétermo=...&ordenar_por=...&direcao=...
   Future<List<dynamic>> buscarAtividades({
     String? termo,
     required String ordenarPor,

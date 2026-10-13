@@ -56,7 +56,8 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
           await _atividadesService.listarAtividades(turmaId: _turma!.id);
       setState(() => _atividades = atividades);
     } on ApiException catch (e) {
-      setState(() => _mensagemErro = 'Erro ao buscar atividades: ${e.mensagem}');
+      setState(
+          () => _mensagemErro = 'Erro ao buscar atividades: ${e.mensagem}');
     } catch (e) {
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
@@ -69,9 +70,10 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   Future<void> _abrirAdicionarAtividade() async {
     if (_turma == null) return;
 
-    final salvou = await showDialog<bool>(
-      context: context,
-      builder: (_) => AdicionarAtividadeModal(turmas: [_turma!]),
+    final salvou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => AdicionarAtividadeModal(turmas: [_turma!])),
     );
 
     if (salvou == true) _buscarAtividades();
@@ -88,10 +90,11 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   Future<void> _abrirEditarAtividade(AtividadeModel atividade) async {
     if (_turma == null) return;
 
-    final salvou = await showDialog<bool>(
-      context: context,
-      builder: (_) =>
-          AdicionarAtividadeModal(turmas: [_turma!], atividade: atividade),
+    final salvou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) =>
+              AdicionarAtividadeModal(turmas: [_turma!], atividade: atividade)),
     );
 
     if (salvou == true) _buscarAtividades();
@@ -131,12 +134,13 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_turma == null ? 'Atividades' : 'Atividades · ${_turma!.nome}'),
+        title: Text(
+            _turma == null ? 'Atividades' : 'Atividades · ${_turma!.nome}'),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirAdicionarAtividade,
         icon: const Icon(Icons.add),
-        label: const Text('Adicionar atividade'),
+        label: const Text('+ Nova atividade'),
       ),
       body: RefreshIndicator(
         onRefresh: _buscarAtividades,

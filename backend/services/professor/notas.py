@@ -133,6 +133,9 @@ class LancarNotasService:
             if observacao is not None:
                 entrada.texto(observacao, "A observacao", entrada.LIMITE_OBSERVACAO)
 
+            if observacao in ("Ausente", "Não entregou") and valor != 0:
+                raise ValueError("Ausente/Não entregou precisa ter nota zero.")
+
             lancamentos.append({
                 "aluno_id": aluno_id,
                 "valor": valor,

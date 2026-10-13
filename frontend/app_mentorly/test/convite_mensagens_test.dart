@@ -1,3 +1,4 @@
+import 'package:app_mentorly/core/services/apiService.dart';
 import 'dart:convert';
 
 import 'package:app_mentorly/core/utils/mensagensConvite.dart';
@@ -67,12 +68,12 @@ Future<void> _abrirCadastro(WidgetTester tester) async {
   final campos = find.byType(TextFormField);
   await tester.enterText(campos.at(0), 'Fulano Tal');
   await tester.enterText(campos.at(1), 'fulano@escola.test');
-  await tester.enterText(campos.at(2), 'Matematica');
-  await tester.tap(find.text('Cadastrar'));
+  await tester.tap(find.text('Cadastrar e enviar convite'));
   await tester.pumpAndSettle();
 }
 
 void main() {
+  setUp(() => ApiService().invalidarCache());
   group('textos (MensagensConvite)', () {
     test('enviado = true diz que o convite foi enviado', () {
       expect(MensagensConvite.cadastro({'conviteEnviado': true}),
@@ -116,7 +117,7 @@ void main() {
         await _abrirCadastro(tester);
         expect(find.text('Professor cadastrado. Convite enviado por e-mail.'),
             findsOneWidget);
-        expect(find.text('Cadastrar Professor'), findsNothing); // tela fechou
+        expect(find.text('Novo professor'), findsNothing); // tela fechou
       }, () => _api(cadastro: {'id': 7, 'conviteEnviado': true}));
     });
 
@@ -130,7 +131,7 @@ void main() {
             findsOneWidget);
         expect(find.text('Professor cadastrado. Convite enviado por e-mail.'),
             findsNothing);
-        expect(find.text('Cadastrar Professor'), findsNothing);
+        expect(find.text('Novo professor'), findsNothing);
       }, () => _api(cadastro: {'id': 7, 'conviteEnviado': false}));
     });
 
@@ -141,31 +142,32 @@ void main() {
         await _abrirCadastro(tester);
         expect(find.textContaining('definir-senha?token=tok-local'),
             findsOneWidget);
-        expect(find.textContaining('não pôde ser enviado'), findsOneWidget);
-        expect(find.text('Copiar link'), findsOneWidget);
-        expect(find.text('Cadastrar Professor'), findsOneWidget); // nao fechou
+        expect(
+            find.textContaining('O e-mail não foi enviado.'), findsOneWidget);
+        expect(find.text('Copiar link do convite'), findsOneWidget);
+        expect(find.text('Novo professor'), findsOneWidget); // nao fechou
       },
           () => _api(cadastro: {
                 'id': 7,
                 'conviteEnviado': false,
-                'conviteToken': 'tok-local'
+                'conviteLink':
+                    'http://localhost:3000/#/definir-senha?token=tok-local'
               }));
     });
 
-    testWidgets('modo dev com e-mail enviado: link local e aviso de envio',
+    testWidgets('e-mail enviado retorna à lista sem uma segunda etapa',
         (tester) async {
       await http.runWithClient(() async {
         await _abrirCadastro(tester);
-        expect(find.textContaining('definir-senha?token=tok-local'),
-            findsOneWidget);
-        expect(find.textContaining('O convite foi enviado por e-mail'),
-            findsOneWidget);
-        expect(find.textContaining('não pôde ser enviado'), findsNothing);
+        expect(find.text('Professor cadastrado. Convite enviado por e-mail.'), findsOneWidget);
+        expect(find.textContaining('definir-senha?token=tok-local'), findsNothing);
+        expect(find.text('Novo professor'), findsNothing);
       },
           () => _api(cadastro: {
                 'id': 7,
                 'conviteEnviado': true,
-                'conviteToken': 'tok-local'
+                'conviteLink':
+                    'http://localhost:3000/#/definir-senha?token=tok-local'
               }));
     });
   });
@@ -175,16 +177,21 @@ void main() {
       await tester
           .pumpWidget(const MaterialApp(home: ListaProfessoresScreen()));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.tap(find
+          .descendant(
+              of: find.byType(ListTile),
+              matching: find.byType(PopupMenuButton<String>))
+          .last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Reenviar convite'));
+      await tester.tap(find.text('Reenviar convite').last);
       await tester.pumpAndSettle();
     }
 
     testWidgets('reenvio com e-mail enviado', (tester) async {
       await http.runWithClient(() async {
         await reenviar(tester);
-        expect(find.text('Convite reenviado por e-mail.'), findsOneWidget);
+        expect(
+            find.textContaining('Convite enviado por e-mail.'), findsOneWidget);
       }, () => _api(reenvio: {'id': 7, 'conviteEnviado': true}));
     });
 
@@ -193,25 +200,23 @@ void main() {
       await http.runWithClient(() async {
         await reenviar(tester);
         expect(
-            find.text(
-                'O convite foi renovado, mas o e-mail não pôde ser enviado.'),
-            findsOneWidget);
-        expect(find.text('Convite reenviado por e-mail.'), findsNothing);
+            find.textContaining('O e-mail não foi enviado.'), findsOneWidget);
+        expect(
+            find.textContaining('Convite enviado por e-mail.'), findsNothing);
       }, () => _api(reenvio: {'id': 7, 'conviteEnviado': false}));
     });
 
     testWidgets('reenvio em modo dev preserva o token local', (tester) async {
       await http.runWithClient(() async {
         await reenviar(tester);
-        expect(
-            find.text(
-                'Convite renovado. Ambiente de desenvolvimento: token tok-local'),
+        expect(find.textContaining('definir-senha?token=tok-local'),
             findsOneWidget);
       },
           () => _api(reenvio: {
                 'id': 7,
                 'conviteEnviado': false,
-                'conviteToken': 'tok-local'
+                'conviteLink':
+                    'http://localhost:3000/#/definir-senha?token=tok-local'
               }));
     });
 
@@ -222,7 +227,11 @@ void main() {
         await tester
             .pumpWidget(const MaterialApp(home: ListaProfessoresScreen()));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(PopupMenuButton<String>));
+        await tester.tap(find
+            .descendant(
+                of: find.byType(ListTile),
+                matching: find.byType(PopupMenuButton<String>))
+            .last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Editar'));
         await tester.pumpAndSettle();
@@ -241,7 +250,11 @@ void main() {
         await tester
             .pumpWidget(const MaterialApp(home: ListaProfessoresScreen()));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(PopupMenuButton<String>));
+        await tester.tap(find
+            .descendant(
+                of: find.byType(ListTile),
+                matching: find.byType(PopupMenuButton<String>))
+            .last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Editar'));
         await tester.pumpAndSettle();

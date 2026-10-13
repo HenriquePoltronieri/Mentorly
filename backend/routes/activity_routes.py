@@ -1,6 +1,6 @@
 from flask import Blueprint
 
-from auth.decorators import auth_required, professor_required
+from auth.decorators import professor_required
 from controllers.activity_controller import ActivityController
 
 activity_blueprint = Blueprint("activities", __name__, url_prefix="/api/activities")
@@ -10,19 +10,19 @@ activity_controller = ActivityController()
 # Leitura: os dois papeis. A Coordenacao precisa disso para o relatorio e a
 # busca; o recorte de cada um e resolvido no controller.
 @activity_blueprint.get("")
-@auth_required
+@professor_required
 def list_activities():
     return activity_controller.list_activities()
 
 
 @activity_blueprint.get("/buscar")
-@auth_required
+@professor_required
 def buscar_atividades():
     return activity_controller.buscar_atividades()
 
 
 @activity_blueprint.get("/<int:activity_id>")
-@auth_required
+@professor_required
 def get_activity(activity_id):
     return activity_controller.get_activity(activity_id)
 

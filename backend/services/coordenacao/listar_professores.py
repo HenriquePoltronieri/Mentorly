@@ -13,10 +13,13 @@ class ListarProfessoresService:
 
     def execute(self, coordenacao_id):
         linhas = Professor.find_all_by_coordenacao(coordenacao_id)
+        por_professor = {}
+        for turma in ProfessorTurma.vinculos_da_escola(coordenacao_id):
+            por_professor.setdefault(turma["professor_id"], []).append(turma)
 
         professores = []
         for linha in linhas:
-            turmas = ProfessorTurma.turmas_do_professor(linha["id"])
+            turmas = por_professor.get(linha["id"], [])
             professor = Professor.to_dict(linha)
             professor["totalTurmas"] = len(turmas)
             professor["turmas"] = [Turma.to_dict(t) for t in turmas]

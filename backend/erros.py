@@ -11,3 +11,7 @@ como "nao encontrado" fazia um bug interno (chave ou indice errado) virar um
 
 class RecursoNaoEncontrado(Exception):
     """Recurso inexistente, ou ocultado de quem nao tem acesso (404)."""
+
+
+class AcessoNegado(Exception):
+    """Recurso fora das turmas vinculadas ao professor."""

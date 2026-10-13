@@ -4,8 +4,13 @@ Todo metodo de leitura em lote recebe coordenacao_id: nao existe consulta
 que devolva professores de todas as escolas.
 """
 
+import hashlib
 from database.connection import execute, insert, query_all, query_one
 from models.utils import booleano, iso
+
+
+def hash_convite(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
 
 
 class Professor:
@@ -56,7 +61,7 @@ class Professor:
             "SELECT id, coordenacao_id, nome, email, disciplina, senha_hash, habilitado, "
             "       convite_token, convite_expira_em "
             "FROM professor WHERE convite_token = %s",
-            (token,),
+            (hash_convite(token),),
         )
 
     # -----------------------------------------------------------------
@@ -70,16 +75,17 @@ class Professor:
             "(coordenacao_id, nome, email, disciplina, convite_token, convite_expira_em) "
             "VALUES (%s, %s, %s, %s, %s, %s)",
             (coordenacao_id, nome, email, disciplina,
-             convite_token, convite_expira_em),
+             hash_convite(convite_token), convite_expira_em),
         )
 
     @staticmethod
-    def definir_senha(professor_id, senha_hash):
+    def definir_senha(professor_id, senha_hash, convite_token=None):
         """Ativa o professor e queima o convite."""
         return execute(
             "UPDATE professor SET senha_hash = %s, convite_token = NULL, "
-            "convite_expira_em = NULL WHERE id = %s",
-            (senha_hash, professor_id),
+            "convite_expira_em = NULL WHERE id = %s AND senha_hash IS NULL "
+            "AND habilitado=1 AND convite_token=%s AND convite_expira_em >= NOW()",
+            (senha_hash, professor_id, hash_convite(convite_token)),
         )
 
     @staticmethod
@@ -87,7 +93,7 @@ class Professor:
         return execute(
             "UPDATE professor SET convite_token = %s, convite_expira_em = %s "
             "WHERE id = %s",
-            (convite_token, convite_expira_em, professor_id),
+            (hash_convite(convite_token), convite_expira_em, professor_id),
         )
 
     @staticmethod

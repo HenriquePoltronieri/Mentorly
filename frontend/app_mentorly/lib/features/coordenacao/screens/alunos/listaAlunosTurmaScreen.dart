@@ -1,4 +1,6 @@
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/widgets/confirmarExclusaoDialog.dart';
 import '../../../../core/services/apiService.dart';
 import '../../models/turmaModel.dart';
@@ -70,6 +72,7 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
@@ -77,10 +80,13 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
 
     try {
       final alunos = await _alunosService.listarAlunos(_turmaId!);
+      if (!mounted) return;
       setState(() => _alunos = alunos);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Erro ao buscar alunos: ${e.mensagem}');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -92,7 +98,7 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   Future<void> _abrirAdicionarAlunos() async {
     if (_turmaId == null) return;
 
-    final adicionou = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       builder: (_) => AdicionarAlunosModal(
         turmaId: _turmaId!,
@@ -100,7 +106,8 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
       ),
     );
 
-    if (adicionou == true) _buscarAlunos();
+    // Escape e toque fora do diálogo também precisam atualizar os alunos salvos.
+    if (mounted) _buscarAlunos();
   }
 
   Future<void> _editarAluno(Map<String, dynamic> aluno) async {
@@ -173,58 +180,54 @@ class _ListaAlunosTurmaScreenState extends State<ListaAlunosTurmaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_turmaNome.isEmpty ? 'Alunos' : 'Alunos - $_turmaNome'),
-      ),
+      appBar: BarraMentorly(
+          professor: false,
+          aba: 'turmas',
+          titulo: _turmaNome.isEmpty ? 'Alunos' : 'Alunos - $_turmaNome'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirAdicionarAlunos,
         icon: const Icon(Icons.person_add_alt),
         label: const Text('Adicionar alunos'),
       ),
       body: RefreshIndicator(
-        onRefresh: _buscarAlunos,
-        child: _construirCorpo(),
+        onRefresh: () {
+          ApiService().invalidarCache();
+          return _buscarAlunos();
+        },
+        child: ConteudoPagina(child: _construirCorpo()),
       ),
     );
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child:
-                Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarAlunos);
     }
 
     if (_alunos.isEmpty) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          const Center(
-              child: Text('Nenhum aluno cadastrado nessa turma ainda')),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Nenhum aluno cadastrado nessa turma ainda',
+          mensagem: 'Comece pelo cadastro.',
+          acao: 'Adicionar alunos',
+          onPressed: _abrirAdicionarAlunos);
     }
 
-    return ListView.builder(
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      separatorBuilder: (_, indice) => const Divider(height: 1),
       itemCount: _alunos.length,
       itemBuilder: (context, index) {
         final aluno = _alunos[index];
         return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.person)),
+          leading: const Icon(Icons.person_outline),
           title: Text(aluno['nome'] ?? ''),
           subtitle: Text(
             (aluno['matricula'] ?? '').toString().isEmpty

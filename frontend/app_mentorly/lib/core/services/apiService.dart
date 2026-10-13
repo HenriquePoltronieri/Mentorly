@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,7 +41,8 @@ class ApiService {
   // - Emulador Android:       'http://10.0.2.2:5000/api'
   // 10.0.2.2 e o apelido que o emulador Android usa pro localhost do host;
   // no navegador esse endereco nao existe, por isso o padrao aqui e localhost.
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = String.fromEnvironment('API_URL',
+      defaultValue: 'http://localhost:5000/api');
 
   static const Duration _timeout = Duration(seconds: 15);
 
@@ -64,6 +66,36 @@ class ApiService {
   // area do professor, entao precisa sobreviver ao refresh da pagina.
   Map<String, dynamic>? usuario;
 
+  final Map<String, ({DateTime expira, dynamic dados})> _cache = {};
+  final Map<String, Future<dynamic>> _leituras = {};
+  int _versaoCache = 0;
+
+  void invalidarCache() {
+    _versaoCache++;
+    _cache.clear();
+    _leituras.clear();
+  }
+
+  bool _podeCachear(String endpoint) =>
+      endpoint.startsWith('/config/') ||
+      endpoint == '/classes' ||
+      endpoint.startsWith('/classes?') ||
+      endpoint == '/coordenacao/professores' ||
+      endpoint == '/professor/turmas';
+
+  Future<T> _comPrazo<T>(Future<T> operacao,
+      {Duration prazo = _timeout}) async {
+    try {
+      return await operacao.timeout(prazo);
+    } on TimeoutException {
+      throw ApiException(
+          408, 'O servidor demorou para responder. Tente novamente.');
+    } on http.ClientException {
+      throw ApiException(
+          0, 'Não foi possível conectar ao servidor. Tente novamente.');
+    }
+  }
+
   bool get estaLogado => token != null;
 
   String? get tipoUsuario => usuario?['tipo'] as String?;
@@ -84,7 +116,9 @@ class ApiService {
   // deslogava o usuario e todas as chamadas passavam a voltar 401.
   // ---------------------------------------------------------------------
 
-  Future<void> salvarSessao(String novoToken, Map<String, dynamic> dados) async {
+  Future<void> salvarSessao(
+      String novoToken, Map<String, dynamic> dados) async {
+    invalidarCache();
     token = novoToken;
     usuario = dados;
     final prefs = await SharedPreferences.getInstance();
@@ -112,6 +146,7 @@ class ApiService {
   }
 
   Future<void> limparSessao() async {
+    invalidarCache();
     token = null;
     usuario = null;
     final prefs = await SharedPreferences.getInstance();
@@ -122,7 +157,7 @@ class ApiService {
   // Monta a URL de um download que o navegador abre em outra aba
   // (launchUrl nao manda cabecalho, entao o token vai na query string).
   String urlComToken(String endpoint) {
-    final separador = endpoint.contains('?') ? '&' : '?';
+    final separador = endpoint.contains('?') ? '&' : '—';
     return '$baseUrl$endpoint${token == null ? '' : '${separador}token=$token'}';
   }
 
@@ -130,50 +165,85 @@ class ApiService {
   // Verbos HTTP
   // ---------------------------------------------------------------------
 
-  Future<dynamic> get(String endpoint) async {
+  Future<dynamic> get(String endpoint, {bool atualizar = false}) async {
+    if (atualizar) invalidarCache();
+    final chave = '${token ?? ''}:$endpoint';
+    final cachear = _podeCachear(endpoint);
+    final item = _cache[chave];
+    if (cachear && item != null && item.expira.isAfter(DateTime.now())) {
+      return jsonDecode(jsonEncode(item.dados));
+    }
+    if (cachear && _leituras.containsKey(chave)) {
+      return jsonDecode(jsonEncode(await _leituras[chave]!));
+    }
+    final versao = _versaoCache;
+    final leitura = _buscar(endpoint);
+    if (cachear) _leituras[chave] = leitura;
+    try {
+      final dados = await leitura;
+      if (cachear && versao == _versaoCache) {
+        _cache[chave] = (
+          expira: DateTime.now().add(const Duration(seconds: 30)),
+          dados: jsonDecode(jsonEncode(dados))
+        );
+      }
+      return dados;
+    } finally {
+      if (identical(_leituras[chave], leitura)) _leituras.remove(chave);
+    }
+  }
+
+  Future<dynamic> _buscar(String endpoint) async {
     final tokenUsado = token;
-    final response = await http
-        .get(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _headers,
-        )
-        .timeout(_timeout);
+    final response = await _comPrazo(http.get(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _headers,
+    ));
     return _tratarResposta(response, endpoint, tokenUsado);
   }
 
+  bool _endpointIa(String endpoint) =>
+      endpoint.endsWith('/insights') ||
+      endpoint.endsWith('/atividades/gerar') ||
+      endpoint.endsWith('/feedback-ia') ||
+      endpoint.endsWith('/correcao-assistida') ||
+      endpoint.endsWith('/ia/chat');
+
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
     final tokenUsado = token;
-    final response = await http
-        .post(
+    final response = await _comPrazo(
+        http.post(
           Uri.parse('$baseUrl$endpoint'),
           headers: _headers,
           body: jsonEncode(body),
-        )
-        .timeout(_timeout);
-    return _tratarResposta(response, endpoint, tokenUsado);
+        ),
+        prazo: _endpointIa(endpoint) ? const Duration(seconds: 50) : _timeout);
+    final dados = _tratarResposta(response, endpoint, tokenUsado);
+    invalidarCache();
+    return dados;
   }
 
   Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
     final tokenUsado = token;
-    final response = await http
-        .put(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _headers,
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout);
-    return _tratarResposta(response, endpoint, tokenUsado);
+    final response = await _comPrazo(http.put(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _headers,
+      body: jsonEncode(body),
+    ));
+    final dados = _tratarResposta(response, endpoint, tokenUsado);
+    invalidarCache();
+    return dados;
   }
 
   Future<dynamic> delete(String endpoint) async {
     final tokenUsado = token;
-    final response = await http
-        .delete(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _headers,
-        )
-        .timeout(_timeout);
-    return _tratarResposta(response, endpoint, tokenUsado);
+    final response = await _comPrazo(http.delete(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _headers,
+    ));
+    final dados = _tratarResposta(response, endpoint, tokenUsado);
+    invalidarCache();
+    return dados;
   }
 
   // Upload de planilha (multipart). O campo do arquivo se chama "arquivo",
@@ -195,9 +265,12 @@ class ApiService {
       http.MultipartFile.fromBytes('arquivo', bytes, filename: nomeArquivo),
     );
 
-    final streamed = await requisicao.send().timeout(_timeout);
-    final response = await http.Response.fromStream(streamed);
+    final response = await _comPrazo(() async {
+      final streamed = await requisicao.send();
+      return http.Response.fromStream(streamed);
+    }());
     final corpo = _tratarResposta(response, endpoint, tokenUsado);
+    invalidarCache();
     return (corpo as Map).cast<String, dynamic>();
   }
 

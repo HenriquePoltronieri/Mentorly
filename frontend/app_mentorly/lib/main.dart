@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app/routes.dart';
 import 'app/sessaoInvalida.dart';
 import 'app/theme.dart';
@@ -25,7 +26,7 @@ String? _rotaDaUrl() {
   final caminho = fragmento.split('?').first;
   if (caminho.isEmpty || caminho == '/') return null;
 
-  return AppRoutes.routes.containsKey(caminho) ? caminho : null;
+  return AppRoutes.routes.containsKey(caminho) ? fragmento : null;
 }
 
 String _rotaInicial(ApiService api) {
@@ -76,6 +77,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mentorly',
+      locale: const Locale('pt', 'BR'),
+      supportedLocales: const [Locale('pt', 'BR')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: scaffoldMessengerKey,
       theme: appTheme,

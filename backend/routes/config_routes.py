@@ -1,10 +1,16 @@
 from flask import Blueprint
 
-from auth.decorators import auth_required, coordenacao_required
+from auth.decorators import auth_required, coordenacao_required, professor_required
 from controllers.config_controller import ConfigController
 
 config_blueprint = Blueprint("config", __name__, url_prefix="/api/config")
 config_controller = ConfigController()
+
+
+@config_blueprint.put("/anos-letivos/<int:ano>/configuracao")
+@coordenacao_required
+def salvar_configuracao_ano(ano):
+    return config_controller.salvar_configuracao_ano(ano)
 
 
 # ---------------------------------------------------------------------
@@ -83,13 +89,13 @@ def excluir_etapa(etapa_id):
 
 # Fechamento: so a Coordenacao fecha/reabre a etapa da propria escola.
 @config_blueprint.post("/etapas/<int:etapa_id>/fechar")
-@coordenacao_required
+@professor_required
 def fechar_etapa(etapa_id):
     return config_controller.fechar_etapa(etapa_id)
 
 
 @config_blueprint.post("/etapas/<int:etapa_id>/reabrir")
-@coordenacao_required
+@professor_required
 def reabrir_etapa(etapa_id):
     return config_controller.reabrir_etapa(etapa_id)
 

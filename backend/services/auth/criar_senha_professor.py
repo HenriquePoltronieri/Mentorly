@@ -40,7 +40,8 @@ class CriarSenhaProfessorService:
         if expira_em and expira_em < datetime.now():
             raise PermissionError("Convite expirado. Peca um novo a coordenacao.")
 
-        Professor.definir_senha(linha["id"], generate_password_hash(senha))
+        if not Professor.definir_senha(linha["id"], generate_password_hash(senha), token):
+            raise PermissionError("Convite expirado ou já utilizado. Peça um novo à Coordenação.")
         atualizado = Professor.find_by_id(linha["id"])
 
         return {

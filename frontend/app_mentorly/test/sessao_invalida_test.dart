@@ -420,6 +420,7 @@ void main() {
       await _cenario(tester, servidor, 'professor', (api, obs, acion) async {
         expect(await api.get('/classes'), {'ok': true});
         for (final status in [400, 404, 409, 422, 500, 503]) {
+          api.invalidarCache();
           servidor.responder(status, {'error': 'erro $status'});
           final erro = await _chamar(api, '/classes');
           expect(erro!.statusCode, status);

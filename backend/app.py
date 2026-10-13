@@ -1,7 +1,10 @@
-from flask import Flask, jsonify, request
+import time
+from flask import Flask, g, jsonify, request
 
 from config import DEBUG
+from erros import AcessoNegado
 from database.connection import init_database, install_procedures, install_schema
+from database.connection import encerrar_conexao_requisicao
 from services.rate_limit import LimiteExcedido
 from routes.activity_routes import activity_blueprint
 from routes.auth_routes import auth_blueprint
@@ -17,6 +20,21 @@ from routes.professor_routes import (
 
 def create_app():
     app = Flask(__name__)
+    app.teardown_appcontext(encerrar_conexao_requisicao)
+
+    @app.before_request
+    def iniciar_medicao():
+        g.inicio_requisicao = time.perf_counter()
+
+    @app.after_request
+    def registrar_tempo(response):
+        duracao = (time.perf_counter() - g.inicio_requisicao) * 1000
+        response.headers["Server-Timing"] = 'app;dur=%.2f, db;desc="%d consultas"' % (duracao, getattr(g, "consultas_db", 0))
+        # Usa o padrão da rota: nunca registra query string/token do convite.
+        app.logger.info("%s %s status=%d tempo_ms=%.2f consultas=%d", request.method,
+                        request.url_rule.rule if request.url_rule else "rota_ausente",
+                        response.status_code, duracao, getattr(g, "consultas_db", 0))
+        return response
 
     # Limite de upload das planilhas. Sem isso, um arquivo enorme fica
     # inteiro na memoria antes de o service conseguir recusar.
@@ -41,7 +59,7 @@ def create_app():
         response.headers["Access-Control-Allow-Methods"] = (
             "GET, POST, PUT, DELETE, OPTIONS"
         )
-        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition"
+        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Server-Timing"
         return response
 
     # Todo endpoint JSON espera um objeto. Corpo que e lista, texto ou numero
@@ -62,6 +80,10 @@ def create_app():
     # a excecao antes de chamar este handler) e, com debug ligado, o depurador
     # segue ativo porque a excecao se propaga. Erros conhecidos (400/401/403/
     # 404/409/422/503) sao respondidos pelos controllers e nao passam por aqui.
+    @app.errorhandler(AcessoNegado)
+    def acesso_negado(erro):
+        return jsonify({"error": str(erro)}), 403
+
     @app.errorhandler(500)
     def erro_interno(_erro):
         return jsonify({"error": "Erro interno do servidor."}), 500

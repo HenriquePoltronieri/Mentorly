@@ -174,7 +174,7 @@ void main() {
       }, () => _cliente([_atividade(descricao: longa)]));
 
       final campo = tester.widget<TextField>(find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Descrição',
+        (w) => w is TextField && w.decoration?.labelText == 'Descrição (opcional)',
       ));
       expect(campo.controller!.text, longa);
       expect(campo.controller!.text.length, longa.length);

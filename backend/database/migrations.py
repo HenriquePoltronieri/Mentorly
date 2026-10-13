@@ -343,12 +343,22 @@ def _anos_letivos_cadastrados():
     return True
 
 
+def _convites_guardam_hash():
+    # Os tokens antigos têm 43 caracteres; hashes SHA-256 têm 64.
+    # A transformação mantém os links enviados válidos e é idempotente.
+    return bool(execute(
+        "UPDATE professor SET convite_token=SHA2(convite_token, 256) "
+        "WHERE convite_token IS NOT NULL AND CHAR_LENGTH(convite_token) <> 64"
+    ))
+
+
 _MIGRACOES = (
     _atividade_ganha_coordenacao_id,
     _etapa_ganha_fechada,
     _anos_letivos_cadastrados,
     _historico_de_turma_dos_alunos,
     _professor_ganha_habilitado,
+    _convites_guardam_hash,
 )
 
 

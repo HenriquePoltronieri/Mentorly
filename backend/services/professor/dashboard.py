@@ -1,8 +1,7 @@
-from models.aluno_model import Aluno
 from models.ano_letivo_model import AnoLetivo
 from models.professor_model import Professor
 from models.professor_turma_model import ProfessorTurma
-from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
+from services.professor.estatisticas_turma import EstatisticasTurmaService
 from erros import RecursoNaoEncontrado
 
 
@@ -36,7 +35,7 @@ class DashboardProfessorService:
         em_risco = []
         if ano is not None:
             em_risco = self._alunos_em_risco(
-                professor["coordenacao_id"], turmas, ano["ano"]
+                professor_id, professor["coordenacao_id"], turmas, ano["ano"]
             )
 
         return self._resumo(professor, ano, turmas, em_risco)
@@ -62,31 +61,17 @@ class DashboardProfessorService:
             "alunosEmRisco": em_risco,
         }
 
-    def _alunos_em_risco(self, coordenacao_id, turmas, ano_letivo):
-        """Alunos cujo desempenho calculado na etapa atual esta abaixo do
-        minimo daquela etapa - nunca por falta de nota (isso e
-        'em_andamento', nao risco) e nunca comparado com a etapa errada.
-        """
-        etapa, _regra = etapa_atual(coordenacao_id, ano_letivo)
-        if etapa is None:
-            return []
-
+    def _alunos_em_risco(self, professor_id, coordenacao_id, turmas, ano_letivo):
+        # Mesmo risco determinístico dos gráficos e do chat; não depende de IA.
         resultado = []
         for turma in turmas:
-            alunos = Aluno.find_all_by_turma(turma["id"])
-            for aluno in alunos:
-                calculo = calcular_desempenho_etapa(
-                    aluno["id"], turma["id"], etapa
-                )
-                if calculo["completo"] and calculo["situacao"] == "abaixo_do_minimo":
-                    resultado.append({
-                        "id": aluno["id"],
-                        "nome": aluno["nome"],
-                        "turma": turma["nome"],
-                        "media": calculo["nota_calculada"],
-                        "notaMinima": etapa.get("nota_minima"),
-                        "etapaId": etapa["id"],
-                        "etapa": etapa.get("nome"),
-                    })
-        resultado.sort(key=lambda item: item["media"])
+            dados = EstatisticasTurmaService().execute(professor_id, coordenacao_id, turma["id"])
+            for aluno in dados["alunos"]:
+                if aluno["risco"] in ("Alto", "Médio"):
+                    resultado.append({"id": aluno["id"], "nome": aluno["nome"], "turma": turma["nome"],
+                                      "turma_id": turma["id"], "media": aluno["media"],
+                                      "notaMinima": aluno["nota_minima"], "risco": aluno["risco"], "motivos": aluno["motivos"],
+                                      "acompanhamento": aluno["acompanhamento"],
+                                      "pontos_obtidos": aluno["pontos_obtidos"], "pontos_avaliados": aluno["pontos_avaliados"]})
+        resultado.sort(key=lambda a: ({"Alto": 0, "Médio": 1}[a["risco"]], a["media"] if a["media"] is not None else -1))
         return resultado

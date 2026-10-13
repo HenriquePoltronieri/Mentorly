@@ -48,7 +48,7 @@ def _exigir_datas_em_ordem(data_inicio, data_fim):
 
 MENSAGEM_ETAPA_FECHADA = (
     "A etapa esta fechada e sua configuracao nao pode ser alterada. "
-    "Peca a coordenacao para reabri-la."
+    "Peca ao professor para reabri-la."
 )
 
 
@@ -88,10 +88,13 @@ class ListarEtapasService:
                 return []
             ano_letivo = atual["ano"]
         linhas = Etapa.find_all_by_coordenacao(coordenacao_id, ano_letivo)
+        criterios_por_etapa = {}
+        for criterio in Criterio.find_all_by_coordenacao(coordenacao_id, ano_letivo):
+            criterios_por_etapa.setdefault(criterio["etapa_id"], []).append(criterio)
         resultado = []
         for linha in linhas:
             etapa = Etapa.to_dict(linha)
-            criterios = Criterio.find_all_by_etapa(linha["id"], coordenacao_id)
+            criterios = criterios_por_etapa.get(linha["id"], [])
             etapa["criterios"] = [Criterio.to_dict(c) for c in criterios]
             # Feedback imediato pra tela de configuracao: sem isso a
             # Coordenacao so descobre que os pesos estao errados quando
@@ -239,7 +242,7 @@ class ExcluirEtapaService:
         )
 
 
-def _contar_alunos_incompletos(etapa):
+def _contar_alunos_incompletos(etapa, professor_id=None):
     """Quantos alunos da escola ainda tem atividade sem nota nesta etapa.
 
     Etapa e configuracao da escola para UM ano letivo, entao percorre so as
@@ -250,11 +253,16 @@ def _contar_alunos_incompletos(etapa):
     Coordenacao decidir com informacao, nao para bloquear nada (Marco 4).
     """
     incompletos = 0
-    for turma in Turma.find_all_by_coordenacao(
-        etapa["coordenacao_id"], etapa["ano_letivo"]
-    ):
+    from models.professor_turma_model import ProfessorTurma
+    turmas = (ProfessorTurma.turmas_do_professor(professor_id) if professor_id else
+              Turma.find_all_by_coordenacao(etapa["coordenacao_id"], etapa["ano_letivo"]))
+    for turma in turmas:
+        if turma["ano_letivo"] != etapa["ano_letivo"]:
+            continue
+        from models.dados_academicos_model import carregar_dados_turma
+        dados = carregar_dados_turma(turma["id"], etapa["coordenacao_id"], etapa["ano_letivo"])
         for aluno in Aluno.find_all_by_turma(turma["id"]):
-            resultado = calcular_desempenho_etapa(aluno["id"], turma["id"], etapa)
+            resultado = calcular_desempenho_etapa(aluno["id"], turma["id"], etapa, dados)
             if resultado["atividades_sem_nota"] > 0:
                 incompletos += 1
     return incompletos
@@ -263,29 +271,30 @@ def _contar_alunos_incompletos(etapa):
 class FecharEtapaService:
     """Fecha a etapa: o resultado calculado fica congelado ate a reabertura.
 
-    So a Coordenacao chama isto (rota com @coordenacao_required). Depois do
+    Somente um professor vinculado chama isto (rota com @professor_required). Depois do
     fechamento, criar/editar atividade e lancar/importar nota nesta etapa
     passam a ser recusados - ver services/activity/validacao.py e
     services/professor/notas.py.
 
     O fechamento NAO e bloqueado por aluno incompleto (decisao do Marco 4):
-    a Coordenacao pode ter motivo legitimo para fechar mesmo assim (aluno
+    o professor pode ter motivo legitimo para fechar mesmo assim (aluno
     evadido, por exemplo). O que muda e que a resposta agora informa
     quantos alunos ficam com atividade sem nota nesta etapa, para a
-    Coordenacao decidir com informacao em vez de descobrir depois.
+    professor decidir com informacao em vez de descobrir depois.
     """
 
-    def execute(self, etapa_id, coordenacao_id):
+    def execute(self, etapa_id, coordenacao_id, professor_id=None):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
             raise RecursoNaoEncontrado("Etapa nao encontrada")
+        _exigir_professor_do_ano(etapa, professor_id)
         # Ano encerrado e historico somente leitura: fechar tambem mudaria o
         # consolidado dele (so etapas fechadas entram). Vem depois do 404.
         exigir_ano_nao_encerrado(etapa["coordenacao_id"], etapa["ano_letivo"])
         if etapa.get("fechada"):
             raise ValueError("Etapa ja esta fechada")
 
-        alunos_incompletos = _contar_alunos_incompletos(etapa)
+        alunos_incompletos = _contar_alunos_incompletos(etapa, professor_id)
 
         Etapa.fechar(etapa_id, coordenacao_id)
         resultado = Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
@@ -296,13 +305,23 @@ class FecharEtapaService:
 class ReabrirEtapaService:
     """Reabre uma etapa fechada, para a Coordenacao corrigir alguma nota."""
 
-    def execute(self, etapa_id, coordenacao_id):
+    def execute(self, etapa_id, coordenacao_id, professor_id=None):
         etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
         if not etapa:
             raise RecursoNaoEncontrado("Etapa nao encontrada")
+        _exigir_professor_do_ano(etapa, professor_id)
         # Mesma regra do fechamento: reabrir mudaria o consolidado do ano encerrado.
         exigir_ano_nao_encerrado(etapa["coordenacao_id"], etapa["ano_letivo"])
         if not etapa.get("fechada"):
             raise ValueError("Etapa ja esta aberta")
         Etapa.reabrir(etapa_id, coordenacao_id)
         return Etapa.to_dict(Etapa.find_by_id(etapa_id, coordenacao_id))
+
+
+def _exigir_professor_do_ano(etapa, professor_id):
+    if professor_id is None:
+        raise RecursoNaoEncontrado("Informe o professor responsável pelo fechamento.")
+    from models.professor_turma_model import ProfessorTurma
+    if not any(t["ano_letivo"] == etapa["ano_letivo"] and t["coordenacao_id"] == etapa["coordenacao_id"]
+               for t in ProfessorTurma.turmas_do_professor(professor_id)):
+        raise RecursoNaoEncontrado("Etapa não encontrada nas suas turmas.")

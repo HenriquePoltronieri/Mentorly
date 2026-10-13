@@ -15,12 +15,14 @@ class ProfessoresService {
   Future<Map<String, dynamic>> cadastrarProfessor({
     required String nome,
     required String email,
-    required String disciplina,
+    String disciplina = '',
+    List<int> turmaIds = const [],
   }) async {
     final resposta = await _api.post('/coordenacao/professores', {
       'nome': nome,
       'email': email,
       'disciplina': disciplina,
+      'turma_ids': turmaIds,
     });
     return resposta as Map<String, dynamic>;
   }
@@ -40,17 +42,26 @@ class ProfessoresService {
   }
 
   Future<Map<String, dynamic>> desativarProfessor(int professorId) async {
-    final resposta = await _api.post('/coordenacao/professores/$professorId/desativar', {});
+    final resposta =
+        await _api.post('/coordenacao/professores/$professorId/desativar', {});
     return resposta as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> reativarProfessor(int professorId) async {
-    final resposta = await _api.post('/coordenacao/professores/$professorId/reativar', {});
+    final resposta =
+        await _api.post('/coordenacao/professores/$professorId/reativar', {});
     return resposta as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> reenviarConvite(int professorId) async {
-    final resposta = await _api.post('/coordenacao/professores/$professorId/reenviar-convite', {});
+    final resposta = await _api
+        .post('/coordenacao/professores/$professorId/reenviar-convite', {});
     return resposta as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> gerarLinkConvite(int professorId) async {
+    return await _api
+            .post('/coordenacao/professores/$professorId/link-convite', {})
+        as Map<String, dynamic>;
   }
 }

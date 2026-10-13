@@ -35,7 +35,7 @@ class ClassController:
         return jsonify(listar_turmas(coordenacao_atual(), ano_letivo))
 
     def relatorio_turmas_atividades(self):
-        return jsonify(relatorio_turmas_atividades(coordenacao_atual()))
+        return jsonify(relatorio_turmas_atividades(coordenacao_atual(), usuario_atual_id()))
 
     def get_class(self, class_id):
         if eh_professor():

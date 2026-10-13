@@ -1,8 +1,12 @@
+import '../../../../app/theme.dart';
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
 import '../../../../app/routes.dart';
 import '../../controllers/configAnoLetivoController.dart';
 import '../../services/professoresService.dart';
 import 'passoAnoLetivo.dart';
+import '../../../../core/services/apiService.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 
 // Passo 3 de 3: "Como as notas dos seus alunos sao calculadas?"
 //
@@ -63,15 +67,15 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
           .where((c) => c.nome == nome)
           .map((c) => c.peso)
           .firstOrNull;
-      final texto = (existente != null && existente > 0)
-          ? _formatarPeso(existente)
-          : '';
+      final texto =
+          (existente != null && existente > 0) ? _formatarPeso(existente) : '';
       return TextEditingController(text: texto);
     });
   }
 
-  String _formatarPeso(double valor) =>
-      valor == valor.roundToDouble()
+  String _formatarPeso(double valor) => !valor.isFinite
+      ? '—'
+      : valor == valor.roundToDouble()
           ? valor.toInt().toString()
           : valor.toString();
 
@@ -84,11 +88,41 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       .map(_pesoDigitado)
       .fold(0.0, (soma, peso) => soma + peso);
 
-  bool get _pesosValidos => (_somaPesos - 100).abs() < 0.01;
+  bool get _pesosValidos =>
+      _criteriosSelecionados.isNotEmpty &&
+      (_somaPesos - 100).abs() < .000001 &&
+      _criteriosSelecionados.every((n) {
+        final peso = _pesoDigitado(n);
+        return peso.isFinite &&
+            peso >= 0 &&
+            peso <= 100 &&
+            (peso * 100 - (peso * 100).round()).abs() < .000001;
+      });
+
+  void _guardarRascunho() {
+    _controller.criteriosSelecionados = List.of(_criteriosSelecionados);
+    _controller.rascunhosPesos.addAll({
+      for (final e in _pesoControllers.entries) e.key: e.value.text,
+    });
+  }
+
+  void _redistribuirPesos() {
+    final total = _criteriosSelecionados.length;
+    if (total == 0) return;
+    final centesimos = 10000 ~/ total;
+    for (var i = 0; i < total; i++) {
+      final peso =
+          (i == total - 1 ? 10000 - centesimos * (total - 1) : centesimos) /
+              100;
+      _pesoController(_criteriosSelecionados[i]).text = _formatarPeso(peso);
+    }
+    _guardarRascunho();
+  }
 
   Future<void> _carregarEstadoAtual() async {
     // Criterios ja configurados aparecem marcados: reconfigurar e edicao.
-    final jaConfigurados = _controller.nomesDosCriterios;
+    final jaConfigurados =
+        _controller.criteriosSelecionados ?? _controller.nomesDosCriterios;
     setState(() {
       _criteriosSelecionados.addAll(jaConfigurados);
       _criteriosPersonalizados.addAll(
@@ -96,7 +130,8 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       );
       // Prepara o campo de peso de cada um ja com o valor salvo.
       for (final nome in jaConfigurados) {
-        _pesoController(nome);
+        _pesoController(nome).text =
+            _controller.rascunhosPesos[nome] ?? _pesoController(nome).text;
       }
     });
 
@@ -135,7 +170,8 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       ),
     );
 
-    if (nome == null || nome.isEmpty) return;
+    nomeController.dispose();
+    if (nome == null || nome.isEmpty || !mounted) return;
     if (_criteriosPersonalizados.contains(nome) ||
         _criteriosPadrao.contains(nome)) {
       return;
@@ -145,6 +181,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       _criteriosPersonalizados.add(nome);
       _criteriosSelecionados.add(nome);
       _pesoController(nome);
+      _redistribuirPesos();
     });
   }
 
@@ -167,25 +204,17 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     });
 
     try {
-      final jaConfigurados = _controller.nomesDosCriterios;
+      await _controller.salvarConfiguracao({
+        for (final nome in _criteriosSelecionados) nome: _pesoDigitado(nome),
+      });
 
-      for (final nome in _criteriosSelecionados) {
-        await _controller.adicionarCriterio(nome);
-        await _controller.definirPeso(nome, _pesoDigitado(nome));
-      }
-      // Criterio desmarcado sai da configuracao da escola.
-      for (final nome in jaConfigurados) {
-        if (!_criteriosSelecionados.contains(nome)) {
-          await _controller.removerCriterio(nome);
-        }
-      }
-
-      setState(() => _salvo = true);
+      if (mounted) setState(() => _salvo = true);
       return true;
     } catch (e) {
+      if (!mounted) return false;
       setState(() {
         _mensagemErro =
-            'Não foi possível salvar. Verifique sua conexão com o servidor.';
+            e is ApiException ? e.mensagem : 'Não foi possível salvar: $e';
       });
       return false;
     } finally {
@@ -222,165 +251,189 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ano letivo · Passo 3 de 3')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const PassoAnoLetivo(passoAtual: 3),
-            const SizedBox(height: 20),
-            const Text(
-              'Como as notas dos seus alunos são calculadas?',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Os critérios escolhidos valem para todas as etapas do ano.',
-              style: TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+      appBar: const BarraMentorly(
+          professor: false, aba: 'ano', titulo: 'Ano letivo · Passo 3 de 3'),
+      body: ConteudoPagina(
+          largura: 680,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ListView(
               children: [
-                ...todosOsCriterios.map((criterio) {
-                  return FilterChip(
-                    label: Text(criterio),
-                    selected: _criteriosSelecionados.contains(criterio),
-                    onSelected: (marcado) {
-                      setState(() {
-                        if (marcado) {
-                          _criteriosSelecionados.add(criterio);
-                          _pesoController(criterio);
-                        } else {
-                          _criteriosSelecionados.remove(criterio);
-                        }
-                      });
-                    },
-                  );
-                }),
-                ActionChip(
-                  label: const Text('Adicionar'),
-                  avatar: const Icon(Icons.add, size: 16),
-                  onPressed: _adicionarCriterioPersonalizado,
+                const PassoAnoLetivo(passoAtual: 3),
+                const SizedBox(height: 20),
+                const Text(
+                  'Como as notas dos seus alunos são calculadas?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
-              ],
-            ),
-            if (_criteriosSelecionados.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const Text(
-                'Peso de cada critério',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'A soma dos pesos precisa fechar em 100%.',
-                style: TextStyle(color: Colors.black54, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              ..._criteriosSelecionados.map((nome) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                const SizedBox(height: 4),
+                const Text(
+                  'Os critérios escolhidos valem para todas as etapas do ano.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...todosOsCriterios.map((criterio) {
+                      return FilterChip(
+                        label: Text(criterio),
+                        selected: _criteriosSelecionados.contains(criterio),
+                        onSelected: (marcado) {
+                          setState(() {
+                            if (marcado) {
+                              _criteriosSelecionados.add(criterio);
+                              _pesoController(criterio);
+                            } else {
+                              _criteriosSelecionados.remove(criterio);
+                            }
+                            _redistribuirPesos();
+                          });
+                        },
+                      );
+                    }),
+                    ActionChip(
+                      label: const Text('Adicionar'),
+                      avatar: const Icon(Icons.add, size: 16),
+                      onPressed: _adicionarCriterioPersonalizado,
+                    ),
+                  ],
+                ),
+                if (_criteriosSelecionados.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Peso de cada critério',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'A soma dos pesos precisa fechar em 100%.',
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._criteriosSelecionados.map((nome) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(nome)),
+                            SizedBox(
+                              width: 120,
+                              child: TextField(
+                                key: ValueKey('peso_$nome'),
+                                controller: _pesoController(nome),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                textAlign: TextAlign.right,
+                                decoration: const InputDecoration(
+                                  labelText: 'Peso',
+                                  border: AppVisual.bordaPeso,
+                                  enabledBorder: AppVisual.bordaPeso,
+                                  suffixText: '%',
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 16),
+                                ),
+                                onChanged: (_) => setState(_guardarRascunho),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                  Row(
+                    children: [
+                      Icon(
+                        _pesosValidos
+                            ? Icons.check_circle
+                            : Icons.error_outline,
+                        size: 18,
+                        color:
+                            _pesosValidos ? Colors.green : Colors.orange[800],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: Text(
+                        'Soma: ${_formatarPeso(_somaPesos)}%'
+                        '${_pesosValidos ? '' : ' — precisa ser 100%'}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _pesosValidos
+                              ? Colors.green[800]
+                              : Colors.orange[800],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )),
+                    ],
+                  ),
+                ],
+                if (_mensagemErro != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      _mensagemErro!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                // O cadastro de professor deixa de ser obrigatorio. Se a escola
+                // ja tem professores, o fluxo nem sugere cadastrar outro.
+                if (_totalProfessores > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        Expanded(child: Text(nome)),
-                        SizedBox(
-                          width: 90,
-                          child: TextField(
-                            controller: _pesoController(nome),
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                              suffixText: '%',
-                              isDense: true,
-                              contentPadding:
-                                  EdgeInsets.symmetric(vertical: 8),
-                            ),
-                            onChanged: (_) => setState(() {}),
+                        const Icon(Icons.check_circle_outline,
+                            size: 18, color: Colors.green),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Sua escola já tem $_totalProfessores professor(es) '
+                            'cadastrado(s). Você pode concluir agora.',
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
                       ],
                     ),
-                  )),
-              Row(
-                children: [
-                  Icon(
-                    _pesosValidos ? Icons.check_circle : Icons.error_outline,
-                    size: 18,
-                    color: _pesosValidos ? Colors.green : Colors.orange[800],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Soma: ${_formatarPeso(_somaPesos)}%'
-                    '${_pesosValidos ? '' : ' — precisa ser 100%'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: _pesosValidos ? Colors.green[800] : Colors.orange[800],
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (_mensagemErro != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(
-                  _mensagemErro!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ),
-            const Spacer(),
-            // O cadastro de professor deixa de ser obrigatorio. Se a escola
-            // ja tem professores, o fluxo nem sugere cadastrar outro.
-            if (_totalProfessores > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    const Icon(Icons.check_circle_outline,
-                        size: 18, color: Colors.green),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Sua escola já tem $_totalProfessores professor(es) '
-                        'cadastrado(s). Você pode concluir agora.',
-                        style: const TextStyle(fontSize: 12),
+                    TextButton.icon(
+                      onPressed:
+                          _carregando ? null : () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      label: const Text('Voltar'),
+                    ),
+                    if (_totalProfessores == 0)
+                      TextButton(
+                        onPressed: _carregando || !_pesosValidos
+                            ? null
+                            : _salvarECadastrarProfessor,
+                        child: const Text('Salvar e cadastrar professor'),
                       ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _carregando ||
+                              !_pesosValidos ||
+                              _criteriosSelecionados.any((n) =>
+                                  _pesoDigitado(n) < 0 ||
+                                  _pesoDigitado(n) > 100)
+                          ? null
+                          : _concluir,
+                      child: _carregando
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              _salvo ? 'Concluído' : 'Concluir configuração'),
                     ),
                   ],
                 ),
-              ),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: _carregando ? null : () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text('Voltar'),
-                ),
-                const Spacer(),
-                if (_totalProfessores == 0)
-                  TextButton(
-                    onPressed: _carregando ? null : _salvarECadastrarProfessor,
-                    child: const Text('Salvar e cadastrar professor'),
-                  ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _carregando ? null : _concluir,
-                  child: _carregando
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_salvo ? 'Concluído' : 'Concluir configuração'),
-                ),
               ],
             ),
-          ],
-        ),
-      ),
+          )),
     );
   }
 }

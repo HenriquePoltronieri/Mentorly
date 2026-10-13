@@ -17,7 +17,7 @@ from config import AI_CONFIG
 logger = logging.getLogger(__name__)
 
 MENSAGEM_INDISPONIVEL = (
-    "Nao foi possivel gerar os insights agora. Tente novamente em instantes."
+    "Não foi possível consultar a IA agora. Tente novamente em instantes."
 )
 
 # Modelos de raciocinio gastam parte do limite pensando; com pouco espaco o

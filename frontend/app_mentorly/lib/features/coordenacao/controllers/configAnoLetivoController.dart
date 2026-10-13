@@ -1,43 +1,28 @@
+import '../../../core/services/apiService.dart';
 import '../services/anosLetivosService.dart';
 import '../services/etapasService.dart';
-import '../services/criteriosService.dart';
 import '../models/etapaModel.dart';
 import '../models/criterioAvaliacaoModel.dart';
 
-// Controla a configuracao do ano letivo (etapas, notas min/max, criterios)
-// de UM ano da escola por vez.
-//
-// Singleton porque as tres telas do fluxo (configEtapas, configNotasEtapa,
-// configCriterios) compartilham a mesma lista de etapas.
-//
-// O ano configurado vem do cadastro de anos letivos da escola: a tela de Anos
-// Letivos escolhe um ano explicitamente, e quem entra pelo menu "Configurar
-// Ano Letivo" usa o ano ATUAL (usarAnoAtualDaEscola). Nao existe mais um
-// ano "assumido" pelo calendario do aparelho.
+// Rascunho compartilhado pelos três passos. O banco só muda ao concluir.
 class ConfigAnoLetivoController {
-  static final ConfigAnoLetivoController _instancia =
-      ConfigAnoLetivoController._interno();
-
+  static final _instancia = ConfigAnoLetivoController._interno();
   factory ConfigAnoLetivoController() => _instancia;
-
   ConfigAnoLetivoController._interno();
-
-  final EtapasService _etapasService = EtapasService();
-  final CriteriosService _criteriosService = CriteriosService();
-
+  final _api = ApiService();
+  final _etapasService = EtapasService();
+  final _anosService = AnosLetivosService();
   List<EtapaModel> etapas = [];
   List<CriterioAvaliacaoModel> criterios = [];
-
-  final AnosLetivosService _anosService = AnosLetivosService();
-
-  // Ano em configuracao. Nulo ate alguem escolher um (ou a escola ter um ano
-  // atual): nesse caso nao ha o que configurar.
+  final Map<int, List<String>> rascunhosNotas = {};
+  final Map<String, String> rascunhosPesos = {};
+  List<String>? criteriosSelecionados;
   int? anoLetivo;
+  String? _sessaoRascunho;
+  bool get temRascunhoDaSessao =>
+      etapas.isNotEmpty && _sessaoRascunho == _api.token;
+  bool get jaConfigurado => etapas.any((e) => e.id != null);
 
-  bool get jaConfigurado => etapas.isNotEmpty;
-
-  // Define o ano a configurar como o ano ATUAL cadastrado pela escola.
-  // Fica nulo se a escola ainda nao marcou nenhum.
   Future<void> usarAnoAtualDaEscola() async {
     final anos = await _anosService.listarAnos();
     anoLetivo = null;
@@ -46,141 +31,89 @@ class ConfigAnoLetivoController {
     }
   }
 
-  // Carrega o que a escola ja tem configurado no ano escolhido. Chamado ao
-  // abrir o fluxo, pra ele virar edicao em vez de recomecar do zero.
-  Future<void> carregarConfiguracaoExistente() async {
-    final ano = anoLetivo;
-    if (ano == null) {
-      etapas = [];
-      criterios = [];
-      return;
-    }
-    final resposta = await _etapasService.listarEtapas(anoLetivo: ano);
-
+  void _lerConfiguracao(List<dynamic> resposta) {
     etapas = resposta
-        .map((item) => EtapaModel.fromJson(item as Map<String, dynamic>))
-        .toList();
-    etapas.sort((a, b) => a.numero.compareTo(b.numero));
-
+        .map((e) => EtapaModel.fromJson(e as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.numero.compareTo(b.numero));
     criterios = [];
-    for (final item in resposta) {
-      final lista = (item as Map<String, dynamic>)['criterios'] as List?;
-      if (lista == null) continue;
-      criterios.addAll(
-        lista.map(
-          (c) => CriterioAvaliacaoModel.fromJson(c as Map<String, dynamic>),
-        ),
-      );
-    }
-  }
-
-  // Cria (ou reaproveita) as etapas no backend AGORA, para que elas ja
-  // tenham id quando as proximas telas forem gravar notas e criterios.
-  Future<void> definirQuantidadeEtapas(int quantidade) async {
-    final ano = anoLetivo;
-    if (ano == null) {
-      throw Exception('Escolha um ano letivo antes de configurar as etapas');
-    }
-    final novas = <EtapaModel>[];
-
-    for (var numero = 1; numero <= quantidade; numero++) {
-      final existente = etapas.where((e) => e.numero == numero).firstOrNull;
-      final nome = (existente != null && existente.nome.isNotEmpty)
-          ? existente.nome
-          : 'Etapa $numero';
-
-      final resposta = await _etapasService.criarEtapa(
-        nome: nome,
-        ordem: numero,
-        anoLetivo: ano,
-      );
-
-      final etapa = EtapaModel.fromJson(resposta);
-      novas.add(etapa);
-    }
-
-    // Se a escola diminuiu a quantidade de etapas, apaga as que sobraram.
-    for (final antiga in etapas) {
-      if (antiga.numero > quantidade && antiga.id != null) {
-        await _etapasService.excluirEtapa(int.parse(antiga.id!));
+    for (final etapa in resposta) {
+      for (final criterio in (etapa['criterios'] as List? ?? [])) {
+        criterios.add(
+            CriterioAvaliacaoModel.fromJson(criterio as Map<String, dynamic>));
       }
     }
-
-    etapas = novas;
   }
 
-  EtapaModel? etapaPorNumero(int numero) =>
-      etapas.where((e) => e.numero == numero).firstOrNull;
+  Future<void> carregarConfiguracaoExistente() async {
+    _sessaoRascunho = _api.token;
+    rascunhosNotas.clear();
+    rascunhosPesos.clear();
+    criteriosSelecionados = null;
+    etapas = [];
+    criterios = [];
+    if (anoLetivo != null) {
+      _lerConfiguracao(await _etapasService.listarEtapas(anoLetivo: anoLetivo));
+    }
+  }
+
+  Future<void> definirQuantidadeEtapas(int quantidade) async {
+    if (anoLetivo == null) throw Exception('Escolha um ano letivo.');
+    if (quantidade < 1 || quantidade > 12) {
+      throw Exception('Escolha de 1 a 12 etapas.');
+    }
+    final antigas = {for (final e in etapas) e.numero: e};
+    etapas = List.generate(
+        quantidade,
+        (i) =>
+            antigas[i + 1] ??
+            EtapaModel(
+              nome: 'Etapa ${i + 1}',
+              numero: i + 1,
+              anoLetivo: anoLetivo!,
+            ));
+  }
+
+  EtapaModel? etapaPorNumero(int numero) {
+    for (final etapa in etapas) {
+      if (etapa.numero == numero) return etapa;
+    }
+    return null;
+  }
 
   Future<void> salvarNotasEtapa(
-    int numeroEtapa,
-    double notaMinima,
-    double notaMaxima,
-  ) async {
-    final etapa = etapaPorNumero(numeroEtapa);
-    if (etapa == null || etapa.id == null) {
-      throw Exception('A etapa $numeroEtapa ainda não foi criada');
+      int numero, double minima, double maxima) async {
+    final etapa = etapaPorNumero(numero);
+    if (etapa == null) throw Exception('Etapa não encontrada.');
+    if (!minima.isFinite ||
+        !maxima.isFinite ||
+        minima < 0 ||
+        minima >= maxima ||
+        maxima > 999.99) {
+      throw Exception(
+          'O mínimo deve ser menor que os pontos da etapa (até 999,99).');
     }
-
-    await _etapasService.definirNotas(
-      etapaId: int.parse(etapa.id!),
-      notaMinima: notaMinima,
-      notaMaxima: notaMaxima,
-    );
-
-    etapa.notaMinima = notaMinima;
-    etapa.notaMaxima = notaMaxima;
+    etapa.notaMinima = minima;
+    etapa.notaMaxima = maxima;
   }
 
-  // Criterios valem para o ano letivo inteiro: sao criados em todas as
-  // etapas, para o professor poder classificar a atividade em qualquer uma.
-  Future<void> adicionarCriterio(String nome) async {
-    if (etapas.isEmpty) {
-      throw Exception('Configure as etapas antes dos critérios');
-    }
-
-    for (final etapa in etapas) {
-      if (etapa.id == null) continue;
-      final resposta = await _criteriosService.criarCriterio(
-        etapaId: int.parse(etapa.id!),
-        nome: nome,
-      );
-      criterios.add(CriterioAvaliacaoModel.fromJson(resposta));
-    }
+  Future<void> salvarConfiguracao(Map<String, double> pesos) async {
+    if (anoLetivo == null) throw Exception('Escolha um ano letivo.');
+    final resposta =
+        await _api.put('/config/anos-letivos/$anoLetivo/configuracao', {
+      'etapas': etapas
+          .map((e) => {
+                'nome': e.nome,
+                'nota_minima': e.notaMinima,
+                'nota_maxima': e.notaMaxima,
+              })
+          .toList(),
+      'criterios':
+          pesos.entries.map((e) => {'nome': e.key, 'peso': e.value}).toList(),
+    });
+    _lerConfiguracao(resposta as List);
   }
 
-  // Grava o peso de um criterio em TODAS as etapas onde ele existe - o
-  // mesmo nome de criterio ("Provas") vale para o ano letivo inteiro,
-  // entao o peso tambem. Backend valida no calculo (Marco 2) que a soma
-  // dos pesos ativos de cada etapa fecha em 100; esta tela so evita que
-  // uma configuracao errada chegue ate la sem o usuario perceber.
-  Future<void> definirPeso(String nome, double peso) async {
-    final alvos = criterios.where((c) => c.nome == nome).toList();
-    for (final criterio in alvos) {
-      final id = int.tryParse(criterio.id);
-      if (id == null) continue;
-      await _criteriosService.atualizarCriterio(criterioId: id, peso: peso);
-      criterio.peso = peso;
-    }
-  }
-
-  Future<void> removerCriterio(String nome) async {
-    final alvos = criterios.where((c) => c.nome == nome).toList();
-    for (final criterio in alvos) {
-      final id = int.tryParse(criterio.id);
-      if (id == null) continue;
-      await _criteriosService.excluirCriterio(id);
-      criterios.remove(criterio);
-    }
-  }
-
-  // Nomes distintos dos criterios ja configurados (eles se repetem por
-  // etapa, entao a tela mostra o conjunto).
   List<String> get nomesDosCriterios =>
       criterios.map((c) => c.nome).toSet().toList();
-
-}
-
-extension _PrimeiroOuNulo<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

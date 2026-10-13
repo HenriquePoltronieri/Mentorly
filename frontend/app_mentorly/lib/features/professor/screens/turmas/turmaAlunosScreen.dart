@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../../core/widgets/confirmarExclusaoDialog.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/services/apiService.dart';
-import '../../../../core/widgets/adicionarAlunosModal.dart';
-import '../../../../core/widgets/editarAlunoModal.dart';
 import '../../../../app/routes.dart';
 import '../../widgets/professorTopBar.dart';
 import '../../services/professorAlunosService.dart';
+import '../../widgets/estatisticas_view.dart';
+import '../../../coordenacao/models/turmaModel.dart';
+import '../atividades/adicionarAtividadeModal.dart';
 
 // tela que lista os alunos de uma turma especifica do professor
 // recebe a turma via Navigator.pushNamed(context, AppRoutes.turmaAlunos, arguments: turma)
@@ -30,29 +31,17 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
   List<dynamic> _alunos = [];
   Map<String, dynamic>? _turma;
   bool _jaBuscou = false;
+  int _versaoEstatisticas = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_jaBuscou) {
-      _turma = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+      _turma =
+          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
       _jaBuscou = true;
       _buscarAlunos();
     }
-  }
-
-  Future<void> _abrirAdicionarAlunos() async {
-    if (_turma == null) return;
-
-    final adicionou = await showDialog<bool>(
-      context: context,
-      builder: (_) => AdicionarAlunosModal(
-        turmaId: _turma!['id'] as int,
-        papel: PapelAluno.professor,
-      ),
-    );
-
-    if (adicionou == true) _buscarAlunos();
   }
 
   Future<void> _buscarAlunos() async {
@@ -64,17 +53,32 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
     });
 
     try {
-      final alunos = await _alunosService.listarAlunos(_turma!['id'] as int);
+      final respostas = await Future.wait([
+        _alunosService.listarAlunos(_turma!['id'] as int),
+        ApiService().get('/professor/turmas/${_turma!['id']}/estatisticas')
+      ]);
+      final metricas = (respostas[1]['alunos'] as List);
+      final alunos = (respostas[0] as List).map((a) {
+        final m = metricas.where((m) => m['id'] == a['id']);
+        return {
+          ...Map<String, dynamic>.from(a as Map),
+          if (m.isNotEmpty) ...Map<String, dynamic>.from(m.first as Map)
+        };
+      }).toList();
+      if (!mounted) return;
       setState(() => _alunos = alunos);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Erro ao buscar alunos: ${e.mensagem}');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -83,197 +87,184 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
     }
   }
 
-  Future<void> _editarAluno(Map<String, dynamic> aluno) async {
-    final salvou = await showDialog<bool>(
-      context: context,
-      builder: (_) => EditarAlunoModal(aluno: aluno, papel: PapelAluno.professor),
-    );
-    if (salvou == true) _buscarAlunos();
-  }
-
-  Future<void> _excluirAluno(Map<String, dynamic> aluno) async {
-    final confirmou = await confirmarExclusao(
-      context,
-      titulo: 'Excluir aluno?',
-      nome: aluno['nome'].toString(),
-      aviso: AvisosDeExclusao.aluno,
-    );
-    if (!confirmou) return;
-
+  Future<void> _novaAtividade() async {
     try {
-      await _alunosService.excluirAluno(aluno['id'] as int);
+      final dados = await ApiService().get('/classes/${_turma!['id']}');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Aluno "${aluno['nome']}" excluído')),
-      );
-      _buscarAlunos();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível conectar ao servidor')),
-      );
+      await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+              builder: (_) => AdicionarAtividadeModal(turmas: [
+                    TurmaModel.fromJson(Map<String, dynamic>.from(dados as Map))
+                  ])));
+      if (mounted) {
+        setState(() => _versaoEstatisticas++);
+        _buscarAlunos();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e is ApiException
+                ? e.mensagem
+                : 'Não foi possível abrir a atividade.')));
+      }
     }
-  }
-
-  Color _corDaMedia(double? media) {
-    if (media == null) return Colors.grey;
-    if (media < 5) return Colors.red;
-    if (media < 7) return Colors.orange;
-    return Colors.green;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const ProfessorTopBar(abaAtiva: 'turmas'),
-      // O professor tambem adiciona alunos, mas so nas turmas vinculadas a
-      // ele - o backend valida isso em /api/professor/turmas/{id}/alunos.
-      floatingActionButton: _turma == null
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _abrirAdicionarAlunos,
-              icon: const Icon(Icons.person_add_alt),
-              label: const Text('Adicionar alunos'),
-            ),
-      body: Column(
-        children: [
-          if (_turma != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
+    return DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: const ProfessorTopBar(abaAtiva: 'turmas'),
+          body: Column(
+            children: [
+              if (_turma != null)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest
+                      .withValues(alpha: 0.3),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _turma!['nome'] ?? '',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.boletimTurma,
+                          arguments: _turma,
+                        ),
+                        icon: const Icon(Icons.grading_outlined),
+                        tooltip: 'Boletim e fechamento de etapas',
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.insightsTurma,
+                          arguments: _turma,
+                        ),
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        tooltip: 'Insights da turma',
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: Text(
-                      _turma!['nome'] ?? '',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
+                ),
+              if (_turma != null)
+                Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Wrap(spacing: 12, runSpacing: 8, children: [
+                      FilledButton.icon(
+                          onPressed: _novaAtividade,
+                          icon: const Icon(Icons.add),
+                          label: const Text('+ Nova atividade')),
+                      OutlinedButton.icon(
+                          onPressed: () => Navigator.pushNamed(
+                              context, AppRoutes.chatIa,
+                              arguments: _turma),
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          label: const Text('Conversar com IA')),
+                    ])),
+              const TabBar(
+                  tabs: [Tab(text: 'Alunos'), Tab(text: 'Estatísticas')]),
+              Expanded(
+                child: TabBarView(children: [
+                  RefreshIndicator(
+                    onRefresh: () {
+                      ApiService().invalidarCache();
+                      return _buscarAlunos();
+                    },
+                    child: ConteudoPagina(child: _construirCorpo()),
                   ),
-                  TextButton.icon(
-                    onPressed: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.boletimTurma,
-                      arguments: _turma,
-                    ),
-                    icon: const Icon(Icons.grading_outlined, size: 18),
-                    label: const Text('Boletim'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.insightsTurma,
-                      arguments: _turma,
-                    ),
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                    label: const Text('Insights IA'),
-                  ),
-                ],
+                  if (_turma != null)
+                    EstatisticasView(
+                        key: ValueKey(_versaoEstatisticas),
+                        turmaId: _turma!['id'] as int)
+                  else
+                    const SizedBox.shrink(),
+                ]),
               ),
-            ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _buscarAlunos,
-              child: _construirCorpo(),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
+        ));
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarAlunos);
     }
 
     if (_alunos.isEmpty) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          const Center(child: Text('Nenhum aluno cadastrado nessa turma ainda')),
-          const SizedBox(height: 4),
-          const Center(
-            child: Text(
-              'Fale com a coordenação para adicionar alunos',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Nenhum aluno nesta turma',
+          mensagem: 'A Coordenação cadastra os alunos desta turma.');
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+    return ListView.separated(
+      separatorBuilder: (_, indice) => const Divider(height: 1),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       itemCount: _alunos.length,
       itemBuilder: (context, index) {
         final aluno = _alunos[index];
-        final media = (aluno['media'] as num?)?.toDouble();
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.person)),
-            title: Text(aluno['nome'] ?? ''),
-            subtitle: Text('Matrícula: ${aluno['matricula'] ?? ''}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _corDaMedia(media).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    media != null ? media.toStringAsFixed(1) : '-',
-                    style: TextStyle(
-                      color: _corDaMedia(media),
-                      fontWeight: FontWeight.w600,
-                    ),
+        return ListTile(
+          leading: const Icon(Icons.person_outline),
+          title: Text(aluno['nome'] ?? ''),
+          subtitle: Text(
+              '${aluno['risco'] ?? 'Sem dados'} · ${aluno['acompanhamento']?['etapa'] ?? 'Selecione uma etapa'}'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: corRisco(aluno['risco']?.toString() ?? 'Sem dados')
+                      .withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  aluno['pontos_obtidos'] == null
+                      ? '—'
+                      : '${formatarMetrica(aluno['pontos_obtidos'])}/${formatarMetrica(aluno['pontos_avaliados'])} pts',
+                  style: TextStyle(
+                    color: corRisco(aluno['risco']?.toString() ?? 'Sem dados'),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                PopupMenuButton<String>(
-                  onSelected: (acao) {
-                    if (acao == 'editar') _editarAluno(aluno);
-                    if (acao == 'excluir') _excluirAluno(aluno);
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'editar', child: Text('Editar')),
-                    PopupMenuItem(value: 'excluir', child: Text('Excluir')),
-                  ],
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_ios, size: 14),
-              ],
-            ),
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.alunoDetail, arguments: aluno);
-            },
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward_ios, size: 14),
+            ],
           ),
+          onTap: () {
+            Navigator.pushNamed(context, AppRoutes.alunoDetail, arguments: {
+              ...Map<String, dynamic>.from(aluno as Map),
+              'turma_id': _turma!['id'],
+              'turma': _turma!['nome']
+            });
+          },
         );
       },
     );

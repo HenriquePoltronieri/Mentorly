@@ -51,7 +51,7 @@ class AuthService {
 
   // Professor recebe o email ja cadastrado pela coordenacao e so cria a senha
   Future<UserModel> criarSenhaProfessor({
-    required String email,
+    String? email,
     required String senha,
     required String confirmarSenha,
     required String token,
@@ -60,7 +60,7 @@ class AuthService {
       throw Exception('As senhas nao coincidem');
     }
     final resposta = await _api.post('/auth/criar-senha-professor', {
-      'email': email,
+      if (email != null && email.isNotEmpty) 'email': email,
       'senha': senha,
       'token': token,
     });

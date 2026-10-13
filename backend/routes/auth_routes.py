@@ -26,6 +26,11 @@ def criar_senha_professor():
     return auth_controller.criar_senha_professor()
 
 
+@auth_blueprint.post("/consultar-convite")
+def consultar_convite():
+    return auth_controller.consultar_convite()
+
+
 @auth_blueprint.post("/enviar-codigo")
 def enviar_codigo():
     return auth_controller.enviar_codigo()

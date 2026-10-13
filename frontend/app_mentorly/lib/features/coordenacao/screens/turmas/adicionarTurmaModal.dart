@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/services/apiService.dart';
 import '../../models/anoLetivoModel.dart';
@@ -56,9 +55,8 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
     try {
       final todos = await _anosService.listarAnos();
       final anoDaTurma = widget.turma?.anoLetivo;
-      final permitidos = todos
-          .where((a) => !a.estaEncerrado || a.ano == anoDaTurma)
-          .toList();
+      final permitidos =
+          todos.where((a) => !a.estaEncerrado || a.ano == anoDaTurma).toList();
 
       int? escolhido = anoDaTurma;
       if (escolhido == null) {
@@ -76,7 +74,8 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
       if (mounted) setState(() => _mensagemErro = e.mensagem);
     } catch (_) {
       if (mounted) {
-        setState(() => _mensagemErro = 'Não foi possível carregar os anos letivos');
+        setState(
+            () => _mensagemErro = 'Não foi possível carregar os anos letivos');
       }
     } finally {
       if (mounted) setState(() => _carregandoAnos = false);
@@ -84,6 +83,7 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
   }
 
   Future<void> _salvar() async {
+    if (_carregando || _carregandoAnos) return;
     if (_nomeController.text.trim().isEmpty) {
       setState(() => _mensagemErro = 'Digite o nome da turma');
       return;
@@ -118,8 +118,10 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = e.mensagem);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -147,10 +149,9 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
     }
     return DropdownButtonFormField<int>(
       initialValue: _anoSelecionado,
-      isDense: true,
+      isExpanded: true,
       decoration: const InputDecoration(
-        border: OutlineInputBorder(),
-        isDense: true,
+        labelText: 'Ano letivo',
       ),
       items: _anos
           .map(
@@ -165,106 +166,53 @@ class _AdicionarTurmaModalState extends State<AdicionarTurmaModal> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Stack(
-            children: [
-              // detalhes decorativos nos cantos, igual o mockup
-              Positioned(
-                top: -20,
-                right: -20,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 1, sigmaY: 1),
-                  child: Container(
-                    width: 90,
-                    height: 90,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFA7F3D0),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: -30,
-                left: -30,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFBFDBFE),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _editando ? 'Editar Turma' : 'Adicionar Turma',
-                    style: const TextStyle(fontSize: 22),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text('Nome da turma:'),
-                  const SizedBox(height: 6),
-                  TextField(
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(_editando ? 'Editar Turma' : 'Adicionar Turma'),
+        content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+                child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
                     controller: _nomeController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      hintText: 'Exemplo "3 ano A"',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Descrição:'),
-                  const SizedBox(height: 6),
-                  TextField(
+                        labelText: 'Nome da turma',
+                        hintText: 'Exemplo: 3 ano A')),
+                const SizedBox(height: 16),
+                TextField(
                     controller: _descricaoController,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _salvar(),
                     decoration: const InputDecoration(
-                      hintText: 'Exemplo "Matemática - turno da manhã"',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
+                        labelText: 'Descrição (opcional)')),
+                const SizedBox(height: 16),
+                _campoAnoLetivo(),
+                if (_mensagemErro != null) ...[
                   const SizedBox(height: 16),
-                  const Text('Ano letivo:'),
-                  const SizedBox(height: 6),
-                  _campoAnoLetivo(),
-                  if (_mensagemErro != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        _mensagemErro!,
-                        style: const TextStyle(color: Colors.red, fontSize: 13),
-                      ),
-                    ),
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      onPressed: _carregando ? null : _salvar,
-                      child: _carregando
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(_editando ? 'Salvar' : 'Adicionar'),
-                    ),
-                  ),
+                  Text(_mensagemErro!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                  TextButton(
+                      onPressed: _carregarAnos,
+                      child: const Text('Tentar novamente')),
                 ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+              ],
+            ))),
+        actions: [
+          TextButton(
+              onPressed: _carregando ? null : () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: _carregando || _carregandoAnos ? null : _salvar,
+              child: Text(_carregando
+                  ? 'Salvando…'
+                  : _editando
+                      ? 'Salvar'
+                      : 'Adicionar')),
+        ],
+      );
 }

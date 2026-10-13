@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../widgets/professorTopBar.dart';
@@ -32,6 +33,7 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
   }
 
   Future<void> _buscarTurmas() async {
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
@@ -39,10 +41,13 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
 
     try {
       final turmas = await _turmasService.listarTurmas();
+      if (!mounted) return;
       setState(() => _turmas = turmas);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Erro ao buscar turmas: ${e.mensagem}');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -56,28 +61,26 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
     return Scaffold(
       appBar: const ProfessorTopBar(abaAtiva: 'turmas'),
       body: RefreshIndicator(
-        onRefresh: _buscarTurmas,
-        child: _construirCorpo(),
+        onRefresh: () {
+          ApiService().invalidarCache();
+          return _buscarTurmas();
+        },
+        child: ConteudoPagina(child: _construirCorpo()),
       ),
     );
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(_mensagemErro!, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarTurmas);
     }
 
     if (_turmas.isEmpty) {
@@ -100,25 +103,24 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+    return ListView.separated(
+      separatorBuilder: (_, indice) => const Divider(height: 1),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       itemCount: _turmas.length,
       itemBuilder: (context, index) {
         final turma = _turmas[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.class_)),
-            title: Text(turma['nome'] ?? ''),
-            subtitle: Text(
-              '${turma['disciplina'] ?? ''} • ${turma['turno'] ?? ''} • ${turma['totalAlunos'] ?? 0} aluno(s)'
-              '${turma['anoLetivo'] != null ? ' • Ano letivo ${turma['anoLetivo']}' : ''}',
-            ),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.turmaAlunos, arguments: turma);
-            },
+        return ListTile(
+          leading: const Icon(Icons.class_outlined),
+          title: Text(turma['nome'] ?? ''),
+          subtitle: Text(
+            '${turma['disciplina'] ?? ''} • ${turma['turno'] ?? ''} • ${turma['totalAlunos'] ?? 0} aluno(s)'
+            '${turma['anoLetivo'] != null ? ' • Ano letivo ${turma['anoLetivo']}' : ''}',
           ),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () {
+            Navigator.pushNamed(context, AppRoutes.turmaAlunos,
+                arguments: turma);
+          },
         );
       },
     );

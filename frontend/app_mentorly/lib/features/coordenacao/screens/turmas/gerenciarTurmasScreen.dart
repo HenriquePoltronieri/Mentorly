@@ -1,4 +1,6 @@
+import '../../../../core/widgets/barra_mentorly.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/widgets/confirmarExclusaoDialog.dart';
 import '../../../../app/routes.dart';
 import '../../../../core/services/apiService.dart';
@@ -32,6 +34,7 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
   }
 
   Future<void> _buscarTurmas() async {
+    if (!mounted) return;
     setState(() {
       _carregando = true;
       _mensagemErro = null;
@@ -39,10 +42,13 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
 
     try {
       final turmas = await _turmasService.listarTurmas();
+      if (!mounted) return;
       setState(() => _turmas = turmas);
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Erro ao buscar turmas: ${e.mensagem}');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível conectar ao servidor');
     } finally {
       if (mounted) {
@@ -86,8 +92,8 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
       _buscarTurmas();
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao excluir: ${e.mensagem}')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,55 +105,52 @@ class _GerenciarTurmasScreenState extends State<GerenciarTurmasScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Turmas')),
+      appBar: const BarraMentorly(
+          professor: false, aba: 'turmas', titulo: 'Turmas'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirCriarTurma,
         icon: const Icon(Icons.add),
         label: const Text('Adicionar turma'),
       ),
       body: RefreshIndicator(
-        onRefresh: _buscarTurmas,
-        child: _construirCorpo(),
+        onRefresh: () {
+          ApiService().invalidarCache();
+          return _buscarTurmas();
+        },
+        child: ConteudoPagina(child: _construirCorpo()),
       ),
     );
   }
 
   Widget _construirCorpo() {
     if (_carregando) {
-      return const Center(child: CircularProgressIndicator());
+      return const CarregamentoPagina();
     }
 
     if (_mensagemErro != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Center(
-            child: Text(_mensagemErro!,
-                style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Falha ao carregar',
+          mensagem: _mensagemErro!,
+          acao: 'Tentar novamente',
+          onPressed: _buscarTurmas);
     }
 
     if (_turmas.isEmpty) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.class_outlined, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          const Center(child: Text('Nenhuma turma cadastrada ainda')),
-        ],
-      );
+      return EstadoPagina(
+          titulo: 'Nenhuma turma cadastrada ainda',
+          mensagem: 'Comece pelo cadastro.',
+          acao: 'Adicionar turma',
+          onPressed: _abrirCriarTurma);
     }
 
-    return ListView.builder(
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      separatorBuilder: (_, indice) => const Divider(height: 1),
       itemCount: _turmas.length,
       itemBuilder: (context, index) {
         final turma = _turmas[index];
         return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.class_)),
+          leading: const Icon(Icons.class_outlined),
           title: Text(turma.nome),
           subtitle: Text(
             [

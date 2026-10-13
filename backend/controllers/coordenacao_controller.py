@@ -10,7 +10,6 @@ from flask import Response, jsonify, request
 from auth.decorators import coordenacao_atual
 from services.entrada import EntradaInvalida
 from models.turma_model import Turma
-from services.academico.boletim import montar_boletim_turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
 from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.aluno.listar_alunos import ListarAlunosService
@@ -49,6 +48,7 @@ class CoordenacaoController:
                 dados.get("nome"),
                 dados.get("email"),
                 dados.get("disciplina"),
+                dados.get("turma_ids"),
             )
         except EntradaInvalida as erro:
             return jsonify({"error": str(erro)}), 400
@@ -89,10 +89,10 @@ class CoordenacaoController:
             return jsonify({"error": str(erro)}), 404
         return jsonify(professor)
 
-    def reenviar_convite_professor(self, professor_id):
+    def reenviar_convite_professor(self, professor_id, enviar=True):
         try:
             professor = ReenviarConviteProfessorService().execute(
-                coordenacao_atual(), professor_id
+                coordenacao_atual(), professor_id, enviar=enviar
             )
         except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404
@@ -233,12 +233,3 @@ class CoordenacaoController:
         except PlanilhaInvalida as erro:
             return jsonify({"error": str(erro)}), 400
         return jsonify(resultado), 201
-
-    # -----------------------------------------------------------------
-    # Boletim academico (Marco 3)
-    # -----------------------------------------------------------------
-    def boletim_turma(self, turma_id):
-        turma = Turma.find_by_id(turma_id, coordenacao_atual())
-        if not turma:
-            return jsonify({"error": "Turma nao encontrada"}), 404
-        return jsonify(montar_boletim_turma(turma, coordenacao_atual()))
