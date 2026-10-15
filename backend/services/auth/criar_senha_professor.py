@@ -19,8 +19,8 @@ class CriarSenhaProfessorService:
         senha = entrada.senha(senha)
         token = entrada.texto(token, "O convite", entrada.LIMITE_CODIGO)
 
-        if not senha or len(senha) < 6:
-            raise ValueError("A senha precisa ter ao menos 6 caracteres")
+        if not senha or len(senha) < 8:
+            raise ValueError("A senha precisa ter ao menos 8 caracteres")
         if not token:
             raise ValueError("Convite invalido")
 

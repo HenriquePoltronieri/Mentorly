@@ -70,6 +70,9 @@ void main() {
           (tester) async {
         var chamadas = 0;
         final cliente = MockClient((request) async {
+          if (request.url.path == '/api/acesso') {
+            return http.Response(jsonEncode({'liberado': true}), 200);
+          }
           if (request.url.path == '/api/auth/consultar-convite') {
             expect(jsonDecode(request.body), {'token': 'convite-teste'});
             return http.Response(
@@ -112,8 +115,8 @@ void main() {
                   : const ProfessorLoginScreen(),
             ),
             routes: {
-              AppRoutes.listaTurmas: (_) =>
-                  const Scaffold(body: Text('Turmas')),
+              AppRoutes.dashboard: (_) =>
+                  const Scaffold(body: Text('Início do professor')),
             },
           ));
           await tester.pumpAndSettle();
@@ -137,7 +140,7 @@ void main() {
           expect(chamadas, 1);
           expect(ApiService().estaLogado, sucesso);
           if (sucesso) {
-            expect(find.text('Turmas'), findsOneWidget);
+            expect(find.text('Início do professor'), findsOneWidget);
             final prefs = await SharedPreferences.getInstance();
             expect(prefs.getString('mentorly.token'), 'jwt-teste');
             expect(ApiService().tipoUsuario, 'professor');

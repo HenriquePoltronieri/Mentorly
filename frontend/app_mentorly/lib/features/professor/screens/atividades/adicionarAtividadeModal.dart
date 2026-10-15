@@ -12,8 +12,9 @@ import 'gerarAtividadeIaDialog.dart';
 class AdicionarAtividadeModal extends StatefulWidget {
   final List<TurmaModel> turmas;
   final AtividadeModel? atividade;
+  final AtividadeModel? modelo;
   const AdicionarAtividadeModal(
-      {super.key, required this.turmas, this.atividade});
+      {super.key, required this.turmas, this.atividade, this.modelo});
   @override
   State<AdicionarAtividadeModal> createState() =>
       _AdicionarAtividadeModalState();
@@ -27,13 +28,14 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
   int? _etapa;
   bool _carregando = false, _salvando = false;
   String? _erro;
+  int _versaoCarga = 0;
   @override
   void initState() {
     super.initState();
-    _titulo = TextEditingController(text: widget.atividade?.nome ?? '');
-    _descricao = TextEditingController(text: widget.atividade?.descricao ?? '');
-    _valor = TextEditingController(
-        text: widget.atividade?.notaMaxima?.toString() ?? '');
+    final base = widget.atividade ?? widget.modelo;
+    _titulo = TextEditingController(text: base?.nome ?? '');
+    _descricao = TextEditingController(text: base?.descricao ?? '');
+    _valor = TextEditingController(text: base?.notaMaxima?.toString() ?? '');
     _data = TextEditingController(
         text: (widget.atividade?.dataEntrega ?? '')
             .split('T')
@@ -49,6 +51,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
   }
 
   Future<void> _carregar() async {
+    final versao = ++_versaoCarga;
     setState(() {
       _carregando = true;
       _etapa = null;
@@ -58,7 +61,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
     try {
       final lista =
           await EtapasService().listarEtapas(anoLetivo: _turma?.anoLetivo);
-      if (!mounted) return;
+      if (!mounted || versao != _versaoCarga) return;
       _etapas = lista
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((e) => e['fechada'] != true && e['ativa'] != false)
@@ -74,8 +77,9 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
             !hoje.isBefore(inicio) &&
             hoje.isBefore(fim.add(const Duration(days: 1)));
       }).toList();
-      _etapa = _etapas.any((e) => e['id'] == widget.atividade?.etapaId)
-          ? widget.atividade!.etapaId
+      final base = widget.atividade ?? widget.modelo;
+      _etapa = _etapas.any((e) => e['id'] == base?.etapaId)
+          ? base!.etapaId
           : atuais.isNotEmpty
               ? atuais.first['id'] as int
               : _etapas.isNotEmpty
@@ -83,13 +87,15 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                   : null;
       _padrao();
     } catch (e) {
-      if (mounted) {
+      if (mounted && versao == _versaoCarga) {
         _erro = e is ApiException
             ? e.mensagem
             : 'Não foi possível carregar as etapas.';
       }
     } finally {
-      if (mounted) setState(() => _carregando = false);
+      if (mounted && versao == _versaoCarga) {
+        setState(() => _carregando = false);
+      }
     }
   }
 
@@ -128,6 +134,9 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               turmaId: _turma!.id,
               nome: _titulo.text.trim(),
               etapaId: _etapa!,
+              criterioId: _etapa == widget.modelo?.etapaId
+                  ? widget.modelo?.criterioId
+                  : null,
               notaMaxima: valor,
               descricao: _descricao.text.trim(),
               dataEntrega: _data.text)
@@ -189,7 +198,9 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(
           title: Text(widget.atividade == null
-              ? 'Nova atividade'
+              ? widget.modelo == null
+                  ? 'Nova atividade'
+                  : 'Reaproveitar atividade'
               : 'Editar atividade')),
       bottomNavigationBar: SafeArea(
           child: Padding(
@@ -203,6 +214,11 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               key: _form,
               autovalidateMode: AutovalidateMode.onUserInteraction,
               child: ListView(padding: const EdgeInsets.all(24), children: [
+                if (widget.modelo != null) ...[
+                  const Text(
+                      'Revise a turma, a etapa, o valor e a nova data de entrega. As notas da atividade original não serão copiadas.'),
+                  const SizedBox(height: 20),
+                ],
                 DropdownButtonFormField<TurmaModel>(
                     initialValue: _turma,
                     isExpanded: true,
@@ -217,7 +233,10 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                         : (v) {
                             setState(() {
                               _turma = v;
-                              if (widget.atividade == null) _valor.clear();
+                              if (widget.atividade == null &&
+                                  widget.modelo == null) {
+                                _valor.clear();
+                              }
                             });
                             _carregar();
                           }),
@@ -247,7 +266,10 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                           : null,
                       onChanged: (v) => setState(() {
                             _etapa = v;
-                            if (widget.atividade == null) _valor.clear();
+                            if (widget.atividade == null &&
+                                widget.modelo == null) {
+                              _valor.clear();
+                            }
                             _padrao();
                           })),
                 const SizedBox(height: 16),

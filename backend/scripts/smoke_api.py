@@ -916,14 +916,14 @@ def main():
         etapa_arred = criar_etapa(coord_a, "Etapa Arredondamento", 55, 6, 25)
         crit_arred = criar_criterio(coord_a, etapa_arred["id"], "Prova", 100)
         a1 = criar_atividade(professor_a, turma_c["id"], etapa_arred["id"],
-                             crit_arred["id"], 3, "P1")
+                               crit_arred["id"], 9, "P1")
         a2 = criar_atividade(professor_a, turma_c["id"], etapa_arred["id"],
-                             crit_arred["id"], 3, "P2")
+                               crit_arred["id"], 9, "P2")
         a3 = criar_atividade(professor_a, turma_c["id"], etapa_arred["id"],
-                             crit_arred["id"], 3, "P3")
-        lancar(professor_a, a1["id"], aluno_joao["id"], 1)
-        lancar(professor_a, a2["id"], aluno_joao["id"], 1)
-        lancar(professor_a, a3["id"], aluno_joao["id"], 1)
+                               crit_arred["id"], 9, "P3")
+        lancar(professor_a, a1["id"], aluno_joao["id"], 3)
+        lancar(professor_a, a2["id"], aluno_joao["id"], 3)
+        lancar(professor_a, a3["id"], aluno_joao["id"], 3)
 
         est_joao = estatisticas_de(professor_a, aluno_joao["id"])
         calc_arred = etapa_por_id(est_joao, etapa_arred["id"])
@@ -4204,7 +4204,7 @@ def main():
 
         # Professor nao gerencia alunos: seu antigo modelo tambem e restrito.
         modelo_prof = "/api/professor/turmas/%d/alunos/modelo-planilha" % turma_q
-        checar(req("get", "%s?token=%s" % (modelo_prof, tok_prof_a)).status_code == 403
+        checar(req("get", "%s?token=%s" % (modelo_prof, tok_prof_a)).status_code in (401, 403)
                and req("get", modelo_prof, tok_prof_a).status_code == 403,
                "M07-14a: modelo de alunos do professor e bloqueado por URL e header")
         # Excecao real e restrita: modelos de alunos da Coordenacao e de notas.
@@ -4213,16 +4213,21 @@ def main():
             ("/api/atividades/%d/notas/modelo-planilha" % ativ_m1["id"], tok_prof_a, tok_coord_a),
         )
         for url, certo, errado in downloads:
-            r = req("get", "%s?token=%s" % (url, certo))
+            from auth.downloads import gerar_permissao
+            from auth.jwt_utils import decodificar_token
+            def permissao(token):
+                p = decodificar_token(token)
+                return gerar_permissao({'id': p['uid'], 'tipo': p['tipo'], 'coordenacao_id': p['coordenacao_id']}, url)
+            r = req("get", "%s?token=%s" % (url, permissao(certo)))
             checar(r.status_code == 200 and "spreadsheetml" in r.headers["Content-Type"],
                    "M07-14: EXCECAO: download %s abre com ?token= (navegador nao manda header)" % url[5:48])
-            checar(req("get", "%s?token=%s" % (url, errado)).status_code == 403,
+            checar(req("get", "%s?token=%s" % (url, permissao(errado))).status_code == 403,
                    "M07-15: exceção: o papel errado na URL continua barrado (403)")
             checar(req("get", "%s?token=%s" % (url, tok_expirado)).status_code == 401
                    and req("get", "%s?token=%s" % (url, pd_cli.token)).status_code in (401, 403)
                    and req("get", "%s?token=lixo" % url).status_code == 401,
                    "M07-16: exceção: expirado, desativado e lixo na URL nao autenticam")
-            checar(req("get", "%s?token=%s" % (url, tok_coord_b if "coordenacao" in url else tok_prof_b)
+            checar(req("get", "%s?token=%s" % (url, permissao(tok_coord_b if "coordenacao" in url else tok_prof_b))
                        ).status_code in (200, 404),
                    "M07-17: exceção: token de outra escola so alcanca o modelo em branco (sem dado da escola A)")
             checar(req("get", "%s?token=%s" % (url, errado), certo).status_code == 200,

@@ -38,9 +38,11 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
   Future<void> _baixarModelo() async {
     // launchUrl abre outra aba e nao manda cabecalho: o token vai na query
     // string, que o backend aceita so nos downloads de modelo.
-    final url = Uri.parse(_api.urlComToken('$_base/modelo-planilha'));
     try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      final url = await _api.autorizarDownload('$_base/modelo-planilha');
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw StateError('download');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível baixar o modelo');

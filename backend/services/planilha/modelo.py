@@ -66,6 +66,12 @@ def modelo_notas(alunos=None):
     for indice in range(1, 5):
         aba.column_dimensions[aba.cell(row=1, column=indice).column_letter].width = 22
 
+    # Nome/matricula de aluno nunca pode virar formula executada pelo Excel.
+    for linha in aba.iter_rows():
+        for celula in linha:
+            if isinstance(celula.value, str):
+                celula.data_type = 's'
+
     buffer = io.BytesIO()
     planilha.save(buffer)
     buffer.seek(0)

@@ -107,7 +107,7 @@ def renderizar(resposta, turmas):
             else:
                 texto = f"{nome}: " + _acompanhamento(aluno)
         elif metrica == "tendencia" and aluno:
-            texto = f"{nome}: tendência {aluno['tendencia']}" + (f", variação {_numero(aluno['variacao'])} ponto(s) nas duas últimas atividades avaliadas." if aluno["variacao"] is not None else "; são necessárias pelo menos duas notas.")
+            texto = f"{nome}: tendência {aluno['tendencia']}" + (f", variação {_numero(aluno['variacao'] * 10)} pontos percentuais de aproveitamento nas duas últimas atividades avaliadas." if aluno["variacao"] is not None else "; são necessárias pelo menos duas notas.")
         elif metrica == "entregas" and aluno:
             texto = f"{nome}: {aluno['entregues']} entrega(s) registrada(s), {aluno['pendentes']} pendência(s), das quais {aluno['sem_nota']} sem nota lançada. Ausência de nota não confirma falta de entrega."
         elif metrica == "dificuldade":
@@ -119,13 +119,15 @@ def renderizar(resposta, turmas):
                     ) + ". Revise essas avaliações para identificar os conteúdos a retomar; a nota sozinha não revela a causa.")
             else:
                 pior = turma["pior_atividade"]
-                texto = f"{nome}: não há notas suficientes para apontar a maior dificuldade." if not pior else f"{turma['turma']['nome']}: menor média em {pior['titulo']}, {_numero(pior['media'])}/10. Isso indica onde revisar os conteúdos, sem afirmar a causa."
+                texto = f"{nome}: não há notas suficientes para apontar a maior dificuldade." if not pior else f"{turma['turma']['nome']}: menor média em {pior['titulo']}, {_numero(pior['media_pontos'])} de {_numero(pior['nota_maxima'])} pontos. Isso indica onde revisar os conteúdos, sem afirmar a causa."
         elif metrica == "media":
-            texto = f"{nome}: ainda não há notas para calcular a média." if alvo["media"] is None else f"{nome}: média {_numero(alvo['media'])}/10 nas atividades avaliadas."
+            texto = f"{nome}: ainda não há notas para calcular a média." if alvo["media"] is None else f"{nome}: aproveitamento de {_numero(alvo['media'] * 10)}% nas atividades avaliadas. Isso não é a nota final da etapa."
+            if aluno and aluno.get('pontos_obtidos') is not None:
+                texto += f" {_numero(aluno['pontos_obtidos'])} de {_numero(aluno['pontos_avaliados'])} pontos avaliados."
         elif aluno:
             texto = f"{nome}: " + _acompanhamento(aluno) + f" {aluno['entregues']} entrega(s) registrada(s), {aluno['sem_nota']} atividade(s) sem nota."
         else:
-            texto = f"{nome}: {len(turma['alunos'])} aluno(s), {len(turma['atividades'])} atividade(s), média {_numero(turma['media'])}" + (f"/10, {turma['alunos_em_risco']} aluno(s) com sinais de risco." if turma["media"] is not None else ". Não há dados suficientes para avaliar desempenho; confira os lançamentos.")
+            texto = f"{nome}: {len(turma['alunos'])} aluno(s), {len(turma['atividades'])} atividade(s). " + (f"Aproveitamento de {_numero(turma['media'] * 10)}% nas atividades avaliadas, {turma['alunos_em_risco']} aluno(s) com sinais de risco. O aproveitamento não é a nota final da etapa." if turma["media"] is not None else "Não há dados suficientes para avaliar desempenho; confira os lançamentos.")
         textos.append(texto)
         evidencias.append({**fato, "media": alvo["media"], "risco": aluno["risco"] if aluno else turma["distribuicao_risco"]})
         if aluno:

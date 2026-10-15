@@ -1,11 +1,14 @@
 """Calculo central usado pelo dashboard e pelo detalhe do aluno.
 
-Desempenho = pontos obtidos / pontos possiveis nas atividades avaliadas.
+Desempenho da atividade = pontos obtidos / pontos possiveis avaliados.
+Nota da etapa usa todos os pontos planejados, com piso igual a parcela
+prevista para o criterio. Assim 2 de 2 nao vira 10 numa etapa de 10.
 A contribuicao considera o peso percentual de cada criterio; a soma das
 contribuicoes, dividida por 100, multiplica a nota maxima da etapa.
 
 Nota ausente nao e zero. A etapa so recebe resultado quando todos os
-criterios com peso positivo estao completos e seus pesos somam 100.
+criterios com peso positivo estao completos, o planejamento cobre os
+pontos previstos de cada criterio e seus pesos somam 100.
 
 A soma das contribuicoes usa o valor EXATO de cada criterio (contribuicao_
 exata), nao o arredondado - arredondar cada criterio antes de somar podia
@@ -44,7 +47,19 @@ def resumo_pesos(criterios):
     return round(soma, 2), valido
 
 
-def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None):
+def base_pontos(atividades, criterio, nota_maxima_etapa):
+    """Nunca amplia poucos pontos cadastrados para a nota inteira da etapa.
+
+    Ex.: criterio de 100% em etapa de 10 precisa de ao menos 10 pontos
+    planejados. Uma atividade de 2 usa base 10: obter 2 contribui com 2.
+    Se ha 20 pontos planejados, a ponderacao os distribui na escala de 10.
+    """
+    planejados = sum(float(a.get('nota_maxima') or 0) for a in atividades)
+    parcela = float(nota_maxima_etapa or 0) * float(criterio.get('peso') or 0) / 100
+    return max(planejados, parcela), planejados, parcela
+
+
+def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None, nota_maxima_etapa=0):
     """Criterio sem atividade ou com nota pendente permanece incompleto."""
     atividades = (dados["atividades"].get((etapa_id, criterio["id"]), []) if dados is not None
                   else Atividade.find_por_criterio(turma_id, etapa_id, criterio["id"]))
@@ -62,6 +77,7 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None):
         "contribuicao": None,
         "contribuicao_exata": None,
         "completo": False,
+        "planejamento_completo": False,
     }
 
     if not atividades:
@@ -72,7 +88,11 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None):
 
     avaliadas = [a for a in atividades if a["id"] in valores]
     resultado["atividades_avaliadas"] = len(avaliadas)
-    resultado["completo"] = len(avaliadas) == len(atividades)
+    base, planejados, parcela = base_pontos(atividades, criterio, nota_maxima_etapa)
+    planejamento_completo = planejados >= parcela - TOLERANCIA_NOTA
+    resultado.update(planejamento_completo=planejamento_completo,
+                     pontos_planejados=round(planejados, 2), pontos_previstos=round(parcela, 2))
+    resultado["completo"] = len(avaliadas) == len(atividades) and planejamento_completo
 
     if not avaliadas:
         return resultado
@@ -90,9 +110,9 @@ def _calcular_criterio(aluno_id, turma_id, etapa_id, criterio, dados=None):
     desempenho = obtido / possivel
     resultado["desempenho_percentual"] = round(desempenho * 100, 2)
 
-    if resultado["completo"]:
+    if base > 0:
         peso_fracao = float(criterio.get("peso") or 0) / 100
-        contribuicao_exata = desempenho * peso_fracao * 100
+        contribuicao_exata = obtido / base * peso_fracao * 100
         resultado["contribuicao"] = round(contribuicao_exata, 2)
         resultado["contribuicao_exata"] = contribuicao_exata
 
@@ -112,7 +132,7 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa, dados=None):
     soma_pesos, pesos_validos = resumo_pesos(criterios)
 
     criterios_calc = [
-        _calcular_criterio(aluno_id, turma_id, etapa["id"], c, dados)
+        _calcular_criterio(aluno_id, turma_id, etapa["id"], c, dados, etapa.get('nota_maxima'))
         for c in criterios
     ]
 
@@ -137,6 +157,7 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa, dados=None):
         "completo": False,
         "mensagem": None,
         "nota_calculada": None,
+        "nota_parcial": None,
         "percentual": None,
     }
 
@@ -160,9 +181,15 @@ def calcular_desempenho_etapa(aluno_id, turma_id, etapa, dados=None):
 
     ativos = [c for c in criterios_calc if (c["peso"] or 0) > 0]
     completo = all(c["completo"] for c in ativos)
+    if atividades_avaliadas:
+        base['nota_parcial'] = round(sum(c['contribuicao_exata'] or 0 for c in ativos)
+                                     / 100 * float(etapa['nota_maxima']), 2)
 
     if not completo:
         base["situacao"] = "em_andamento"
+        if any(not c['planejamento_completo'] for c in ativos):
+            base['mensagem'] = ('Planejamento incompleto: cadastre atividades que cubram os pontos '
+                                'previstos de cada critério. A pontuação é parcial e não é nota final.')
         return base
 
     soma_contribuicao = sum((c["contribuicao_exata"] or 0) for c in ativos) / 100

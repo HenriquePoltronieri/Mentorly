@@ -10,6 +10,8 @@ import '../features/auth/screens/cadastroScreen.dart';
 import '../features/auth/screens/professorLoginScreen.dart';
 import '../features/auth/screens/definirSenhaProfessorScreen.dart';
 import '../features/auth/screens/twoFactorScreen.dart';
+import '../features/auth/screens/acesso_escola_screen.dart';
+import '../features/admin/screens/admin_screen.dart';
 
 // telas coordenacao
 import '../features/coordenacao/screens/config/configEtapasScreen.dart';
@@ -24,6 +26,8 @@ import '../features/coordenacao/screens/turmas/listaTurmasProfessorScreen.dart';
 import '../features/coordenacao/screens/alunos/listaAlunosTurmaScreen.dart';
 // telas professor
 import '../features/professor/screens/dashboardScreen.dart';
+import '../features/professor/screens/turmas/acompanhamentos_screen.dart';
+import '../features/professor/screens/turmas/grade_notas_screen.dart';
 import '../features/professor/screens/chat_ia_screen.dart';
 import '../features/professor/screens/turmas/listaTurmasScreen.dart';
 import '../features/professor/screens/turmas/turmaAlunosScreen.dart';
@@ -46,6 +50,8 @@ class AppRoutes {
   static const String professorLogin = '/professor-login';
   static const String definirSenha = '/definir-senha';
   static const String twoFactor = '/two-factor';
+  static const String acesso = '/acesso';
+  static const String admin = '/admin';
 
   // coordenacao
   static const String coordenacaoHome = '/coordenacao/home';
@@ -61,6 +67,8 @@ class AppRoutes {
 
   // professor
   static const String chatIa = '/professor/ia-chat';
+  static const String gradeNotas = '/professor/grade-notas';
+  static const String acompanhamentos = '/professor/acompanhamentos';
   static const String dashboard = '/professor/dashboard';
   static const String listaTurmas = '/professor/turmas';
   static const String turmaAlunos = '/professor/turma-alunos';
@@ -112,6 +120,8 @@ class AppRoutes {
     professorLogin: (context) => ProfessorLoginScreen(),
     definirSenha: (context) => DefinirSenhaProfessorScreen(),
     twoFactor: (context) => TwoFactorScreen(),
+    acesso: (context) => const AcessoEscolaScreen(),
+    admin: (context) => const AdminScreen(),
 
     coordenacaoHome: (context) => CoordenacaoHomeScreen(),
     anosLetivos: (context) => AnosLetivosScreen(),
@@ -126,6 +136,8 @@ class AppRoutes {
 
     // professor
     chatIa: (context) => const ChatIaScreen(),
+    gradeNotas: (context) => const GradeNotasScreen(),
+    acompanhamentos: (context) => const AcompanhamentosScreen(),
     dashboard: (context) => DashboardScreen(),
     listaTurmas: (context) => ListaTurmasScreen(),
     turmaAlunos: (context) => TurmaAlunosScreen(),

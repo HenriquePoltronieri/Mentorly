@@ -20,7 +20,7 @@ class BarraMentorly extends StatelessWidget implements PreferredSizeWidget {
       this.onVoltar});
   Map<String, (String, String)> get abas => professor
       ? {
-          'dashboard': ('Dashboard', AppRoutes.dashboard),
+          'dashboard': ('Início', AppRoutes.dashboard),
           'turmas': ('Turmas', AppRoutes.listaTurmas),
           'atividades': ('Atividades', AppRoutes.listaAtividades),
         }
@@ -93,8 +93,11 @@ class BarraMentorly extends StatelessWidget implements PreferredSizeWidget {
                       .toList()),
             PopupMenuButton<String>(
                 tooltip: 'Conta',
-                onSelected: (_) => sair(context),
+                onSelected: (valor) => valor == 'acesso'
+                    ? Navigator.pushNamed(context, AppRoutes.acesso)
+                    : sair(context),
                 itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'acesso', child: Text('Plano e acesso da escola')),
                       PopupMenuItem(
                           value: 'sair',
                           child: Row(children: [

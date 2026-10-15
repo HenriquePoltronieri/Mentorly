@@ -1,4 +1,4 @@
-from werkzeug.security import check_password_hash
+from auth.passwords import conferir_senha
 
 from auth.jwt_utils import TIPO_COORDENACAO, gerar_token
 from models.coordenacao_model import Coordenacao
@@ -19,7 +19,7 @@ class LoginCoordenacaoService:
             raise ValueError("Informe email e senha")
 
         linha = Coordenacao.find_by_email(email)
-        if not linha or not check_password_hash(linha["senha_hash"], senha):
+        if not conferir_senha(linha['senha_hash'] if linha else None, senha):
             raise PermissionError("Email ou senha invalidos")
 
         return {

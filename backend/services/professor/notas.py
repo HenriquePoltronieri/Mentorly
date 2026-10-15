@@ -91,6 +91,8 @@ class LancarNotasService:
 
         nota_maxima = atividade.get("nota_maxima")
         lancamentos = []
+        situacoes = {}
+        vistos = set()
         for item in brutas:
             aluno_id = item.get("aluno_id") or item.get("alunoId")
             valor = item.get("valor")
@@ -99,6 +101,16 @@ class LancarNotasService:
 
             if aluno_id is None:
                 raise ValueError("Informe o aluno de cada nota")
+            aluno_id = _inteiro_do_aluno(aluno_id)
+            if aluno_id in vistos:
+                raise ValueError("Cada aluno pode aparecer uma única vez no lançamento.")
+            vistos.add(aluno_id)
+            if aluno_id not in alunos_da_turma:
+                raise RecursoNaoEncontrado("Aluno nao encontrado nesta turma")
+            if 'situacao' in item:
+                if item['situacao'] not in ('Nota', 'Ausente', 'Não entregou', 'Não corrigido'):
+                    raise ValueError("Situação de avaliação inválida.")
+                situacoes[aluno_id] = item['situacao']
             if valor is None or str(valor).strip() == "":
                 # Campo em branco na tela = nota ainda nao lancada, ignora.
                 continue
@@ -117,6 +129,8 @@ class LancarNotasService:
 
             if valor < 0:
                 raise ValueError("A nota nao pode ser negativa")
+            if round(valor, 2) != valor:
+                raise ValueError('Use no máximo duas casas decimais na nota.')
             # Atividade sem valor maximo e legado: nao da para dizer se a
             # nota cabe, entao recusa em vez de aceitar qualquer numero.
             if nota_maxima is None:
@@ -133,7 +147,7 @@ class LancarNotasService:
             if observacao is not None:
                 entrada.texto(observacao, "A observacao", entrada.LIMITE_OBSERVACAO)
 
-            if observacao in ("Ausente", "Não entregou") and valor != 0:
+            if 'situacao' not in item and observacao in ("Ausente", "Não entregou") and valor != 0:
                 raise ValueError("Ausente/Não entregou precisa ter nota zero.")
 
             lancamentos.append({
@@ -142,7 +156,9 @@ class LancarNotasService:
                 "observacao": observacao,
             })
 
-        if lancamentos:
+        if situacoes:
+            Nota.lancar_em_lote(atividade_id, lancamentos, situacoes)
+        elif lancamentos:
             Nota.lancar_em_lote(atividade_id, lancamentos)
 
         return {"lancadas": len(lancamentos)}

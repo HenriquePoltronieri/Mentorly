@@ -51,7 +51,7 @@ def texto(valor, rotulo, limite, *, aparar=True):
     if not isinstance(valor, str):
         raise EntradaInvalida("%s precisa ser um texto" % rotulo)
     resultado = valor.strip() if aparar else valor
-    if len(resultado.strip()) > limite:
+    if len(resultado) > limite:
         raise EntradaInvalida("%s: no maximo %d caracteres" % (rotulo, limite))
     return resultado
 

@@ -123,6 +123,9 @@ class PermissoesTest(TestCase):
         self.auth = patch("auth.decorators._professor_habilitado", return_value=True)
         self.auth.start()
         self.addCleanup(self.auth.stop)
+        acesso = patch('auth.decorators._conferir_acesso', return_value=None)
+        acesso.start()
+        self.addCleanup(acesso.stop)
         limiter.reset()
 
     def test_professor_nao_gerencia_alunos(self):

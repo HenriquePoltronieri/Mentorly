@@ -55,6 +55,7 @@ class EtapaDesempenhoModel {
   final String situacao;
   final String? mensagem;
   final double? notaCalculada;
+  final double? notaParcial;
   final double? percentual;
   final int totalAtividades;
   final int atividadesAvaliadas;
@@ -72,6 +73,7 @@ class EtapaDesempenhoModel {
     required this.situacao,
     this.mensagem,
     this.notaCalculada,
+    this.notaParcial,
     this.percentual,
     this.totalAtividades = 0,
     this.atividadesAvaliadas = 0,
@@ -95,6 +97,7 @@ class EtapaDesempenhoModel {
       situacao: json['situacao'] ?? 'em_andamento',
       mensagem: json['mensagem'] as String?,
       notaCalculada: paraDouble(json['nota_calculada']),
+      notaParcial: paraDouble(json['nota_parcial']),
       percentual: paraDouble(json['percentual']),
       totalAtividades: json['total_atividades'] ?? 0,
       atividadesAvaliadas: json['atividades_avaliadas'] ?? 0,

@@ -1,12 +1,13 @@
 """Métricas de leitura e risco determinístico, compartilhados pelos gráficos e IA.
 
-Comparações entre atividades usam escala 0–10 (valor / máximo * 10).
-Sem nota não é zero e não confirma falta de entrega; ausências explícitas
-são armazenadas com valor zero e observação. Pendências de lançamento
+Gráficos recebem pontos reais e o máximo de cada atividade. Comparações
+internas e IA usam escala 0–10 (valor / máximo * 10).
+Sem nota não é zero e não confirma falta de entrega; situações explícitas
+são registradas separadamente do valor. Pendências de lançamento
 vencidas entram como sinal para o professor conferir, nunca como diagnóstico.
 """
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from services.horario import agora_brasilia
 from database.connection import query_all
 from models.turma_model import Turma
 from models.professor_turma_model import ProfessorTurma
@@ -23,17 +24,21 @@ def _media(valores):
 
 
 def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje=None, criterios=None):
-    hoje = hoje or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+    hoje = hoje or agora_brasilia().date()
     selecionadas = [a for a in atividades if etapa_id is None or a["etapa_id"] == etapa_id]
     selecionadas.sort(key=lambda a: (str(a.get("data_entrega") or a.get("created_at") or ""), a["id"]))
-    valores = {(n["aluno_id"], n["atividade_id"]): n for n in notas}
+    valores = {(n["aluno_id"], n["atividade_id"]): n for n in notas if n.get("valor") is not None}
+    situacoes = {(n["aluno_id"], n["atividade_id"]): n.get("situacao") for n in notas if n.get("situacao")}
     medias = {}
+    medias_pontos = {}
     entregas = 0
     for a in selecionadas:
         ns = [valores.get((al["id"], a["id"])) for al in alunos]
         escala = float(a.get("nota_maxima") or 0)
         medias[a["id"]] = _media([float(n["valor"]) / escala * 10 for n in ns if n and escala > 0])
-        entregas += sum(1 for n in ns if n and n.get("observacao") not in ("Ausente", "Não entregou"))
+        medias_pontos[a["id"]] = _media([float(n["valor"]) for n in ns if n])
+        entregas += sum(1 for al, n in zip(alunos, ns) if n and
+                        situacoes.get((al["id"], a["id"]), n.get("observacao")) not in ("Ausente", "Não entregou", "Não corrigido"))
     ranking = []
     for al in alunos:
         lista = []
@@ -46,14 +51,15 @@ def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje
             prazo = a.get("data_entrega")
             if not n and prazo and str(prazo)[:10] < hoje.isoformat():
                 vencidas += 1
-            status = n.get("observacao") if n and n.get("observacao") in ("Ausente", "Não entregou") else "Entregue" if n else "Sem nota lançada"
+            status = situacoes.get((al["id"], a["id"])) or (n.get("observacao") if n and n.get("observacao") in ("Ausente", "Não entregou") else "Entregue" if n else "Sem nota lançada")
             entregues += status == "Entregue"
             lista.append({"id": a["id"], "titulo": a["titulo"], "etapa_id": a["etapa_id"],
                           "criterio_id": a.get("criterio_id"), "descricao": a.get("descricao"),
                           "observacao": n.get("observacao") if n else None,
                           "data": str(prazo or a.get("created_at") or ""), "nota": nota,
                           "nota_maxima": maximo or None, "nota_normalizada": normalizada,
-                          "media_turma": medias[a["id"]], "status": status})
+                          "media_turma": medias[a["id"]],
+                          "media_turma_pontos": medias_pontos[a["id"]], "status": status})
         avaliadas = [a["nota_normalizada"] for a in lista if a["nota_normalizada"] is not None]
         com_nota = [a for a in lista if a["nota_normalizada"] is not None]
         pontos = sum(a["nota"] for a in com_nota)
@@ -80,11 +86,14 @@ def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje
                         "menor_nota": min(avaliadas) if avaliadas else None, "atividades": lista})
     ranking.sort(key=lambda a: ({"Alto": 0, "Médio": 1, "Em andamento": 2, "Baixo": 3, "Sem dados": 4}[a["risco"]], a["media"] if a["media"] is not None else -1, a["nome"]))
     distribuicao = {r: sum(a["risco"] == r for a in ranking) for r in ("Alto", "Médio", "Em andamento", "Baixo", "Sem dados")}
-    por_atividade = [{"id": a["id"], "titulo": a["titulo"], "media": medias[a["id"]], "data": str(a.get("data_entrega") or a.get("created_at") or ""), "etapa_id": a["etapa_id"]} for a in selecionadas]
+    por_atividade = [{"id": a["id"], "titulo": a["titulo"], "media": medias[a["id"]],
+                      "media_pontos": medias_pontos[a["id"]],
+                      "nota_maxima": float(a["nota_maxima"]) if a.get("nota_maxima") is not None else None,
+                      "data": str(a.get("data_entrega") or a.get("created_at") or ""), "etapa_id": a["etapa_id"]} for a in selecionadas]
     avaliadas = [a for a in por_atividade if a["media"] is not None]
     total = len(alunos) * len(selecionadas)
     return {"turma": {"id": turma["id"], "nome": turma["nome"]}, "escala": 10,
-            "etapa_atual": atual, "etapas": [{"id": e["id"], "nome": e["nome"], "nota_minima": float(e["nota_minima"]) if e.get("nota_minima") is not None else None, "nota_maxima": float(e["nota_maxima"]) if e.get("nota_maxima") is not None else None} for e in etapas],
+            "etapa_atual": atual, "etapas": [{"id": e["id"], "nome": e["nome"], "fechada": bool(e.get("fechada", False)), "nota_minima": float(e["nota_minima"]) if e.get("nota_minima") is not None else None, "nota_maxima": float(e["nota_maxima"]) if e.get("nota_maxima") is not None else None} for e in etapas],
             "media": _media([a["media"] for a in ranking if a["media"] is not None]),
             "percentual_entregas": round(entregas / total * 100, 1) if total else None,
             "alunos_em_risco": distribuicao["Alto"] + distribuicao["Médio"],
@@ -106,7 +115,11 @@ class EstatisticasTurmaService:
         alunos = Aluno.find_all_by_turma(turma_id)
         criterios = Criterio.find_all_by_coordenacao(coordenacao_id, turma["ano_letivo"])
         atividades = query_all("SELECT id,titulo,descricao,criterio_id,etapa_id,nota_maxima,data_entrega,created_at FROM atividade WHERE turma_id=%s AND coordenacao_id=%s", (turma_id, coordenacao_id))
-        notas = query_all("SELECT n.aluno_id,n.atividade_id,n.valor,n.observacao FROM nota n JOIN atividade a ON a.id=n.atividade_id JOIN aluno al ON al.id=n.aluno_id WHERE a.turma_id=%s AND a.coordenacao_id=%s AND al.turma_id=%s", (turma_id, coordenacao_id, turma_id))
+        notas = query_all("SELECT al.id AS aluno_id,a.id AS atividade_id,n.valor,n.observacao,s.situacao "
+                          "FROM atividade a JOIN aluno al ON al.turma_id=a.turma_id "
+                          "LEFT JOIN nota n ON n.atividade_id=a.id AND n.aluno_id=al.id "
+                          "LEFT JOIN atividade_situacao s ON s.atividade_id=a.id AND s.aluno_id=al.id "
+                          "WHERE a.turma_id=%s AND a.coordenacao_id=%s AND (n.id IS NOT NULL OR s.situacao IS NOT NULL)", (turma_id, coordenacao_id))
         dados = resumir(turma, etapas, atual["id"] if atual else None, atividades, alunos, notas, etapa_id, criterios=criterios)
         if aluno_id is not None:
             aluno = next((a for a in dados["alunos"] if a["id"] == aluno_id), None)

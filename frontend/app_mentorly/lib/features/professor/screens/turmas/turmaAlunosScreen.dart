@@ -167,6 +167,12 @@ class _TurmaAlunosScreenState extends State<TurmaAlunosScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     child: Wrap(spacing: 12, runSpacing: 8, children: [
+                      OutlinedButton.icon(
+                          onPressed: () => Navigator.pushNamed(
+                              context, AppRoutes.gradeNotas,
+                              arguments: _turma),
+                          icon: const Icon(Icons.table_chart_outlined),
+                          label: const Text('Grade de notas')),
                       FilledButton.icon(
                           onPressed: _novaAtividade,
                           icon: const Icon(Icons.add),

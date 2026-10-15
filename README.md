@@ -1,5 +1,15 @@
 # Mentorly
 
+**Abrir aplicativo e administração:** execute `.\iniciar.ps1` ou dê dois cliques
+em `Iniciar Mentorly.cmd`. O primeiro uso pede a criação da sua conta administrativa.
+Guia: [hospedagem, planos, acessos e backups](docs/hospedagem-e-acessos.md).
+
+A administração também é Flutter. O backend Python usa MySQL com SQL direto,
+sem ORM. Revisão adicional: [QA administrativo](docs/qa-admin-2026-10-15.md).
+
+**Notas:** uma atividade de 2 pontos não completa sozinha uma etapa de 10.
+O boletim mostra pontuação parcial e identifica planejamento incompleto.
+
 > Estado atual: **Marcos 1 a 8 e bloco de IA (9A a 9D) concluídos em código e testes**. A fase atual é
 > **validação final, congelamento (freeze) do MVP e preparação da apresentação**. O plano e o histórico das
 > decisões estão em [docs/roadmap.md](docs/roadmap.md).
@@ -34,10 +44,10 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ### Backend
 - Python 3
-- Flask 3.0.3
-- SQL direto via PyMySQL 1.1.1 (sem ORM)
+- Flask 3.1.3
+- SQL direto via PyMySQL 1.2.3 (sem ORM)
 - MySQL 8 (com Stored Procedures)
-- PyJWT 2.9.0 (autenticação) e Werkzeug 3.0.4 (hash de senha)
+- PyJWT 2.15.1 (autenticação) e Werkzeug 3.1.9 (hash de senha)
 - openpyxl 3.1.5 (importação de planilhas XLSX)
 - integração HTTP com a **Groq** (modelo `openai/gpt-oss-20b`), configurável por ambiente
 

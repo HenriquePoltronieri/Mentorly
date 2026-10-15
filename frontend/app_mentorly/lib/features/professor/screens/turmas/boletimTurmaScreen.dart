@@ -89,6 +89,9 @@ class _BoletimTurmaScreenState extends State<BoletimTurmaScreen> {
   }
 
   Future<void> _alternarFechamento(Map<String, dynamic> etapa) async {
+    if (_alterandoEtapaId != null) return;
+    // A trava comeca antes do dialogo, impedindo varias confirmacoes abertas.
+    _alterandoEtapaId = etapa['etapa_id'] as int;
     final etapaId = etapa['etapa_id'] as int;
     final estaFechada = etapa['fechada'] == true;
 
@@ -116,7 +119,11 @@ class _BoletimTurmaScreenState extends State<BoletimTurmaScreen> {
         ],
       ),
     );
-    if (confirmou != true) return;
+    if (!mounted) return;
+    if (confirmou != true) {
+      setState(() => _alterandoEtapaId = null);
+      return;
+    }
 
     setState(() => _alterandoEtapaId = etapaId);
     try {
@@ -173,6 +180,9 @@ class _BoletimTurmaScreenState extends State<BoletimTurmaScreen> {
 
   String _rotuloCelula(Map<String, dynamic> etapa) {
     if (etapa['nota_calculada'] == null) {
+      if (etapa['nota_parcial'] is num) {
+        return '${(etapa['nota_parcial'] as num).toStringAsFixed(1)} parcial';
+      }
       return etapa['situacao'] == 'configuracao_invalida' ? 'config.' : '—';
     }
     final nota = (etapa['nota_calculada'] as num).toDouble();

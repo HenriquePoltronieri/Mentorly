@@ -66,9 +66,11 @@ class _TelaLoginState extends State<TelaLogin> {
       } else {
         await auth.loginCoordenacao(_email.text.trim(), _senha.text);
       }
+      final acesso = await ApiService().get('/acesso');
       if (!mounted) return;
       Navigator.pushReplacementNamed(context,
-          widget.professor ? AppRoutes.listaTurmas : AppRoutes.coordenacaoHome);
+          acesso['liberado'] != true ? AppRoutes.acesso :
+          widget.professor ? AppRoutes.dashboard : AppRoutes.coordenacaoHome);
     } catch (e) {
       if (mounted) {
         setState(() => _erro = e is ApiException

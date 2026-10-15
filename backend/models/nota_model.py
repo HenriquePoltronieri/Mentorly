@@ -24,10 +24,11 @@ class Nota:
         """
         return query_all(
             "SELECT al.id AS aluno_id, al.nome AS aluno_nome, al.matricula, "
-            "       n.id AS nota_id, n.valor, n.observacao, n.updated_at "
+            "       n.id AS nota_id, n.valor, n.observacao, n.updated_at, s.situacao "
             "FROM atividade a "
             "INNER JOIN aluno al ON al.turma_id = a.turma_id "
             "LEFT JOIN nota n ON n.aluno_id = al.id AND n.atividade_id = a.id "
+            "LEFT JOIN atividade_situacao s ON s.aluno_id=al.id AND s.atividade_id=a.id "
             "WHERE a.id = %s "
             "ORDER BY al.nome ASC",
             (atividade_id,),
@@ -121,12 +122,18 @@ class Nota:
     # Escrita
     # -----------------------------------------------------------------
     @staticmethod
-    def lancar_em_lote(atividade_id, notas):
+    def lancar_em_lote(atividade_id, notas, situacoes=None):
         """Lanca varias notas em uma transacao so.
 
         notas: lista de dicts com aluno_id, valor e observacao opcional.
         """
         with transacao() as cursor:
+            for aluno_id, situacao in (situacoes or {}).items():
+                if situacao == 'Nota':
+                    cursor.execute("DELETE FROM atividade_situacao WHERE atividade_id=%s AND aluno_id=%s", (atividade_id, aluno_id))
+                else:
+                    cursor.execute("INSERT INTO atividade_situacao (atividade_id,aluno_id,situacao) VALUES (%s,%s,%s) "
+                                   "ON DUPLICATE KEY UPDATE situacao=VALUES(situacao)", (atividade_id, aluno_id, situacao))
             for nota in notas:
                 cursor.execute(
                     "INSERT INTO nota (atividade_id, aluno_id, valor, observacao) "
@@ -160,6 +167,7 @@ class Nota:
             "nota": numero(linha.get("valor")),
             "notaMaxima": numero(linha.get("nota_maxima")),
             "observacao": linha.get("observacao"),
+            "situacao": linha.get("situacao"),
             "etapaId": linha.get("etapa_id"),
             "etapa": linha.get("etapa_nome"),
             "dataEntrega": iso(linha.get("data_entrega")),

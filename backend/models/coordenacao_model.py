@@ -1,6 +1,6 @@
 """Model da Coordenacao (a escola). SQL direto, sem ORM."""
 
-from database.connection import execute, insert, query_all, query_one
+from database.connection import execute, insert, query_all, query_one, transacao
 from models.utils import iso
 
 
@@ -39,11 +39,17 @@ class Coordenacao:
     # -----------------------------------------------------------------
     @staticmethod
     def create(nome, email, senha_hash, telefone=None):
-        return insert(
-            "INSERT INTO coordenacao (nome, email, senha_hash, telefone) "
-            "VALUES (%s, %s, %s, %s)",
-            (nome, email, senha_hash, telefone),
-        )
+        from datetime import timedelta
+        from services.horario import agora_brasilia
+        prazo = agora_brasilia().date() + timedelta(days=14)
+        # Escola e teste nascem juntos: uma falha nao deixa cadastro sem acesso.
+        with transacao() as cursor:
+            cursor.execute('INSERT INTO coordenacao(nome,email,senha_hash,telefone) VALUES (%s,%s,%s,%s)',
+                           (nome, email, senha_hash, telefone))
+            escola_id = cursor.lastrowid
+            cursor.execute('INSERT INTO acesso_escola(coordenacao_id,valido_ate) VALUES (%s,%s)',
+                           (escola_id, prazo))
+        return escola_id
 
     @staticmethod
     def update(coordenacao_id, nome=None, telefone=None, senha_hash=None):

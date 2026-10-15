@@ -122,7 +122,7 @@ class _DefinirSenhaProfessorScreenState
         token: _token!,
       );
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.listaTurmas);
+        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
       }
     } catch (e) {
       if (mounted) {

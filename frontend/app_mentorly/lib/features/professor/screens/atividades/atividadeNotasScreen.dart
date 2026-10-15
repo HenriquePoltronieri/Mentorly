@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import '../../services/rascunho_notas_service.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/widgets/identidade_visual.dart';
@@ -23,6 +25,11 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
   AtividadeModel? _atividade;
   bool _iniciou = false, _carregando = true, _salvando = false;
   String? _erro;
+  RascunhoNotasService? _rascunho;
+  Timer? _debounce;
+  String _estadoRascunho = '';
+  final _originais = <int, String>{};
+  bool _preenchendo = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -31,11 +38,19 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       _atividade = args?['atividade'] as AtividadeModel?;
+      if (_atividade != null) {
+        _rascunho = RascunhoNotasService('atividade.${_atividade!.id}');
+      }
       _carregar();
     }
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool preservarRascunho = true}) async {
+    if (preservarRascunho && _notas.isNotEmpty && !_carregando) {
+      _debounce?.cancel();
+      await _guardar();
+      if (!mounted) return;
+    }
     if (_atividade == null) {
       setState(() {
         _carregando = false;
@@ -54,17 +69,21 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
       final notas = (dados['notas'] as List)
           .map((n) => NotaModel.fromJson(Map<String, dynamic>.from(n as Map)))
           .toList();
+      _preenchendo = true;
       for (final n in notas) {
-        final campo =
-            _campos.putIfAbsent(n.alunoId, () => TextEditingController());
+        final campo = _campos.putIfAbsent(
+            n.alunoId, () => TextEditingController()..addListener(_alterou));
         campo.text = n.valor?.toString() ?? '';
         _focos.putIfAbsent(n.alunoId, () => FocusNode());
-        _situacoes[n.alunoId] =
-            ['Ausente', 'Não entregou'].contains(n.observacao)
+        _situacoes[n.alunoId] = n.situacao ??
+            (['Ausente', 'Não entregou'].contains(n.observacao)
                 ? n.observacao!
-                : 'Nota';
+                : 'Nota');
+        _originais[n.alunoId] = '${campo.text}|${_situacoes[n.alunoId]}';
       }
+      _preenchendo = false;
       setState(() => _notas = notas);
+      await _restaurar();
     } catch (e) {
       if (mounted) {
         setState(() => _erro = e is ApiException
@@ -76,9 +95,100 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
     }
   }
 
+  void _alterou() {
+    if (_preenchendo || _carregando || _salvando) return;
+    _debounce?.cancel();
+    setState(() => _estadoRascunho = 'Alterações ainda não publicadas');
+    _debounce = Timer(const Duration(milliseconds: 450), _guardar);
+  }
+
+  Map<String, dynamic> _dadosRascunho() => {
+        'campos': {
+          for (final n in _notas)
+            '${n.alunoId}': {
+              'texto': _campos[n.alunoId]!.text,
+              'situacao': _situacoes[n.alunoId],
+              'original': _originais[n.alunoId]
+            }
+        }
+      };
+  Future<void> _guardar() async {
+    try {
+      await _rascunho?.gravar(_dadosRascunho());
+      if (mounted) {
+        setState(() => _estadoRascunho = 'Rascunho salvo neste dispositivo');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _estadoRascunho =
+            'Não foi possível guardar o rascunho neste dispositivo');
+      }
+    }
+  }
+
+  Future<void> _restaurar() async {
+    Map<String, dynamic>? salvo;
+    try {
+      salvo = await _rascunho?.ler();
+    } catch (_) {
+      return;
+    }
+    if (!mounted || salvo?['campos'] is! Map) return;
+    final campos = Map<String, dynamic>.from(salvo!['campos'] as Map);
+    if (!campos.entries.any((e) =>
+        e.value is Map &&
+        '${e.value['texto']}|${e.value['situacao']}' != e.value['original'])) {
+      return;
+    }
+    final restaurar = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+                title: const Text('Continuar rascunho?'),
+                content: const Text(
+                    'Há lançamentos guardados neste dispositivo. Serão recuperados apenas os campos cuja nota oficial não mudou desde o rascunho.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text('Descartar')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text('Recuperar'))
+                ]));
+    if (!mounted) return;
+    if (restaurar != true) {
+      await _rascunho?.apagar();
+      return;
+    }
+    _preenchendo = true;
+    var conflitos = 0;
+    for (final n in _notas) {
+      final d = campos['${n.alunoId}'];
+      if (d is! Map || '${d['texto']}|${d['situacao']}' == d['original']) {
+        continue;
+      }
+      if (d['original'] != _originais[n.alunoId]) {
+        conflitos++;
+        continue;
+      }
+      if (!['Nota', 'Ausente', 'Não entregou', 'Não corrigido']
+          .contains(d['situacao'])) {
+        continue;
+      }
+      _campos[n.alunoId]!.text = d['texto'].toString();
+      _situacoes[n.alunoId] = d['situacao'].toString();
+    }
+    _preenchendo = false;
+    setState(() => _estadoRascunho = conflitos == 0
+        ? 'Rascunho recuperado. Revise e salve as notas.'
+        : '$conflitos campos mudaram no servidor e não foram recuperados.');
+  }
+
   String? _validar(String? v) {
     if ((v ?? '').trim().isEmpty) return null;
     final n = double.tryParse(v!.replaceAll(',', '.'));
+    if (RegExp(r'[.,]\d{3,}').hasMatch(v)) {
+      return 'Use até 2 casas decimais';
+    }
     return n == null ||
             !n.isFinite ||
             n < 0 ||
@@ -89,25 +199,42 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
 
   Future<void> _salvar() async {
     if (_salvando || !_form.currentState!.validate()) return;
+    if (_notas.any(
+        (n) => n.valor != null && _campos[n.alunoId]!.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Para retirar uma nota já salva, use Excluir nota no aluno.')));
+      return;
+    }
+    _debounce?.cancel();
     setState(() => _salvando = true);
     try {
       final lancamentos = _notas
-          .where((n) => _campos[n.alunoId]!.text.trim().isNotEmpty)
+          .where((n) =>
+              '${_campos[n.alunoId]!.text}|${_situacoes[n.alunoId]}' !=
+              _originais[n.alunoId])
           .map((n) => {
                 'aluno_id': n.alunoId,
-                'valor':
-                    double.parse(_campos[n.alunoId]!.text.replaceAll(',', '.')),
+                'valor': double.tryParse(
+                    _campos[n.alunoId]!.text.replaceAll(',', '.')),
+                'situacao': _situacoes[n.alunoId],
                 'observacao': _situacoes[n.alunoId] == 'Nota'
-                    ? null
+                    ? n.observacao == 'Ausente' ||
+                            n.observacao == 'Não entregou'
+                        ? null
+                        : n.observacao
                     : _situacoes[n.alunoId],
               })
           .toList();
       await ApiService()
           .post('/atividades/${_atividade!.id}/notas', {'notas': lancamentos});
+      _debounce?.cancel();
+      await _rascunho?.apagar();
+      _estadoRascunho = 'Notas salvas no servidor';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Notas salvas! Estatísticas atualizadas.')));
-      await _carregar();
+      await _carregar(preservarRascunho: false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -210,6 +337,10 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
 
   @override
   void dispose() {
+    if (_debounce?.isActive == true) {
+      _debounce!.cancel();
+      _rascunho?.gravar(_dadosRascunho()).catchError((Object _) {});
+    }
     for (final c in _campos.values) {
       c.dispose();
     }
@@ -230,7 +361,7 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                   child: Row(children: [
                     Expanded(
                         child: Text(
-                            '${_notas.where((n) => _campos[n.alunoId]!.text.trim().isNotEmpty).length}/${_notas.length} lançadas')),
+                            '${_notas.where((n) => _campos[n.alunoId]!.text.trim().isNotEmpty).length}/${_notas.length} preenchidas')),
                     FilledButton(
                         onPressed: _salvando || _carregando ? null : _salvar,
                         child: Text(_salvando ? 'Salvando…' : 'Salvar tudo')),
@@ -255,6 +386,17 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                 style: Theme.of(context).textTheme.titleLarge),
                             Text(
                                 'Valor máximo: ${_atividade?.notaMaxima ?? "não definido"}'),
+                            const SizedBox(height: 8),
+                            const Text(
+                                'Ausente e Não entregou registram a situação. O valor só entra no cálculo quando você informa uma nota. Para atribuir zero, digite 0. Para retirar uma nota salva, use Excluir nota.'),
+                            if (_estadoRascunho.isNotEmpty)
+                              Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Text(_estadoRascunho,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall)),
                             Wrap(spacing: 12, children: [
                               TextButton.icon(
                                   onPressed: _salvando ? null : _mesmaNota,
@@ -295,9 +437,7 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                                   controller:
                                                       _campos[n.alunoId],
                                                   focusNode: _focos[n.alunoId],
-                                                  enabled: !_salvando &&
-                                                      _situacoes[n.alunoId] ==
-                                                          'Nota',
+                                                  enabled: !_salvando,
                                                   validator: _validar,
                                                   keyboardType:
                                                       const TextInputType
@@ -331,7 +471,8 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                                   items: [
                                                     'Nota',
                                                     'Ausente',
-                                                    'Não entregou'
+                                                    'Não entregou',
+                                                    'Não corrigido'
                                                   ]
                                                       .map((v) =>
                                                           DropdownMenuItem(
@@ -343,11 +484,7 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                                       : (v) => setState(() {
                                                             _situacoes[
                                                                 n.alunoId] = v!;
-                                                            _campos[n.alunoId]!
-                                                                    .text =
-                                                                v == 'Nota'
-                                                                    ? ''
-                                                                    : '0';
+                                                            _alterou();
                                                           })),
                                               IconButton(
                                                   tooltip:

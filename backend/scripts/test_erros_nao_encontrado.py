@@ -76,6 +76,7 @@ def _chamar(app, caso, erro):
         substituto = MagicMock(return_value=instancia)
     rate_limit.limiter.reset()
     with patch.object(modulo, alvo, substituto), \
+            patch('auth.decorators._conferir_acesso', return_value=None), \
             patch("auth.decorators._professor_habilitado", return_value=True):
         kwargs = {"headers": {"Authorization": "Bearer %s" % token}}
         if corpo is not None:

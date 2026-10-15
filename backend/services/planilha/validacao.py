@@ -85,6 +85,10 @@ def validar_linha_nota(linha, nota_maxima=None):
         return None, "nota nao e um numero"
     if valor < 0:
         return None, "nota negativa"
+    if round(valor, 2) != valor:
+        return None, 'use no máximo duas casas decimais na nota'
+    if nota_maxima is None:
+        return None, 'atividade sem valor máximo definido; configure antes de importar notas'
     if nota_maxima is not None and valor > float(nota_maxima):
         return None, "nota acima do maximo da atividade (%s)" % nota_maxima
 

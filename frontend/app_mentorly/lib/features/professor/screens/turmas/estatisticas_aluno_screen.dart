@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../widgets/estatisticas_view.dart';
 import 'alunoDetailScreen.dart';
+import '../../../../app/routes.dart';
 
 class EstatisticasAlunoScreen extends StatelessWidget {
   const EstatisticasAlunoScreen({super.key});
@@ -17,7 +18,13 @@ class EstatisticasAlunoScreen extends StatelessWidget {
             title: Text(aluno?['nome']?.toString() ?? 'Estatísticas do aluno'),
             actions: [
               IconButton(
-                  tooltip: 'Desempenho por etapa e feedback IA',
+                  tooltip: 'Registrar acompanhamento',
+                  icon: const Icon(Icons.event_note_outlined),
+                  onPressed: () => Navigator.pushNamed(
+                      context, AppRoutes.acompanhamentos,
+                      arguments: aluno)),
+              IconButton(
+                  tooltip: 'Desempenho e plano de recuperação',
                   icon: const Icon(Icons.grading),
                   onPressed: () => Navigator.push(
                       context,

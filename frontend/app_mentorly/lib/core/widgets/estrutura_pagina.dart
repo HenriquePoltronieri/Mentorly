@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../app/theme.dart';
-import '../services/apiService.dart';
 import 'identidade_visual.dart';
 
 // Limita a largura sem impor um segundo scroll às listas e formulários.
@@ -11,10 +10,8 @@ class ConteudoPagina extends StatelessWidget {
   const ConteudoPagina(
       {super.key, required this.child, this.largura = 1120, this.vidro = true});
   @override
-  Widget build(BuildContext context) => FundoMentorly(
-      perfil: ApiService().ehProfessor
-          ? PerfilVisual.professor
-          : PerfilVisual.coordenacao,
+  Widget build(BuildContext context) => ColoredBox(
+      color: AppCores.fundo,
       child: Padding(
           padding:
               EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 12 : 24),

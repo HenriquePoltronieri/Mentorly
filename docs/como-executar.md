@@ -1,5 +1,11 @@
 # Como Executar
 
+**Modo recomendado:** dê dois cliques em `Iniciar Mentorly.cmd` na raiz ou
+execute `.\iniciar.ps1`. Aplicativo e administração usam o mesmo servidor.
+Veja [o guia de hospedagem e acessos](hospedagem-e-acessos.md) para o primeiro
+administrador, planos, cortesias e backups. Os comandos separados abaixo
+continuam disponíveis para desenvolvimento.
+
 ## Backend
 
 ### O que precisa ter instalado
@@ -11,11 +17,11 @@
 
 Estão em `backend/requirements.txt`:
 
-- Flask 3.0.3
-- PyMySQL 1.1.1
-- PyJWT 2.9.0 (token de login)
+- Flask 3.1.3
+- PyMySQL 1.2.3
+- PyJWT 2.15.1 (token de login)
 - openpyxl 3.1.5 (importação de planilhas)
-- Werkzeug 3.0.4 (hash de senha)
+- Werkzeug 3.1.9 (hash de senha)
 - cryptography 50.0.1 (suporte do PyMySQL às senhas do MySQL 8)
 
 Para instalar:

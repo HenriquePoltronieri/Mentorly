@@ -32,6 +32,10 @@ JANELA_PADRAO = 15 * 60  # 15 minutos
 # escopo -> (maximo de requisicoes, janela em segundos). Constantes simples:
 # sem variavel de ambiente, para os padroes funcionarem em dev e na demo.
 LIMITES = {
+    'admin_login': (10, JANELA_PADRAO),
+    'origem_global': (150, 60),
+    'cadastro': (10, JANELA_PADRAO),
+    'criar_senha': (15, JANELA_PADRAO),
     "convite_consultar": (30, JANELA_PADRAO),
     # Login: IP + e-mail digitado.
     "login": (10, JANELA_PADRAO),
@@ -83,6 +87,9 @@ class RateLimiter:
         simultaneas nunca passam de `maximo` por janela.
         """
         maximo, janela = (limites or LIMITES)[escopo]
+        import config
+        if config.PRODUCAO:
+            return _consumir_no_banco(escopo, chave, maximo, janela, mensagem)
         with self._trava:
             agora = self._relogio()
             self._limpar_se_preciso(agora)
@@ -123,6 +130,29 @@ class RateLimiter:
 limiter = RateLimiter()
 
 
+def _consumir_no_banco(escopo, chave, maximo, janela, mensagem):
+    """Janela fixa com trava MySQL: reinicios e varios workers nao zeram limites."""
+    import hashlib
+    from database.connection import transacao
+    digest = hashlib.sha256((escopo + ':' + str(chave)).encode()).hexdigest()
+    agora = time.time()
+    with transacao() as cursor:
+        # ON DUPLICATE KEY toma trava exclusiva. INSERT IGNORE seguido de
+        # SELECT FOR UPDATE causava deadlock com varias tentativas simultaneas.
+        cursor.execute('INSERT INTO limite_requisicao(chave,expira_em) VALUES (%s,%s) '
+                       'ON DUPLICATE KEY UPDATE chave=VALUES(chave)',
+                       (digest, agora + janela))
+        cursor.execute('SELECT contador,expira_em FROM limite_requisicao WHERE chave=%s FOR UPDATE', (digest,))
+        registro = cursor.fetchone()
+        expirou = registro['expira_em'] <= agora
+        contador = 0 if expirou else registro['contador']
+        prazo = agora + janela if expirou else registro['expira_em']
+        if contador >= maximo:
+            raise LimiteExcedido(mensagem, math.ceil(prazo - agora))
+        cursor.execute('UPDATE limite_requisicao SET contador=%s,expira_em=%s WHERE chave=%s',
+                       (contador + 1, prazo, digest))
+
+
 def _normalizar(identificador):
     """E-mail/login normalizado para a chave; tipo estranho vira vazio."""
     if not isinstance(identificador, str):
@@ -132,6 +162,8 @@ def _normalizar(identificador):
 
 def limitar_por_origem(escopo, ip, identificador):
     """Login e codigos: IP + identificador (nao so IP, nao so identificador)."""
+    # Trocar o email nao permite tentativas ilimitadas do mesmo endereco.
+    limiter.consumir('origem_global', ip or '?')
     limiter.consumir(escopo, "%s|%s" % (ip or "?", _normalizar(identificador)))
 
 

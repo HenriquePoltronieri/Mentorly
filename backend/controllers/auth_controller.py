@@ -33,6 +33,7 @@ class AuthController:
 
     def cadastro_coordenacao(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem('cadastro', request.remote_addr, '')
         try:
             resultado = CadastroCoordenacaoService().execute(
                 dados.get("nome"),
@@ -72,6 +73,7 @@ class AuthController:
 
     def criar_senha_professor(self):
         dados = request.get_json(silent=True) or {}
+        limitar_por_origem('criar_senha', request.remote_addr, '')
         try:
             resultado = CriarSenhaProfessorService().execute(
                 dados.get("email"), dados.get("senha"), dados.get("token")

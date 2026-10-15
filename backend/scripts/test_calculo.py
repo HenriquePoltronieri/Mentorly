@@ -17,7 +17,7 @@ class CalculoTest(unittest.TestCase):
             "nota_minima": 60, "nota_maxima": 100,
         }
         self.criterios = [{"id": 1, "nome": "Provas", "peso": 100}]
-        self.atividades = {1: [{"id": 1, "nota_maxima": 10}]}
+        self.atividades = {1: [{"id": 1, "nota_maxima": 100}]}
         self.notas = {}
         for alvo, metodo, resposta in (
             (calculo.Criterio, "find_all_by_etapa", lambda *args: self.criterios),
@@ -48,6 +48,7 @@ class CalculoTest(unittest.TestCase):
         self.assertIsNone(resultado["nota_calculada"])
 
     def test_ponderacao_e_normalizacao(self):
+        self.etapa.update(nota_minima=6, nota_maxima=10)
         self.criterios = [
             {"id": 1, "nome": "Provas", "peso": 70},
             {"id": 2, "nome": "Trabalhos", "peso": 30},
@@ -58,7 +59,7 @@ class CalculoTest(unittest.TestCase):
         }
         self.notas = {1: 18, 2: 16, 3: 9}
         resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
-        self.assertEqual(resultado["nota_calculada"], 86.5)
+        self.assertEqual(resultado["nota_calculada"], 8.65)
         self.assertEqual(resultado["situacao"], "adequado")
 
     def test_soma_sem_arredondamento_intermediario(self):
@@ -73,10 +74,10 @@ class CalculoTest(unittest.TestCase):
             {"id": 2, "nome": "Trabalhos", "peso": 50},
         ]
         self.atividades = {
-            1: [{"id": 1, "nota_maxima": 3}],
-            2: [{"id": 2, "nota_maxima": 3}],
+            1: [{"id": 1, "nota_maxima": 150}],
+            2: [{"id": 2, "nota_maxima": 150}],
         }
-        self.notas = {1: 1, 2: 1}
+        self.notas = {1: 50, 2: 50}
         self.etapa["nota_minima"] = 33.34
         resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
         self.assertEqual(resultado["nota_calculada"], 33.33)
@@ -92,10 +93,10 @@ class CalculoTest(unittest.TestCase):
             {"id": 2, "nome": "Trabalhos", "peso": 50},
         ]
         self.atividades = {
-            1: [{"id": 1, "nota_maxima": 3}],
-            2: [{"id": 2, "nota_maxima": 3}],
+            1: [{"id": 1, "nota_maxima": 150}],
+            2: [{"id": 2, "nota_maxima": 150}],
         }
-        self.notas = {1: 1, 2: 1}
+        self.notas = {1: 50, 2: 50}
         resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
         contribuicoes = {c["criterio_id"]: c["contribuicao"] for c in resultado["criterios"]}
         self.assertEqual(contribuicoes[1], 16.67)

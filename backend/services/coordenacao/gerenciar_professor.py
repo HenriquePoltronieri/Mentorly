@@ -6,6 +6,7 @@ escola logada antes de qualquer alteracao.
 """
 
 from datetime import datetime, timedelta
+import re
 
 from auth.jwt_utils import gerar_token_convite
 from config import CONVITE_EXPIRACAO_HORAS
@@ -62,6 +63,8 @@ class EditarProfessorService:
             ).lower()
             if not email:
                 raise ValueError("O email do professor e obrigatorio")
+            if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+                raise entrada.EntradaInvalida('Informe um e-mail válido')
             existente = Professor.find_by_email(email)
             if existente and existente["id"] != professor_id:
                 raise ValueError("Este email ja esta em uso por outro professor")

@@ -4,7 +4,7 @@ Projeções não substituem o boletim: novas atividades/recuperações podem mud
 o resultado. Sem nota mantém todos os pontos possíveis, nunca vira zero.
 """
 from datetime import date
-from services.academico.calculo import resumo_pesos, TOLERANCIA_NOTA
+from services.academico.calculo import resumo_pesos, TOLERANCIA_NOTA, base_pontos
 
 
 def _data(valor):
@@ -29,6 +29,7 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
             "nota_minima": float(etapa["nota_minima"]) if etapa.get("nota_minima") is not None else None,
             "nota_maxima": float(etapa["nota_maxima"]) if etapa.get("nota_maxima") is not None else None,
             "pontos_ponderados": None, "pontos_restantes": None, "pontos_faltantes": None,
+            "pontos_nao_planejados": None,
             "cobertura_avaliada": None, "risco": "Sem dados", "motivos": []}
     _, valido = resumo_pesos(criterios)
     if not valido or base["nota_minima"] is None or not base["nota_maxima"] or any(
@@ -36,14 +37,15 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
     ):
         base["motivos"] = ["Confira a configuração dos critérios e da escala da etapa antes de avaliar o risco."]
         return base
-    obtidos = restantes = cobertura = 0
+    obtidos = restantes = cobertura = nao_planejados = 0
     for criterio in criterios:
         peso = float(criterio.get("peso") or 0) / 100
         if peso <= 0:
             continue
         lista = [a for a in atividades if a.get("criterio_id") == criterio["id"]]
-        total = sum(a["nota_maxima"] for a in lista)
+        total, planejados, _ = base_pontos(lista, criterio, base['nota_maxima'])
         parcela = peso * base["nota_maxima"]
+        nao_planejados += max(0, parcela - planejados)
         if total <= 0:
             restantes += parcela
             continue
@@ -53,11 +55,15 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
         restantes += (total - avaliado) / total * parcela
         cobertura += avaliado / total * peso
     base.update(pontos_ponderados=round(obtidos, 2), pontos_restantes=round(restantes, 2),
+                pontos_nao_planejados=round(nao_planejados, 2),
                 pontos_faltantes=round(max(0, base["nota_minima"] - obtidos), 2),
                 cobertura_avaliada=round(cobertura * 100, 1))
     if cobertura <= 0:
         return base
-    if not final:
+    if nao_planejados > TOLERANCIA_NOTA:
+        base['risco'] = 'Em andamento'
+        base['motivos'] = ['Planejamento incompleto: ainda faltam atividades para cobrir os pontos da etapa. A pontuação atual é parcial.']
+    elif not final:
         base["risco"] = "Em andamento"
         base["motivos"] = ["Etapa em andamento: acompanhe as dificuldades sem antecipar risco de nota."]
     elif obtidos >= base["nota_minima"] - TOLERANCIA_NOTA:

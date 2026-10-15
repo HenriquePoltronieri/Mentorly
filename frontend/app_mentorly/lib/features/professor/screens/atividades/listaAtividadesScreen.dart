@@ -3,7 +3,7 @@ import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../app/routes.dart';
 import '../../../coordenacao/models/turmaModel.dart';
-import '../../widgets/professorTopBar.dart';
+import '../../widgets/professor_scaffold.dart';
 import '../../services/professorTurmasService.dart';
 
 // tela que lista as turmas do professor pra ele escolher em qual
@@ -25,6 +25,7 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
   bool _carregando = true;
   String? _mensagemErro;
   List<TurmaModel> _turmas = [];
+  String _busca = '';
 
   @override
   void initState() {
@@ -60,8 +61,8 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const ProfessorTopBar(abaAtiva: 'atividades'),
+    return ProfessorScaffold(
+      aba: 'atividades',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.pushNamed(context, AppRoutes.buscarAtividades);
@@ -74,7 +75,29 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
           ApiService().invalidarCache();
           return _buscarTurmas();
         },
-        child: ConteudoPagina(child: _construirCorpo()),
+        child: ConteudoPagina(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Atividades por turma',
+                            style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: 8),
+                        const Text(
+                            'Crie, reaproveite atividades e lance as notas da turma.'),
+                        const SizedBox(height: 20),
+                        TextField(
+                            decoration: const InputDecoration(
+                                labelText: 'Buscar turma',
+                                prefixIcon: Icon(Icons.search)),
+                            onChanged: (v) => setState(() => _busca = v)),
+                      ])),
+              Expanded(child: _construirCorpo()),
+            ])),
       ),
     );
   }
@@ -103,16 +126,28 @@ class _ListaAtividadesScreenState extends State<ListaAtividadesScreen> {
       );
     }
 
+    final filtradas = _turmas
+        .where((t) => '${t.nome} ${t.disciplina}'
+            .toLowerCase()
+            .contains(_busca.toLowerCase()))
+        .toList();
+    if (filtradas.isEmpty) {
+      return const EstadoPagina(
+          titulo: 'Nenhuma turma encontrada',
+          mensagem: 'Tente outro nome ou disciplina.');
+    }
     return ListView.separated(
       separatorBuilder: (_, indice) => const Divider(height: 1),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-      itemCount: _turmas.length,
+      itemCount: filtradas.length,
       itemBuilder: (context, index) {
-        final turma = _turmas[index];
+        final turma = filtradas[index];
         return ListTile(
           leading: const Icon(Icons.assignment_outlined),
           title: Text(turma.nome),
-          subtitle: Text('${turma.disciplina} • ${turma.turno}'),
+          subtitle: Text([turma.disciplina, turma.turno]
+              .where((v) => v.trim().isNotEmpty)
+              .join(' · ')),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
           onTap: () {
             Navigator.pushNamed(context, AppRoutes.turmaAtividades,

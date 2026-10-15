@@ -332,6 +332,10 @@ class _CardEtapa extends StatelessWidget {
       case 'configuracao_invalida':
         return etapa.mensagem ?? 'Configuração da etapa inválida';
       default:
+          if (etapa.notaParcial != null) {
+            return 'Pontuação parcial: ${etapa.notaParcial!.toStringAsFixed(1)} / '
+                '${etapa.notaMaxima?.toStringAsFixed(1) ?? "—"}. ${etapa.mensagem ?? "Ainda há avaliações pendentes."}';
+          }
         return 'Em andamento — ainda faltam notas para calcular';
     }
   }

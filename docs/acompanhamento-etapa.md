@@ -2,8 +2,16 @@
 
 A lista de alunos mostra os pontos originais das avaliações lançadas na etapa
 atual. Um trabalho de 2 pontos aparece como `2/2` ou `1/2`, sem converter essa
-pontuação em nota final. Os gráficos continuam usando a escala comparável de
-0 a 10. O desempenho agregado considera o valor máximo de cada avaliação.
+pontuação em nota final. No detalhe do aluno, resumos, atividades e gráficos
+mostram os pontos reais, como `2 de 2`. A média da turma por atividade também
+usa os pontos reais daquela avaliação. Cada atividade mantém seu valor máximo.
+As métricas normalizadas continuam disponíveis internamente para comparação e IA.
+
+Cada etapa mostra a nota mínima para passar na escala configurada pela
+coordenação, mesmo no início. Com notas lançadas e critérios válidos, mostra
+também a pontuação ponderada e quanto falta para alcançar o mínimo. Essa
+projeção considera os pesos dos critérios e as atividades cadastradas; novas
+avaliações podem mudar o resultado. Sem notas, não inventa uma pontuação.
 
 ## Alertas
 

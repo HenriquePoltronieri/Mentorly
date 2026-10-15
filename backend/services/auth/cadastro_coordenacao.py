@@ -1,4 +1,5 @@
 from werkzeug.security import generate_password_hash
+import re
 
 from auth.jwt_utils import TIPO_COORDENACAO, gerar_token
 from models.coordenacao_model import Coordenacao
@@ -24,8 +25,10 @@ class CadastroCoordenacaoService:
             raise ValueError("O nome e obrigatorio")
         if not email:
             raise ValueError("O email e obrigatorio")
-        if not senha or len(senha) < 6:
-            raise ValueError("A senha precisa ter ao menos 6 caracteres")
+        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+            raise entrada.EntradaInvalida('Informe um e-mail válido')
+        if not senha or len(senha) < 8:
+            raise ValueError("A senha precisa ter ao menos 8 caracteres")
 
         if Coordenacao.find_by_email(email):
             raise ValueError("Ja existe uma coordenacao com este email")

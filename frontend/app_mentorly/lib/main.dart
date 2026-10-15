@@ -38,7 +38,7 @@ String _rotaInicial(ApiService api) {
 
   if (!api.estaLogado) return AppRoutes.perfilSelection;
   if (api.ehCoordenacao) return AppRoutes.coordenacaoHome;
-  if (api.ehProfessor) return AppRoutes.listaTurmas;
+  if (api.ehProfessor) return AppRoutes.dashboard;
   return AppRoutes.perfilSelection;
 }
 

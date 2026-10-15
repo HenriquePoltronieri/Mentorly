@@ -124,3 +124,37 @@ AI_CONFIG = {
     "model": os.environ.get("AI_MODEL") or "openai/gpt-oss-20b",
     "timeout": min(20, _float_positivo_env("AI_TIMEOUT", 15)),
 }
+
+# Hospedagem. Desenvolvimento conserva a URL do Flutter; o iniciador usa :5000.
+PRODUCAO = os.environ.get('APP_ENV', 'development').lower() == 'production'
+CORS_ORIGINS = [v.strip().rstrip('/') for v in os.environ.get(
+    'CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',') if v.strip()]
+WEB_BUILD_DIR = os.environ.get('WEB_BUILD_DIR', '')
+
+
+def validar_producao():
+    if not PRODUCAO:
+        return
+    from urllib.parse import urlparse
+    problemas = []
+    if len(os.environ.get('SECRET_KEY', '')) < 32:
+        problemas.append('SECRET_KEY com pelo menos 32 caracteres')
+    if DEBUG or DEV_EXPOSE_AUTH_CODES:
+        problemas.append('FLASK_DEBUG e DEV_EXPOSE_AUTH_CODES desligados')
+    if DB_CONFIG['user'] == 'root' or not DB_CONFIG['password']:
+        problemas.append('usuario MySQL proprio com senha (nao root)')
+    if urlparse(APP_BASE_URL).scheme != 'https':
+        problemas.append('APP_BASE_URL/FRONTEND_URL com HTTPS')
+    if any(urlparse(o).scheme != 'https' or '*' in o for o in CORS_ORIGINS):
+        problemas.append('CORS_ORIGINS somente com enderecos HTTPS autorizados')
+    if not SMTP_CONFIG['host'] or not (SMTP_CONFIG['usar_tls'] or SMTP_CONFIG['usar_ssl']):
+        problemas.append('SMTP configurado com TLS ou SSL')
+    if not os.environ.get('TRUSTED_HOSTS', '').strip():
+        problemas.append('TRUSTED_HOSTS com os dominios da API')
+    try:
+        from cryptography.fernet import Fernet
+        Fernet(os.environ.get('BACKUP_KEY', '').encode())
+    except (ValueError, TypeError):
+        problemas.append('BACKUP_KEY valida, guardada separadamente dos backups')
+    if problemas:
+        raise RuntimeError('Configuracao de producao incompleta: ' + '; '.join(problemas))

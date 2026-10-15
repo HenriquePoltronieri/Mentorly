@@ -65,12 +65,15 @@ class MarcaMentorly extends StatelessWidget {
             width: compacta ? 54 : 70, height: compacta ? 54 : 70),
         if (!somenteIcone) ...[
           const SizedBox(width: 4),
-          Text('Mentorly',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: compacta ? 19 : 25,
-                  fontWeight: FontWeight.w500,
-                  color: AppCores.texto))
+          Flexible(
+              child: Text('Mentorly',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: compacta ? 19 : 25,
+                      fontWeight: FontWeight.w500,
+                      color: AppCores.texto)))
         ],
       ])));
 }
@@ -95,7 +98,7 @@ class VidroCard extends StatelessWidget {
               decoration: BoxDecoration(
                   color: AppCores.vidro,
                   borderRadius: BorderRadius.circular(AppVisual.raioCard),
-                  border: Border.all(color: const Color(0xAAFFFFFF))),
+                  border: Border.all(color: AppCores.linha)),
               child: Stack(children: [
                 if (formas)
                   Positioned.fill(

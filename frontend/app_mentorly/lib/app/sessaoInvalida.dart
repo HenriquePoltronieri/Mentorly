@@ -11,6 +11,9 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 // Liga o ApiService a este tratamento. Chamado uma vez, no main().
 void registrarTratamentoDeSessao(ApiService api) {
   api.aoEncerrarSessao = _aoEncerrarSessao;
+  api.aoBloquearEscola = () {
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.acesso, (_) => false);
+  };
 }
 
 // Sessao invalida: troca TODA a pilha pelo login do papel que estava logado

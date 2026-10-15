@@ -5,6 +5,8 @@ import '../../../../app/routes.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../models/atividadeModel.dart';
 import '../../services/atividadesService.dart';
+import '../../services/professorTurmasService.dart';
+import '../../../../core/widgets/estrutura_pagina.dart';
 import 'adicionarAtividadeModal.dart';
 
 // Lista as atividades de uma turma especifica, com criar/editar/excluir.
@@ -100,6 +102,30 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
     if (salvou == true) _buscarAtividades();
   }
 
+  Future<void> _duplicar(AtividadeModel atividade) async {
+    try {
+      final dados = await ProfessorTurmasService().listarTurmas();
+      if (!mounted) return;
+      final salvou = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+              builder: (_) => AdicionarAtividadeModal(
+                  turmas: dados
+                      .map((t) => TurmaModel.fromJson(
+                          Map<String, dynamic>.from(t as Map)))
+                      .toList(),
+                  modelo: atividade)));
+      if (salvou == true && mounted) _buscarAtividades();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e is ApiException
+                ? e.mensagem
+                : 'Não foi possível abrir a cópia.')));
+      }
+    }
+  }
+
   Future<void> _excluirAtividade(AtividadeModel atividade) async {
     final confirmou = await confirmarExclusao(
       context,
@@ -142,10 +168,12 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
         icon: const Icon(Icons.add),
         label: const Text('+ Nova atividade'),
       ),
-      body: RefreshIndicator(
-        onRefresh: _buscarAtividades,
-        child: _construirCorpo(),
-      ),
+      body: ConteudoPagina(
+          vidro: false,
+          child: RefreshIndicator(
+            onRefresh: _buscarAtividades,
+            child: _construirCorpo(),
+          )),
     );
   }
 
@@ -185,9 +213,13 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
       itemBuilder: (context, index) {
         final atividade = _atividades[index];
         final estreita = MediaQuery.sizeOf(context).width < _larguraEstreita;
-        final acoes = Row(
-          mainAxisSize: MainAxisSize.min,
+        final acoes = Wrap(
           children: [
+            IconButton(
+              tooltip: 'Reaproveitar em outra turma',
+              icon: const Icon(Icons.copy_outlined),
+              onPressed: () => _duplicar(atividade),
+            ),
             IconButton(
               tooltip: 'Editar',
               icon: const Icon(Icons.edit_outlined),
@@ -250,7 +282,7 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
               ],
             ),
             isThreeLine: !atividade.configuracaoCompleta,
-            trailing: estreita ? null : acoes,
+            trailing: estreita ? null : SizedBox(width: 192, child: acoes),
             // Tocar na atividade leva ao lancamento de notas, que era a
             // tela orfa do app - nenhuma rota apontava para ela.
             onTap: () => _abrirLancarNotas(atividade),
@@ -264,7 +296,7 @@ class _TurmaAtividadesScreenState extends State<TurmaAtividadesScreen> {
   static const int _linhasDaPrevia = 2;
 
   // Abaixo desta largura os botoes saem do lado do texto (ver itemBuilder).
-  static const double _larguraEstreita = 480;
+  static const double _larguraEstreita = 680;
 
   // "1º Bimestre • Prova • Vale 20 pontos • Entrega: 2026-09-15"
   //

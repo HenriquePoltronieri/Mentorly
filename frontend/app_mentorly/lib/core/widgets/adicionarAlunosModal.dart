@@ -45,9 +45,11 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
   Future<void> _baixarModelo() async {
     // launchUrl abre outra aba e nao manda cabecalho, entao o token vai na
     // query string (o backend aceita ?token= so nos downloads).
-    final url = Uri.parse(_api.urlComToken('$_base/modelo-planilha'));
     try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      final url = await _api.autorizarDownload('$_base/modelo-planilha');
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw StateError('download');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _mensagemErro = 'Não foi possível baixar o modelo');

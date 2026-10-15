@@ -55,6 +55,9 @@ class ApiService {
   static const String codigoProfessorDesativado = 'professor_desativado';
 
   AoEncerrarSessao? aoEncerrarSessao;
+  void Function()? aoBloquearEscola;
+  bool _bloqueioNotificado = false;
+  final Map<String, Future<dynamic>> _alteracoes = {};
 
   static const String _chaveToken = 'mentorly.token';
   static const String _chaveUsuario = 'mentorly.usuario';
@@ -120,6 +123,7 @@ class ApiService {
       String novoToken, Map<String, dynamic> dados) async {
     invalidarCache();
     token = novoToken;
+    _bloqueioNotificado = false;
     usuario = dados;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_chaveToken, novoToken);
@@ -154,11 +158,12 @@ class ApiService {
     await prefs.remove(_chaveUsuario);
   }
 
-  // Monta a URL de um download que o navegador abre em outra aba
-  // (launchUrl nao manda cabecalho, entao o token vai na query string).
-  String urlComToken(String endpoint) {
-    final separador = endpoint.contains('?') ? '&' : '—';
-    return '$baseUrl$endpoint${token == null ? '' : '${separador}token=$token'}';
+  // Autoriza apenas o arquivo pedido por 2 minutos; nunca expoe o JWT na URL.
+  Future<Uri> autorizarDownload(String endpoint) async {
+    final caminho = endpoint.split('?').first;
+    final resposta = await get('/downloads/autorizar?caminho=${Uri.encodeQueryComponent(caminho)}');
+    final destino = Uri.base.resolve('$baseUrl$endpoint');
+    return destino.replace(queryParameters: {...destino.queryParameters, 'token': resposta['token'].toString()});
   }
 
   // ---------------------------------------------------------------------
@@ -210,6 +215,25 @@ class ApiService {
       endpoint.endsWith('/ia/chat');
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
+    return _umaAlteracao('POST', endpoint, body, () => _post(endpoint, body));
+  }
+
+  // Duplo clique compartilha o envio em andamento em vez de criar duas vezes.
+  Future<dynamic> _umaAlteracao(String verbo, String endpoint,
+      dynamic corpo, Future<dynamic> Function() enviar) async {
+    final chave = '$token:$verbo:$endpoint:${jsonEncode(corpo)}';
+    final pendente = _alteracoes[chave];
+    if (pendente != null) return pendente;
+    final futuro = enviar();
+    _alteracoes[chave] = futuro;
+    try {
+      return await futuro;
+    } finally {
+      _alteracoes.remove(chave);
+    }
+  }
+
+  Future<dynamic> _post(String endpoint, Map<String, dynamic> body) async {
     final tokenUsado = token;
     final response = await _comPrazo(
         http.post(
@@ -224,6 +248,10 @@ class ApiService {
   }
 
   Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
+    return _umaAlteracao('PUT', endpoint, body, () => _put(endpoint, body));
+  }
+
+  Future<dynamic> _put(String endpoint, Map<String, dynamic> body) async {
     final tokenUsado = token;
     final response = await _comPrazo(http.put(
       Uri.parse('$baseUrl$endpoint'),
@@ -236,6 +264,10 @@ class ApiService {
   }
 
   Future<dynamic> delete(String endpoint) async {
+    return _umaAlteracao('DELETE', endpoint, null, () => _delete(endpoint));
+  }
+
+  Future<dynamic> _delete(String endpoint) async {
     final tokenUsado = token;
     final response = await _comPrazo(http.delete(
       Uri.parse('$baseUrl$endpoint'),
@@ -278,10 +310,24 @@ class ApiService {
       http.Response response, String endpoint, String? tokenUsado) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
-      return jsonDecode(response.body);
+      try {
+        final corpo = jsonDecode(response.body);
+        if (endpoint == '/acesso' && corpo is Map && corpo['liberado'] == true) {
+          _bloqueioNotificado = false;
+        }
+        return corpo;
+      } on FormatException {
+        throw ApiException(502, 'O servidor enviou uma resposta inesperada. Tente novamente.');
+      }
     }
 
     final codigo = _extrairCodigo(response);
+    if (codigo == 'escola_sem_acesso' && tokenUsado == token &&
+        tokenUsado != null && !_bloqueioNotificado) {
+      _bloqueioNotificado = true;
+      invalidarCache();
+      aoBloquearEscola?.call();
+    }
     var mensagem = _extrairMensagem(response);
 
     // Sessao invalida: so em chamada AUTENTICADA (enviada com token, fora de

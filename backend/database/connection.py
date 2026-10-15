@@ -39,6 +39,9 @@ def get_connection(com_banco=True):
     }
     if com_banco:
         parametros["database"] = DB_CONFIG["database"]
+    if os.environ.get('DB_SSL_CA'):
+        parametros.update(ssl_ca=os.environ['DB_SSL_CA'], ssl_verify_cert=True,
+                          ssl_verify_identity=True)
     return pymysql.connect(**parametros)
 
 
@@ -164,7 +167,7 @@ def init_database():
             cursor.execute(
                 "CREATE DATABASE IF NOT EXISTS `%s` "
                 "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-                % DB_CONFIG["database"]
+                % DB_CONFIG["database"].replace('`', '``')
             )
         conexao.commit()
     finally:
@@ -244,10 +247,23 @@ def install_schema():
     # Import local: migrations.py importa os helpers deste modulo.
     from database.migrations import aplicar_migracoes
     aplicar_migracoes()
+    install_professor_workspace()
+    install_comercial()
 
     return resultado
+
+
+def install_professor_workspace():
+    """Instalacao aditiva, tambem utilizavel sem reinstalar schema/procedures."""
+    return _rodar_arquivo_sql(os.path.join(BASE_DIR, "database", "professor_workspace.sql"))
 
 
 def install_procedures():
     """Instala as stored procedures a partir de database/procedures.sql."""
     return _rodar_arquivo_sql(PROCEDURES_FILE)
+
+
+def install_comercial():
+    _rodar_arquivo_sql(os.path.join(BASE_DIR, "database", "comercial.sql"))
+    from services.acesso_escola import cadastrar_escolas_existentes
+    cadastrar_escolas_existentes()

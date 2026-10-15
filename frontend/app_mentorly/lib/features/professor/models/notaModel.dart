@@ -14,6 +14,7 @@ class NotaModel {
   final double? valor;
   final double? notaMaxima;
   final String? observacao;
+  final String? situacao;
 
   NotaModel({
     this.id,
@@ -23,6 +24,7 @@ class NotaModel {
     this.valor,
     this.notaMaxima,
     this.observacao,
+    this.situacao,
   });
 
   bool get temNota => valor != null;
@@ -41,6 +43,7 @@ class NotaModel {
       valor: paraDouble(json['valor']),
       notaMaxima: paraDouble(json['notaMaxima']),
       observacao: json['observacao'] as String?,
+      situacao: json['situacao'] as String?,
     );
   }
 

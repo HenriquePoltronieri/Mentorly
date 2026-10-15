@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:app_mentorly/core/services/apiService.dart';
@@ -23,6 +24,7 @@ http.Response json(Object o, [int status = 200]) =>
         headers: {'content-type': 'application/json; charset=utf-8'});
 void main() {
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     ApiService().invalidarCache();
     ApiService().token = 'teste-${DateTime.now().microsecondsSinceEpoch}';
     ApiService().usuario = {'id': 1, 'tipo': 'professor'};
@@ -121,7 +123,8 @@ void main() {
             }));
   });
 
-  testWidgets('notas inválidas não salvam; ausência envia zero com observação',
+  testWidgets(
+      'notas inválidas não salvam; falta de entrega preserva nota vazia',
       (t) async {
     final posts = <Map<String, dynamic>>[];
     await http.runWithClient(() async {
@@ -145,12 +148,13 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('Não entregou').last);
       await t.pumpAndSettle();
-      expect(find.text('2/2 lançadas'), findsOneWidget);
+      expect(find.text('1/2 preenchidas'), findsOneWidget);
       await t.tap(find.text('Salvar tudo'));
       await t.pumpAndSettle();
       final notas = posts.single['notas'] as List;
       expect(notas[0]['valor'], 8);
-      expect(notas[1]['valor'], 0);
+      expect(notas[1]['valor'], isNull);
+      expect(notas[1]['situacao'], 'Não entregou');
       expect(notas[1]['observacao'], 'Não entregou');
       expect(
           find.text('Notas salvas! Estatísticas atualizadas.'), findsOneWidget);
@@ -204,18 +208,50 @@ void main() {
             }));
   });
 
-  testWidgets('gráficos reais renderizam linha e risco em largura móvel', (t) async {
-    t.view.physicalSize = const Size(320, 900); t.view.devicePixelRatio = 1; addTearDown(t.view.reset);
+  testWidgets('gráficos reais renderizam linha e risco em largura móvel',
+      (t) async {
+    t.view.physicalSize = const Size(320, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
     await http.runWithClient(() async {
-      await t.pumpWidget(app(const Scaffold(body: EstatisticasView(turmaId: 7)))); await t.pumpAndSettle();
-      await t.scrollUntilVisible(find.byType(LineChart), 200); expect(find.byType(LineChart), findsOneWidget);
-      await t.scrollUntilVisible(find.byType(PieChart), 200); expect(find.byType(PieChart), findsOneWidget);
+      await t
+          .pumpWidget(app(const Scaffold(body: EstatisticasView(turmaId: 7))));
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.byType(LineChart), 200);
+      expect(find.byType(LineChart), findsOneWidget);
+      final grafico = t.widget<LineChart>(find.byType(LineChart)).data;
+      expect(grafico.lineBarsData.first.spots.single.y, 1);
+      expect(grafico.maxY, 2);
+      await t.scrollUntilVisible(find.byType(PieChart), 200);
+      expect(find.byType(PieChart), findsOneWidget);
       expect(t.takeException(), isNull);
-    }, () => MockClient((r) async => json({
-      'turma': {'id': 7, 'nome': '7A'}, 'etapas': [], 'media': 5, 'percentual_entregas': 100, 'alunos_em_risco': 1,
-      'pior_atividade': {'id': 1, 'titulo': 'Prova', 'media': 5}, 'distribuicao_risco': {'Alto': 1, 'Médio': 0, 'Baixo': 0, 'Sem dados': 0},
-      'atividades': [{'id': 1, 'titulo': 'Prova', 'media': 5}], 'alunos': [{'id': 1, 'nome': 'Ana Teste', 'risco': 'Alto', 'media': 5}],
-    })));
+    },
+        () => MockClient((r) async => json({
+              'turma': {'id': 7, 'nome': '7A'},
+              'etapas': [],
+              'media': 5,
+              'percentual_entregas': 100,
+              'alunos_em_risco': 1,
+              'pior_atividade': {'id': 1, 'titulo': 'Prova', 'media': 5},
+              'distribuicao_risco': {
+                'Alto': 1,
+                'Médio': 0,
+                'Baixo': 0,
+                'Sem dados': 0
+              },
+              'atividades': [
+                {
+                  'id': 1,
+                  'titulo': 'Prova',
+                  'media': 5,
+                  'media_pontos': 1,
+                  'nota_maxima': 2
+                }
+              ],
+              'alunos': [
+                {'id': 1, 'nome': 'Ana Teste', 'risco': 'Alto', 'media': 5}
+              ],
+            })));
   });
 
   testWidgets('estatísticas sem notas têm estado vazio e filtro por etapa',
@@ -228,7 +264,7 @@ void main() {
       await t.scrollUntilVisible(
           find.textContaining('Ainda não há notas.'), 200);
       expect(find.textContaining('Ainda não há notas.'), findsOneWidget);
-      await t.ensureVisible(find.text('Etapa 1'));
+      await t.scrollUntilVisible(find.text('Etapa 1'), -150);
       await t.tap(find.text('Etapa 1'));
       await t.pumpAndSettle();
       expect(consultas.last.queryParameters['etapa_id'], '1');

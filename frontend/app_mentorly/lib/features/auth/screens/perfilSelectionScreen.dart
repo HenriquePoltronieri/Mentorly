@@ -31,6 +31,9 @@ class PerfilSelectionScreen extends StatelessWidget {
                     child: Text('Ou', textAlign: TextAlign.center)),
                 _perfil(context, 'Professor', 'Atividades, notas e desempenho',
                     Icons.co_present_outlined, AppRoutes.professorLogin),
+                const SizedBox(height: 24),
+                TextButton(onPressed: () => Navigator.pushNamed(context, AppRoutes.admin),
+                  child: const Text('Administração do Mentorly')),
               ])));
   Widget _perfil(BuildContext context, String titulo, String descricao,
           IconData icone, String rota) =>

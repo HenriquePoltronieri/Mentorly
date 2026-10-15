@@ -46,14 +46,17 @@ def _carregar_usuario(aceita_token_na_url=False):
     cabecalho = request.headers.get("Authorization")
     if cabecalho:
         token = extrair_token(cabecalho)
+        payload = decodificar_token(token) if token else None
     elif aceita_token_na_url and request.method == "GET":
         token = request.args.get("token")
+        from auth.downloads import ler_permissao
+        payload = ler_permissao(token, request.path) if token else None
     else:
         token = None
+        payload = None
     if not token:
         return None
 
-    payload = decodificar_token(token)
     if not payload:
         return None
 
@@ -91,6 +94,18 @@ def _professor_desativado():
     }), 403
 
 
+def _conferir_acesso(usuario):
+    # A consulta de situacao continua disponivel mesmo com prazo vencido.
+    if request.path == '/api/acesso':
+        return None
+    from services.acesso_escola import consultar
+    acesso = consultar(usuario['coordenacao_id'])
+    if not acesso['liberado']:
+        return jsonify({'error': acesso['mensagem'], 'code': 'escola_sem_acesso',
+                        'acesso': acesso}), 403
+    return None
+
+
 def auth_required(funcao):
     """Exige um token valido, de qualquer papel."""
 
@@ -101,6 +116,9 @@ def auth_required(funcao):
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if not _professor_habilitado(usuario):
             return _professor_desativado()
+        bloqueio = _conferir_acesso(usuario)
+        if bloqueio is not None:
+            return bloqueio
         return funcao(*args, **kwargs)
 
     return wrapper
@@ -122,6 +140,9 @@ def coordenacao_required(funcao):
             return jsonify(
                 {"error": "Esta acao e exclusiva da Coordenacao"}
             ), 403
+        bloqueio = _conferir_acesso(usuario)
+        if bloqueio is not None:
+            return bloqueio
         return funcao(*args, **kwargs)
 
     return wrapper
@@ -148,6 +169,9 @@ def professor_required(funcao):
         # mesma de @auth_required, pois ambos precisam bloquear o token.
         if not _professor_habilitado(usuario):
             return _professor_desativado()
+        bloqueio = _conferir_acesso(usuario)
+        if bloqueio is not None:
+            return bloqueio
         return funcao(*args, **kwargs)
 
     return wrapper

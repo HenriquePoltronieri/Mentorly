@@ -1,4 +1,4 @@
-from werkzeug.security import check_password_hash
+from auth.passwords import conferir_senha
 
 from auth.jwt_utils import TIPO_PROFESSOR, gerar_token
 from models.professor_model import Professor
@@ -19,23 +19,11 @@ class LoginProfessorService:
             raise ValueError("Informe email e senha")
 
         linha = Professor.find_by_email(email)
-        if not linha:
+        if not conferir_senha(linha.get('senha_hash') if linha else None, senha):
             raise PermissionError("Email ou senha invalidos")
 
         if not linha.get("habilitado", True):
             raise PermissionError("Professor desativado. Procure a Coordenacao.")
-
-        # Professor cadastrado pela coordenacao que ainda nao abriu o convite
-        # nao tem senha. Aqui a mensagem e especifica porque ajuda o usuario
-        # e nao revela nada que ele ja nao saiba.
-        if not linha["senha_hash"]:
-            raise PermissionError(
-                "Voce ainda nao criou sua senha. Use o link do convite "
-                "enviado por email."
-            )
-
-        if not check_password_hash(linha["senha_hash"], senha):
-            raise PermissionError("Email ou senha invalidos")
 
         return {
             "token": gerar_token(

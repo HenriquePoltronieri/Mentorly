@@ -12,9 +12,9 @@ abstract final class AppCores {
   static const neutro = Color(0xFF2AA0FF);
   static const texto = Color(0xFF171B24);
   static const secundario = Color(0xFF424B5A);
-  static const fundo = Color(0xFFE6E6E6);
-  static const linha = Color(0xFFB7C3CE);
-  static const vidro = Color(0x7AFFFFFF);
+  static const fundo = Color(0xFFF5F7FB);
+  static const linha = Color(0xFFE0E6EF);
+  static const vidro = Color(0xFFFFFFFF);
   static const sucesso = Color(0xFF236844);
   static const atencao = Color(0xFF995410);
 }
@@ -27,14 +27,14 @@ abstract final class AppEspacos {
 }
 
 abstract final class AppVisual {
-  static const raioCard = 20.0;
-  static const raioPilula = 999.0;
+  static const raioCard = 14.0;
+  static const raioPilula = 10.0;
   static const bordaPeso = OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(raioPilula)),
       borderSide: BorderSide(color: AppCores.secundario));
   static const transicao = Duration(milliseconds: 280);
   static const sombraCard = [
-    BoxShadow(color: Color(0x120B2440), blurRadius: 20, offset: Offset(0, 6))
+    BoxShadow(color: Color(0x050B2440), blurRadius: 8, offset: Offset(0, 2))
   ];
   static const sombraCampo = [
     BoxShadow(color: Color(0x10000000), blurRadius: 8, offset: Offset(0, 3))
@@ -45,7 +45,7 @@ abstract final class AppVisual {
 
 final _borda = OutlineInputBorder(
     borderRadius: BorderRadius.circular(AppVisual.raioPilula),
-    borderSide: const BorderSide(color: Color(0x55FFFFFF)));
+    borderSide: const BorderSide(color: AppCores.linha));
 
 final ThemeData appTheme = ThemeData(
   useMaterial3: true,
@@ -56,8 +56,8 @@ final ThemeData appTheme = ThemeData(
   colorScheme:
       ColorScheme.fromSeed(seedColor: AppCores.azul, surface: AppCores.fundo)
           .copyWith(
-    primary: AppCores.acento,
-    onPrimary: AppCores.texto,
+    primary: AppCores.coordenacao,
+    onPrimary: Colors.white,
     secondary: AppCores.azul,
     onSurface: AppCores.texto,
     outline: AppCores.secundario,
@@ -69,8 +69,8 @@ final ThemeData appTheme = ThemeData(
         height: 1.25,
         color: AppCores.texto),
     headlineMedium: TextStyle(
-        fontSize: 30,
-        fontWeight: FontWeight.w400,
+        fontSize: 28,
+        fontWeight: FontWeight.w600,
         height: 1.3,
         color: AppCores.texto),
     headlineSmall: TextStyle(
@@ -87,7 +87,7 @@ final ThemeData appTheme = ThemeData(
     bodySmall: TextStyle(fontSize: 13, height: 1.5, color: AppCores.secundario),
   ),
   appBarTheme: const AppBarTheme(
-      backgroundColor: AppCores.fundo,
+      backgroundColor: Colors.white,
       foregroundColor: AppCores.texto,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -99,16 +99,16 @@ final ThemeData appTheme = ThemeData(
           color: AppCores.texto)),
   elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-          backgroundColor: AppCores.acento,
-          foregroundColor: AppCores.texto,
+          backgroundColor: AppCores.coordenacao,
+          foregroundColor: Colors.white,
           elevation: 0,
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: AppVisual.pilula)),
   filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-          backgroundColor: AppCores.acento,
-          foregroundColor: AppCores.texto,
+          backgroundColor: AppCores.coordenacao,
+          foregroundColor: Colors.white,
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: AppVisual.pilula)),
@@ -157,7 +157,7 @@ final ThemeData appTheme = ThemeData(
       color: AppCores.vidro,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppVisual.raioCard),
-          side: const BorderSide(color: Color(0xAAFFFFFF)))),
+          side: const BorderSide(color: AppCores.linha))),
   dialogTheme: DialogThemeData(
       backgroundColor: const Color(0xFFF0F4F7),
       shape: RoundedRectangleBorder(

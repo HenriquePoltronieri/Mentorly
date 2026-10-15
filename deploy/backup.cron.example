@@ -1,0 +1,4 @@
+# Exemplo Linux: ajuste TODOS os caminhos e configure o ambiente/.env protegido.
+# Execute como usuario privado do app, com permissoes MySQL para o dump.
+# 02:15 no fuso configurado no agendador. Mantenha copia externa dos .enc.
+15 2 * * * cd /caminho/Mentorly && .venv/bin/python backend/scripts/backup.py >> /caminho/privado/backup.log 2>&1

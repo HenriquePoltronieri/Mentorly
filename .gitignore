@@ -18,3 +18,11 @@ backend/.env
 .env
 .env.*
 !.env.example
+
+# Copias de seguranca contêm dados das escolas, mesmo quando criptografadas.
+backups/
+
+# Saidas locais de QA: relatórios finais ficam nos arquivos Markdown.
+docs/*.log
+docs/arquivos-fluxos-professor.txt
+docs/flutter-analyze-fluxos.txt

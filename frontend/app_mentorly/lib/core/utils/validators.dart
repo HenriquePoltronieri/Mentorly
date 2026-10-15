@@ -12,7 +12,7 @@ class Validators {
 
   static String? validarSenha(String? valor) {
     if (valor == null || valor.isEmpty) return 'Digite a senha';
-    if (valor.length < 6) return 'A senha precisa ter no minimo 6 caracteres';
+    if (valor.length < 8) return 'A senha precisa ter no minimo 8 caracteres';
     return null;
   }
 

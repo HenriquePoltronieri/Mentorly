@@ -39,7 +39,15 @@ def gerar_token(usuario_id, tipo, coordenacao_id):
 def decodificar_token(token):
     """Devolve o payload, ou None se o token for invalido/expirado."""
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITMO])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITMO],
+                             options={'require': ['exp', 'iat', 'sub', 'uid', 'tipo', 'coordenacao_id']})
+        if (payload.get('tipo') not in (TIPO_COORDENACAO, TIPO_PROFESSOR) or
+                type(payload.get('uid')) is not int or payload['uid'] <= 0 or
+                type(payload.get('coordenacao_id')) is not int or payload['coordenacao_id'] <= 0 or
+                payload['sub'] != str(payload['uid']) or
+                (payload['tipo'] == TIPO_COORDENACAO and payload['uid'] != payload['coordenacao_id'])):
+            return None
+        return payload
     except jwt.PyJWTError:
         return None
 
