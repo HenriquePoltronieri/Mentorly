@@ -72,6 +72,11 @@ preservados; as funções pedagógicas ficam bloqueadas no servidor.
 3. Clique em **Gerenciar acesso** e escolha o plano, a situação e a validade.
 4. Escreva o motivo e clique em **Salvar acesso**.
 
+Para reativar uma escola suspensa, clique em **Reativar conta** e escolha uma
+situação liberada. Para apagar uma conta, use **Excluir conta** e digite o
+e-mail da escola para confirmar. A exclusão é definitiva e remove os dados
+vinculados da escola.
+
 | Situação | Comportamento |
 |---|---|
 | Teste gratuito | Libera até a data escolhida; exige validade |

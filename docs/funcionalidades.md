@@ -1,6 +1,6 @@
 # Funcionalidades
 
-O Mentorly tem hoje **25 funcionalidades demonstráveis**, contadas de forma conservadora: cada
+O Mentorly tem hoje **27 funcionalidades demonstráveis**, contadas de forma conservadora: cada
 linha abaixo tem tela no aplicativo, endpoint na API e regra no backend. Todas passam pelas
 camadas explicadas em [architecture.md](architecture.md).
 
@@ -41,6 +41,13 @@ um Service (exceção documentada na arquitetura).
 | 23 | Gerar atividade com IA, revisar e salvar pelo fluxo normal | `gerarAtividadeIaDialog` (dentro de `adicionarAtividadeModal`) | `GeracaoAtividadeIaService` | `POST /api/professor/turmas/<id>/atividades/gerar` | `GerarAtividadeIaService`, `AIClient` | `Turma`, `Etapa`, `Criterio` (a criação usa `Atividade`) |
 | 24 | Corrigir resposta discursiva com IA: sugestão revisada pelo Professor, nota lançada pelo fluxo normal | `corrigirRespostaIaDialog` (dentro de `atividadeNotasScreen`) | `CorrecaoAssistidaIaService` | `POST /api/professor/atividades/<id>/correcao-assistida` | `CorrigirRespostaIaService`, `AIClient` | `Atividade`, `Etapa` (a nota é gravada por `LancarNotasService`, não pela IA) |
 | 25 | Feedback e plano de recuperação por IA para um aluno em uma etapa (somente leitura) | `feedbackIaDialog` (dentro de `alunoDetailScreen`) | `FeedbackIaService` | `POST /api/professor/alunos/<id>/feedback-ia` | `GerarFeedbackIaService`, `AIClient` | `calculo.py`, `Aluno`, `Etapa` (nenhuma escrita) |
+
+## Administração do Mentorly
+
+| # | Funcionalidade | Tela Flutter | Service/Controller Dart | Endpoint | Service backend | Model / Repository |
+|---|---|---|---|---|---|---|
+| 26 | Gerenciar o acesso das escolas: liberar, suspender e reativar conta, com plano, validade e motivo | `adminScreen`, `_EditarAcesso` | `AdminService.salvar` | `PUT /api/admin/escolas/<id>/acesso` | `acesso_escola.alterar` | `AcessoEscola`, `AcessoHistorico` |
+| 27 | Excluir definitivamente uma conta de Coordenação após confirmar o e-mail, incluindo dados pedagógicos vinculados | `adminScreen`, `_ExcluirEscola` | `AdminService.excluir` | `DELETE /api/admin/escolas/<id>` | `ExcluirEscolaService` | `Coordenacao` e exclusões em cascata |
 
 O Professor também edita e exclui aluno nas turmas dele (`PUT`/`DELETE /api/professor/alunos/<id>`,
 os mesmos Services da funcionalidade 7), e importa alunos por planilha.

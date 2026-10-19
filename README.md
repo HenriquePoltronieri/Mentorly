@@ -59,7 +59,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades
 
-São 25 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
+São 27 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
 **Coordenação**
@@ -90,6 +90,10 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 23. Gerar atividade com IA: o Professor pede uma sugestão, revisa e só então salva
 24. Corrigir resposta discursiva com IA: a IA sugere a avaliação, o Professor decide e lança a nota
 25. Feedback e plano de recuperação por IA para um aluno, a partir do resultado calculado pelo motor
+
+**Administração do Mentorly**
+26. Gerenciar o acesso das escolas: liberar, suspender e reativar contas, com plano, validade e motivo registrados
+27. Excluir definitivamente uma conta de Coordenação, mediante confirmação do e-mail, removendo seus dados vinculados
 
 ---
 
@@ -376,6 +380,14 @@ Professor sem token ou com o papel errado respondem 401/403.
 | GET | `/api/coordenacao/turmas/<id>/alunos/modelo-planilha` | Baixar modelo de planilha |
 | POST | `/api/coordenacao/turmas/<id>/alunos/importar` | Importar alunos por planilha |
 | GET | `/api/coordenacao/turmas/<id>/boletim` | Boletim da turma |
+
+### Administração (`/api/admin`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/admin/escolas` | Listar e buscar escolas, acessos e histórico administrativo |
+| PUT | `/api/admin/escolas/<id>/acesso` | Liberar, suspender ou reativar uma conta, registrando plano, validade e motivo |
+| DELETE | `/api/admin/escolas/<id>` | Excluir definitivamente uma conta após confirmar o e-mail da escola |
 
 ### Professor (`/api/professor` e `/api/atividades`)
 
