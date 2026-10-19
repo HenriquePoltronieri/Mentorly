@@ -8,6 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.connection import query_one, query_all, execute
 from services import acesso_escola, entrada
+from services.excluir_escola import ExcluirEscolaService
 from services.rate_limit import limitar_por_origem
 
 admin_blueprint = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -105,6 +106,17 @@ def salvar_acesso(escola_id):
     except ValueError as erro:
         return jsonify({'error': str(erro)}), 400
     return jsonify({'mensagem': 'Acesso atualizado para a coordenação e seus professores.'})
+
+
+@admin_blueprint.delete('/escolas/<int:escola_id>')
+@administrador_required
+def excluir_escola(escola_id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        ExcluirEscolaService().execute(escola_id, dados.get('email_confirmacao'))
+    except ValueError as erro:
+        return jsonify({'error': str(erro)}), 400
+    return jsonify({'mensagem': 'Conta de coordenacao excluida definitivamente.'})
 
 
 @admin_blueprint.post('/sair')

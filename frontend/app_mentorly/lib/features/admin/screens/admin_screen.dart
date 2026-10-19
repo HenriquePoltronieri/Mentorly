@@ -72,23 +72,47 @@ class _AdminScreenState extends State<AdminScreen> {
         () async => _painel = await _servico.listar(_busca.text.trim()));
   }
 
-  Future<void> _editar(Map escola) async {
+  Future<void> _editar(Map escola, {bool reativar = false}) async {
     if (_ocupado || _dialogoAberto) return;
     _dialogoAberto = true;
     final salvo = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (_) =>
-            _EditarAcesso(escola: escola, painel: _painel!, servico: _servico));
+        builder: (_) => _EditarAcesso(
+            escola: escola,
+            painel: _painel!,
+            servico: _servico,
+            reativar: reativar));
     if (!mounted) return;
     _dialogoAberto = false;
     await _executar(() async {
       _painel = await _servico.listar(_busca.text.trim());
     });
     if (salvo == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('Acesso atualizado para a escola e seus professores.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(reativar
+              ? 'Conta reativada para a escola e seus professores.'
+              : 'Acesso atualizado para a escola e seus professores.')));
+    }
+  }
+
+  Future<void> _excluir(Map escola) async {
+    if (_ocupado || _dialogoAberto) return;
+    _dialogoAberto = true;
+    final excluida = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ExcluirEscola(escola: escola, servico: _servico));
+    if (!mounted) return;
+    _dialogoAberto = false;
+    if (excluida == true) {
+      await _executar(() async {
+        _painel = await _servico.listar(_busca.text.trim());
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Conta de coordenacao excluida definitivamente.')));
+      }
     }
   }
 
@@ -182,6 +206,22 @@ class _AdminScreenState extends State<AdminScreen> {
                     OutlinedButton(
                         onPressed: _ocupado ? null : () => _editar(e as Map),
                         child: const Text('Gerenciar acesso')),
+                    if (e['situacao'] == 'suspensa') ...[
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                          onPressed: _ocupado
+                              ? null
+                              : () => _editar(e as Map, reativar: true),
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('Reativar conta')),
+                    ],
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                        onPressed: _ocupado ? null : () => _excluir(e as Map),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context).colorScheme.error),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Excluir conta')),
                   ])))),
       const SizedBox(height: 24),
       Text('Últimas alterações', style: Theme.of(context).textTheme.titleLarge),
@@ -240,8 +280,12 @@ class _EditarAcesso extends StatefulWidget {
   final Map escola;
   final Map painel;
   final AdminService servico;
+  final bool reativar;
   const _EditarAcesso(
-      {required this.escola, required this.painel, required this.servico});
+      {required this.escola,
+      required this.painel,
+      required this.servico,
+      this.reativar = false});
   @override
   State<_EditarAcesso> createState() => _EditarAcessoState();
 }
@@ -301,7 +345,8 @@ class _EditarAcessoState extends State<_EditarAcesso> {
   Widget build(BuildContext context) => PopScope(
       canPop: !_salvando,
       child: AlertDialog(
-        title: Text('Acesso: ${widget.escola['nome']}'),
+        title: Text(
+            '${widget.reativar ? 'Reativar conta' : 'Acesso'}: ${widget.escola['nome']}'),
         content: SizedBox(
             width: 460,
             child: SingleChildScrollView(
@@ -388,4 +433,88 @@ class _EditarAcessoState extends State<_EditarAcesso> {
               child: Text(_salvando ? 'Salvando…' : 'Salvar acesso'))
         ],
       ));
+}
+
+class _ExcluirEscola extends StatefulWidget {
+  final Map escola;
+  final AdminService servico;
+  const _ExcluirEscola({required this.escola, required this.servico});
+
+  @override
+  State<_ExcluirEscola> createState() => _ExcluirEscolaState();
+}
+
+class _ExcluirEscolaState extends State<_ExcluirEscola> {
+  final _email = TextEditingController();
+  bool _excluindo = false;
+  String? _erro;
+
+  Future<void> _confirmar() async {
+    if (_excluindo) return;
+    setState(() {
+      _excluindo = true;
+      _erro = null;
+    });
+    try {
+      await widget.servico.excluir(widget.escola['id'] as int, _email.text);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _erro = e is ApiException
+            ? e.mensagem
+            : 'Nao foi possivel excluir a conta. Tente novamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _excluindo = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+      canPop: !_excluindo,
+      child: AlertDialog(
+          title: const Text('Excluir conta de coordenacao?'),
+          content: SizedBox(
+              width: 460,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(
+                    'A conta de ${widget.escola['nome']} e todos os dados de turmas, alunos, professores, atividades e notas serao apagados definitivamente.'),
+                const SizedBox(height: 16),
+                Text(
+                    'Para confirmar, digite ${widget.escola['email']}.',
+                    style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: _email,
+                    enabled: !_excluindo,
+                    keyboardType: TextInputType.emailAddress,
+                    maxLength: 150,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                        labelText: 'E-mail da escola para confirmar'),
+                    onSubmitted: (_) => _confirmar()),
+                if (_erro != null)
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(_erro!,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error))),
+              ])),
+          actions: [
+            TextButton(
+                onPressed:
+                    _excluindo ? null : () => Navigator.pop(context, false),
+                child: const Text('Cancelar')),
+            FilledButton.tonalIcon(
+                onPressed: _excluindo ? null : _confirmar,
+                icon: const Icon(Icons.delete_forever),
+                label: Text(_excluindo ? 'Excluindo...' : 'Excluir definitivamente')),
+          ]));
 }

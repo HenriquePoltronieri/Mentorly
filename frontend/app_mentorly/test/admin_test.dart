@@ -83,6 +83,25 @@ void main() {
     servico.dispose();
   });
 
+  test('exclusao de escola envia confirmacao e CSRF', () async {
+    final servico = AdminService(cliente: MockClient((r) async {
+      if (r.url.path.endsWith('/sessao')) {
+        return resposta({
+          'csrf': 'csrf-excluir',
+          'usuario': {'id': 1, 'nome': 'Admin'}
+        });
+      }
+      expect(r.method, 'DELETE');
+      expect(r.url.path, '/api/admin/escolas/7');
+      expect(r.headers['X-CSRF-Token'], 'csrf-excluir');
+      expect(jsonDecode(r.body), {'email_confirmacao': 'escola@qa.test'});
+      return resposta({'mensagem': 'Conta excluida.'});
+    }));
+    await servico.consultarSessao();
+    await servico.excluir(7, 'escola@qa.test');
+    servico.dispose();
+  });
+
   for (final largura in [320.0, 1280.0]) {
     testWidgets('login e liberação com texto literal em ${largura.toInt()}px',
         (tester) async {

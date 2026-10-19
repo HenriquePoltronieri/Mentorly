@@ -79,6 +79,11 @@ class AdminService {
     await _enviar('/escolas/$escolaId/acesso', metodo: 'PUT', dados: dados);
   }
 
+  Future<void> excluir(int escolaId, String emailConfirmacao) async {
+    await _enviar('/escolas/$escolaId',
+        metodo: 'DELETE', dados: {'email_confirmacao': emailConfirmacao});
+  }
+
   Future<void> sair() async {
     try {
       await _enviar('/sair', metodo: 'POST', dados: {});

@@ -19,6 +19,7 @@ from database.connection import query_one, execute, insert
 from werkzeug.security import generate_password_hash, check_password_hash
 from services.rate_limit import limiter
 from services.acesso_escola import consultar
+from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
 from scripts import criar_admin
 
 
@@ -187,6 +188,42 @@ class AdminSegurancaTest(qa.IntegracaoCompletaTest):
                 patch.object(criar_admin, 'getpass', side_effect=['senha-segura-qa-123']*2), redirect_stdout(io.StringIO()):
             criar_admin.criar_admin()
         self.assertEqual(self.client.get('/api/admin/escolas').status_code, 401)
+
+
+    def test_z_admin_exclui_escola_com_confirmacao_e_dependencias(self):
+        criada = CadastroCoordenacaoService().execute(
+            'Escola para excluir', uuid.uuid4().hex + '@qa.invalid', 'senha-qa-123')
+        escola_id = criada['usuario']['id']
+        email = criada['usuario']['email']
+        professor_id = insert(
+            'INSERT INTO professor(coordenacao_id,nome,email,senha_hash) VALUES (%s,%s,%s,%s)',
+            (escola_id, 'Professor excluido', uuid.uuid4().hex + '@qa.invalid',
+             generate_password_hash('senha-qa-123')))
+        insert("INSERT INTO ano_letivo(coordenacao_id,ano,status) VALUES (%s,2026,'atual')", (escola_id,))
+        turma_id = insert("INSERT INTO turma(coordenacao_id,nome,ano_letivo) VALUES (%s,'Turma excluida',2026)", (escola_id,))
+        aluno_id = insert("INSERT INTO aluno(turma_id,nome) VALUES (%s,'Aluno excluido')", (turma_id,))
+        etapa_id = insert("INSERT INTO etapa(coordenacao_id,nome,ordem,ano_letivo) VALUES (%s,'Etapa excluida',1,2026)", (escola_id,))
+        criterio_id = insert("INSERT INTO criterio(coordenacao_id,etapa_id,nome,peso) VALUES (%s,%s,'Criterio excluido',100)", (escola_id, etapa_id))
+        atividade_id = insert("INSERT INTO atividade(coordenacao_id,turma_id,professor_id,etapa_id,criterio_id,titulo) VALUES (%s,%s,%s,%s,%s,'Atividade excluida')", (escola_id, turma_id, professor_id, etapa_id, criterio_id))
+        insert('INSERT INTO nota(atividade_id,aluno_id,valor) VALUES (%s,%s,8)', (atividade_id, aluno_id))
+
+        csrf = self.logar_admin()
+        caminho = f'/api/admin/escolas/{escola_id}'
+        recusada = self.client.delete(caminho, json={'email_confirmacao': 'errado@qa.invalid'},
+                                      headers={'X-CSRF-Token': csrf})
+        self.assertEqual(recusada.status_code, 400)
+        self.assertIsNotNone(query_one('SELECT id FROM coordenacao WHERE id=%s', (escola_id,)))
+
+        removida = self.client.delete(caminho, json={'email_confirmacao': email},
+                                      headers={'X-CSRF-Token': csrf})
+        self.assertEqual(removida.status_code, 200)
+        for tabela, coluna, valor in (
+                ('coordenacao', 'id', escola_id), ('acesso_escola', 'coordenacao_id', escola_id),
+                ('professor', 'coordenacao_id', escola_id), ('turma', 'coordenacao_id', escola_id),
+                ('etapa', 'coordenacao_id', escola_id), ('atividade', 'id', atividade_id),
+                ('aluno', 'id', aluno_id), ('nota', 'atividade_id', atividade_id)):
+            self.assertIsNone(query_one(
+                'SELECT 1 FROM %s WHERE %s=%%s' % (tabela, coluna), (valor,)), tabela)
 
 
 if __name__ == '__main__':
