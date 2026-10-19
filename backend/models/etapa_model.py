@@ -7,6 +7,7 @@ duplicatas a cada passagem pelo fluxo.
 """
 
 from database.connection import execute, insert, query_all, query_one
+from database.orm import db
 from models.utils import booleano, iso, numero
 
 _COLUNAS = (
@@ -15,7 +16,21 @@ _COLUNAS = (
 )
 
 
-class Etapa:
+class Etapa(db.Model):
+    __tablename__ = "etapa"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    ordem = db.Column(db.Integer, nullable=False)
+    ano_letivo = db.Column(db.Integer, nullable=False)
+    data_inicio = db.Column(db.Date)
+    data_fim = db.Column(db.Date)
+    nota_minima = db.Column(db.Numeric(5, 2))
+    nota_maxima = db.Column(db.Numeric(5, 2))
+    ativa = db.Column(db.Boolean, nullable=False)
+    fechada = db.Column(db.Boolean, nullable=False)
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "etapa"
 
     # -----------------------------------------------------------------

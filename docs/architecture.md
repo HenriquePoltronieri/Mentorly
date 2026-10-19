@@ -116,17 +116,21 @@ uma camada é pulada.
 
   com um método `execute()`. Services não importam Flask e não acessam o banco diretamente.
 
-- **Model** — `backend/models/`. Uma classe por entidade, com métodos estáticos e SQL escrito à
+- **Model** — `backend/models/`. As entidades CRUD herdam de `db.Model` e espelham o schema
 
-  mão (PyMySQL). **Não há ORM.** Os Models também serializam a linha para o JSON da API.
+  MySQL. Os métodos de persistência existentes usam SQL parametrizado via PyMySQL.
 
-- **Repository** — `backend/repositories/consultas.py`. Usado só para as consultas que não são
+- **Repository** — `backend/repositories/consultas.py`. Usado para consultas especiais:
 
-  CRUD e chamam Stored Procedures (busca de atividades, relatório de turmas, resumo da escola,
+  busca de atividades, professores por escola e turmas do professor chamam Stored Procedures;
 
-  professores por escola e turmas do professor). O `CALL` fica em um único arquivo,
+  relatório de turmas e resumo da escola usam consultas agregadas. O `CALL` fica em um único arquivo,
 
   `backend/database/procedure.py`, que valida o nome contra uma lista de procedures permitidas.
+
+  `backend/repositories/admin_consultas.py` reúne os joins de escolas, planos e histórico usados
+
+  no painel administrativo.
 
 - **Banco** — MySQL 8. O schema fica em `backend/database/schema.sql`, as migrações para bancos
 
@@ -734,9 +738,11 @@ buscarAtividadesScreen.dart
 
   → ApiService.get('/activities/buscar')
 
-  → GET /api/activities/buscar             (backend/routes/activity_routes.py, @auth_required)
+  → GET /api/activities/buscar             (backend/routes/activity_routes.py, @professor_required)
 
   → ActivityController.buscar_atividades   (backend/controllers/activity_controller.py)
+
+  → BuscarAtividadesService                 (backend/services/activity/buscar_atividades.py)
 
   → consultas.buscar_atividades            (backend/repositories/consultas.py)
 
@@ -746,9 +752,7 @@ buscarAtividadesScreen.dart
 
 ```
 
-Aqui **não há Service intermediário**: o Controller chama a função do Repository diretamente. É uma
-
-das exceções abaixo. O isolamento continua garantido, porque o Controller passa o `coordenacao_id`
+O Service intermediário chama o Repository. O isolamento continua garantido, porque o Controller passa o `coordenacao_id`
 
 do token e, se quem busca for professor, o `professor_id`.
 
@@ -836,14 +840,6 @@ interface ou no Controller; são atalhos pequenos e conscientes.
 | Onde | O que acontece | Observação |
 
 |---|---|---|
-
-| `class_controller.py` (`list_classes`, `get_class`) | O ramo do Professor chama `ProfessorTurma` e `Turma` direto (Controller → Model) | Consulta de leitura com o `professor_id` do token |
-
-| `coordenacao_controller.py` e `professor_controller.py` (`boletim_turma`) | Chamam `Turma.find_by_id*` direto para validar acesso (Controller → Model) | `boletim.py` documenta que quem valida a turma é o Controller |
-
-| `activity_controller.py`, `class_controller.py`, `dashboard_controller.py` | Chamam `repositories/consultas.py` sem Service (Controller → Repository) | Simplificação intencional ([simplificacao-tecnica.md](simplificacao-tecnica.md)): o Service apenas repassava a chamada |
-
-| `services/turmas.py` | CRUD de turma como módulo de funções, e não uma classe por caso de uso | Os demais Services seguem o padrão classe + `execute()` |
 
 | `adicionarAlunosModal`, `editarAlunoModal`, `lancarNotasModal` (Flutter) | Usam `ApiService` direto, sem um Service Dart | Servem para envio de arquivo, cadastro e edição de aluno; só exibem e enviam dados |
 

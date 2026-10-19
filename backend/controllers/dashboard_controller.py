@@ -1,10 +1,10 @@
 from flask import jsonify
 
 from auth.decorators import coordenacao_atual
-from repositories.consultas import resumo_da_escola
+from services.coordenacao.resumo_escola import ResumoEscolaService
 
 
 class DashboardController:
     def resumo_sistema(self):
         # A Coordenação só recebe números administrativos, sem atividades/notas.
-        return jsonify(resumo_da_escola(coordenacao_atual()))
+        return jsonify(ResumoEscolaService().execute(coordenacao_atual()))

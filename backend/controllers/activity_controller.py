@@ -16,7 +16,7 @@ from services.activity.create_activity import CreateActivityService
 from services.activity.delete_activity import DeleteActivityService
 from services.activity.get_activities import GetActivitiesService
 from services.activity.get_activity import GetActivityService
-from repositories.consultas import buscar_atividades
+from services.activity.buscar_atividades import BuscarAtividadesService
 from services.activity.update_activity import UpdateActivityService
 from services.entrada import inteiro
 from erros import RecursoNaoEncontrado
@@ -41,7 +41,7 @@ class ActivityController:
 
     def buscar_atividades(self):
         return jsonify(
-            buscar_atividades(
+            BuscarAtividadesService().execute(
                 coordenacao_atual(),
                 _professor_id_ou_none(),
                 request.args.get("termo"),

@@ -4,9 +4,17 @@ from datetime import datetime, timedelta
 
 from config import CODIGO_EXPIRACAO_MINUTOS
 from database.connection import execute, insert, query_one
+from database.orm import db
 
 
-class CodigoVerificacao:
+class CodigoVerificacao(db.Model):
+    __tablename__ = "codigo_verificacao"
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), nullable=False)
+    codigo = db.Column(db.String(10), nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    usado = db.Column(db.Boolean, nullable=False)
+    created_at = db.Column(db.DateTime)
     TABELA = "codigo_verificacao"
 
     @staticmethod

@@ -16,7 +16,7 @@ def list_classes():
 
 
 @class_blueprint.get("/relatorio/atividades")
-@professor_required
+@auth_required
 def relatorio_turmas_atividades():
     return class_controller.relatorio_turmas_atividades()
 

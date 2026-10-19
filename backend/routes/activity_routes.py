@@ -7,8 +7,8 @@ activity_blueprint = Blueprint("activities", __name__, url_prefix="/api/activiti
 activity_controller = ActivityController()
 
 
-# Leitura: os dois papeis. A Coordenacao precisa disso para o relatorio e a
-# busca; o recorte de cada um e resolvido no controller.
+# Leitura de atividades exige Professor; o recorte por escola e por vinculo
+# de turma continua aplicado no backend.
 @activity_blueprint.get("")
 @professor_required
 def list_activities():

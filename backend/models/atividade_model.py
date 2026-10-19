@@ -1,4 +1,4 @@
-"""Model da Atividade. SQL direto, sem ORM.
+"""Model da Atividade.
 
 Atividade e conteudo pedagogico: so o Professor cria, e sempre dentro de
 uma turma vinculada a ele. professor_id nunca vem do corpo da requisicao,
@@ -9,6 +9,7 @@ title/description/class_id/due_date, que as telas ja consomem.
 """
 
 from database.connection import execute, insert, query_all, query_one
+from database.orm import db
 from models.utils import iso, numero
 
 # SELECT unico das tres consultas. Os LEFT JOIN trazem o nome da etapa e do
@@ -31,7 +32,20 @@ _SELECT = (
 _ORDEM = " ORDER BY a.data_entrega IS NULL, a.data_entrega ASC, a.id ASC"
 
 
-class Atividade:
+class Atividade(db.Model):
+    __tablename__ = "atividade"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    turma_id = db.Column(db.Integer, db.ForeignKey("turma.id"), nullable=False)
+    professor_id = db.Column(db.Integer, db.ForeignKey("professor.id"), nullable=False)
+    etapa_id = db.Column(db.Integer, db.ForeignKey("etapa.id"))
+    criterio_id = db.Column(db.Integer, db.ForeignKey("criterio.id"))
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+    data_entrega = db.Column(db.DateTime)
+    nota_maxima = db.Column(db.Numeric(5, 2))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "atividade"
 
     # -----------------------------------------------------------------

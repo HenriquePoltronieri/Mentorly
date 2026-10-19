@@ -32,15 +32,14 @@ BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GENERICO = {"error": "Erro interno do servidor."}
 
 # (rotulo, metodo, url, papel, modulo do controller, nome patchado, corpo)
-# O nome patchado e uma classe de service (instanciada no controller) ou, no
-# caso de excluir_turma, uma funcao.
+# O nome patchado e uma classe de service instanciada no controller.
 CASOS = (
     ("turma (coordenacao)", "get", "/api/coordenacao/turmas/1/alunos", "coord",
      coordenacao_controller, "ListarAlunosService", None),
     ("etapa (coordenacao)", "get", "/api/config/etapas/1", "coord",
      config_controller, "BuscarEtapaService", None),
     ("turma (excluir)", "delete", "/api/classes/1", "coord",
-     class_controller, "excluir_turma", None),
+     class_controller, "ExcluirTurmaService", None),
     ("atividade (excluir)", "delete", "/api/activities/1", "prof",
      activity_controller, "DeleteActivityService", None),
     ("notas da atividade", "get", "/api/atividades/1/notas", "prof",
@@ -68,12 +67,9 @@ def _chamar(app, caso, erro):
     _, metodo, url, papel, modulo, alvo, corpo = caso
     token = (gerar_token(1, TIPO_PROFESSOR, 1) if papel == "prof"
              else gerar_token(1, TIPO_COORDENACAO, 1))
-    if alvo == "excluir_turma":
-        substituto = MagicMock(side_effect=erro)
-    else:
-        instancia = MagicMock()
-        instancia.execute.side_effect = erro
-        substituto = MagicMock(return_value=instancia)
+    instancia = MagicMock()
+    instancia.execute.side_effect = erro
+    substituto = MagicMock(return_value=instancia)
     rate_limit.limiter.reset()
     with patch.object(modulo, alvo, substituto), \
             patch('auth.decorators._conferir_acesso', return_value=None), \

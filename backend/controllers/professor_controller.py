@@ -8,8 +8,7 @@ as turmas que a Coordenacao vinculou a ele. O id do professor vem do token
 from flask import Response, jsonify, request
 
 from auth.decorators import coordenacao_atual, usuario_atual_id
-from models.turma_model import Turma
-from services.academico.boletim import montar_boletim_turma
+from services.academico.boletim import BoletimTurmaProfessorService
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
 from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.planilha.importar_alunos import ImportarAlunosService
@@ -174,10 +173,12 @@ class ProfessorController:
         return jsonify(dados)
 
     def boletim_turma(self, turma_id):
-        turma = Turma.find_by_id_para_professor(turma_id, usuario_atual_id())
-        if not turma:
+        try:
+            dados = BoletimTurmaProfessorService().execute(
+                turma_id, usuario_atual_id(), coordenacao_atual())
+        except RecursoNaoEncontrado:
             return jsonify({"error": "Turma nao encontrada"}), 404
-        return jsonify(montar_boletim_turma(turma, coordenacao_atual()))
+        return jsonify(dados)
 
     def insights_turma(self, turma_id):
         limitar_ia(usuario_atual_id())

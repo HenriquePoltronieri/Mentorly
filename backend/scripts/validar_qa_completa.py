@@ -72,6 +72,33 @@ class IntegracaoCompletaTest(unittest.TestCase):
         return {'versao': linha['versao'], 'situacao': 'cortesia', 'plano_codigo': 'escolar',
                 'valido_ate': '', 'motivo': 'Demonstração autorizada', **extras}
 
+    def test_16_crud_turmas_e_busca_passam_pelas_camadas(self):
+        nome = 'Turma QA ' + uuid.uuid4().hex[:8]
+        criado = self.client.post('/api/classes', headers=self.coord,
+                                  json={'name': nome, 'ano_letivo': 2026})
+        self.assertEqual(criado.status_code, 201, criado.text)
+        turma_id = criado.json['id']
+        self.assertEqual(query_one('SELECT nome FROM turma WHERE id=%s', (turma_id,))['nome'], nome)
+        self.assertIn(turma_id, [t['id'] for t in self.client.get('/api/classes', headers=self.coord).json])
+        relatorio_coord = self.client.get('/api/classes/relatorio/atividades', headers=self.coord)
+        relatorio_prof = self.client.get('/api/classes/relatorio/atividades', headers=self.prof_headers)
+        self.assertEqual(relatorio_coord.status_code, 200, relatorio_coord.text)
+        self.assertEqual(relatorio_prof.status_code, 200, relatorio_prof.text)
+        self.assertIn(turma_id, [t['id'] for t in relatorio_coord.json])
+        self.assertNotIn(turma_id, [t['id'] for t in relatorio_prof.json])
+        outro_nome = nome + ' editada'
+        editado = self.client.put(f'/api/classes/{turma_id}', headers=self.coord,
+                                  json={'name': outro_nome})
+        self.assertEqual(editado.status_code, 200, editado.text)
+        self.assertEqual(query_one('SELECT nome FROM turma WHERE id=%s', (turma_id,))['nome'], outro_nome)
+        self.assertEqual(self.client.delete(f'/api/classes/{turma_id}', headers=self.coord).status_code, 204)
+        self.assertIsNone(query_one('SELECT id FROM turma WHERE id=%s', (turma_id,)))
+        self.assertEqual(self.client.get('/api/activities/buscar', headers=self.prof_headers).status_code, 200)
+        boletim = self.client.get(f'/api/professor/turmas/{self.turma}/boletim',
+                                  headers=self.prof_headers)
+        self.assertEqual(boletim.status_code, 200, boletim.text)
+        self.assertEqual(boletim.json['turma_id'], self.turma)
+
     def test_01_teste_inicial_nao_renova_quando_reinicia(self):
         antes = consultar(self.escola)['valido_ate']
         iniciar_teste(self.escola)

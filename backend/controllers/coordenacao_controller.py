@@ -9,7 +9,6 @@ from flask import Response, jsonify, request
 
 from auth.decorators import coordenacao_atual
 from services.entrada import EntradaInvalida
-from models.turma_model import Turma
 from services.aluno.cadastrar_aluno import CadastrarAlunoService
 from services.aluno.gerenciar_aluno import AtualizarAlunoService, ExcluirAlunoService
 from services.aluno.listar_alunos import ListarAlunosService

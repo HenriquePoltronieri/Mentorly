@@ -6,12 +6,13 @@ from functools import wraps
 from flask import Blueprint, request, session, jsonify, g, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database.connection import query_one, query_all, execute
-from services import acesso_escola, entrada
-from services.excluir_escola import ExcluirEscolaService
+from database.connection import query_one, execute
+from controllers.admin_escolas_controller import AdminEscolasController
+from services import entrada
 from services.rate_limit import limitar_por_origem
 
 admin_blueprint = Blueprint('admin', __name__, url_prefix='/api/admin')
+admin_escolas_controller = AdminEscolasController()
 HASH_INEXISTENTE = generate_password_hash(secrets.token_urlsafe(24))
 
 
@@ -81,42 +82,19 @@ def login():
 @admin_blueprint.get('/escolas')
 @administrador_required
 def painel():
-    busca = request.args.get('q', '').strip().lower()[:150]
-    escolas = acesso_escola.listar()
-    if busca:
-        escolas = [e for e in escolas if busca in (e['nome'] + ' ' + e['email']).lower()]
-    historico = query_all('SELECT h.*,c.nome AS escola,ad.nome AS administrador FROM acesso_historico h '
-                          'JOIN coordenacao c ON c.id=h.coordenacao_id '
-                          'JOIN administrador ad ON ad.id=h.administrador_id ORDER BY h.id DESC LIMIT 50')
-    for escola in escolas:
-        escola['valido_ate'] = escola['valido_ate'].isoformat() if escola.get('valido_ate') else None
-    for registro in historico:
-        for campo in ('valido_ate', 'criado_em'):
-            registro[campo] = registro[campo].isoformat() if registro.get(campo) else None
-    return jsonify({'escolas': escolas, 'historico': historico,
-                    'planos': query_all('SELECT * FROM plano ORDER BY nome'),
-                    'situacoes': acesso_escola.SITUACOES})
+    return admin_escolas_controller.listar()
 
 
 @admin_blueprint.put('/escolas/<int:escola_id>/acesso')
 @administrador_required
 def salvar_acesso(escola_id):
-    try:
-        acesso_escola.alterar(escola_id, g.administrador['id'], request.get_json(silent=True) or {})
-    except ValueError as erro:
-        return jsonify({'error': str(erro)}), 400
-    return jsonify({'mensagem': 'Acesso atualizado para a coordenação e seus professores.'})
+    return admin_escolas_controller.salvar_acesso(escola_id)
 
 
 @admin_blueprint.delete('/escolas/<int:escola_id>')
 @administrador_required
 def excluir_escola(escola_id):
-    try:
-        dados = request.get_json(silent=True) or {}
-        ExcluirEscolaService().execute(escola_id, dados.get('email_confirmacao'))
-    except ValueError as erro:
-        return jsonify({'error': str(erro)}), 400
-    return jsonify({'mensagem': 'Conta de coordenacao excluida definitivamente.'})
+    return admin_escolas_controller.excluir(escola_id)
 
 
 @admin_blueprint.post('/sair')

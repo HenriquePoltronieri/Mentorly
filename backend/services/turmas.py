@@ -115,3 +115,50 @@ def excluir_turma(turma_id, coordenacao_id):
         lambda: Turma.delete(turma_id, coordenacao_id),
         "Esta turma possui dados historicos vinculados e nao pode ser excluida.",
     )
+
+
+class ListarTurmasService:
+    def execute(self, coordenacao_id, ano_letivo=None):
+        return listar_turmas(coordenacao_id, ano_letivo)
+
+
+class BuscarTurmaService:
+    def execute(self, turma_id, coordenacao_id):
+        return buscar_turma(turma_id, coordenacao_id)
+
+
+class CriarTurmaService:
+    def execute(self, coordenacao_id, nome, descricao=None, disciplina=None,
+                turno=None, ano_letivo=None):
+        return criar_turma(coordenacao_id, nome, descricao, disciplina, turno, ano_letivo)
+
+
+class AtualizarTurmaService:
+    def execute(self, turma_id, coordenacao_id, nome=None, descricao=None,
+                disciplina=None, turno=None, ano_letivo=None):
+        return atualizar_turma(turma_id, coordenacao_id, nome, descricao,
+                               disciplina, turno, ano_letivo)
+
+
+class ExcluirTurmaService:
+    def execute(self, turma_id, coordenacao_id):
+        return excluir_turma(turma_id, coordenacao_id)
+
+
+class ListarTurmasDoProfessorService:
+    def execute(self, professor_id):
+        from models.professor_turma_model import ProfessorTurma
+        return [Turma.to_dict(linha) for linha in
+                ProfessorTurma.turmas_do_professor(professor_id)]
+
+
+class BuscarTurmaDoProfessorService:
+    def execute(self, turma_id, professor_id):
+        linha = Turma.find_by_id_para_professor(turma_id, professor_id)
+        return Turma.to_dict(linha) if linha else None
+
+
+class RelatorioTurmasAtividadesService:
+    def execute(self, coordenacao_id, professor_id):
+        from repositories.consultas import relatorio_turmas_atividades
+        return relatorio_turmas_atividades(coordenacao_id, professor_id)

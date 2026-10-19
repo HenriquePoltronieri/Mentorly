@@ -1,4 +1,4 @@
-"""Model do Professor. SQL direto, sem ORM.
+"""Model do Professor.
 
 Todo metodo de leitura em lote recebe coordenacao_id: nao existe consulta
 que devolva professores de todas as escolas.
@@ -6,6 +6,7 @@ que devolva professores de todas as escolas.
 
 import hashlib
 from database.connection import execute, insert, query_all, query_one
+from database.orm import db
 from models.utils import booleano, iso
 
 
@@ -13,7 +14,19 @@ def hash_convite(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
 
 
-class Professor:
+class Professor(db.Model):
+    __tablename__ = "professor"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    nome = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(150), nullable=False, unique=True)
+    disciplina = db.Column(db.String(100))
+    senha_hash = db.Column(db.String(255))
+    habilitado = db.Column(db.Boolean, nullable=False)
+    convite_token = db.Column(db.String(64))
+    convite_expira_em = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "professor"
 
     # -----------------------------------------------------------------

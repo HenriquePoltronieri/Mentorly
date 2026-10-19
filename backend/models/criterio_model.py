@@ -6,6 +6,7 @@ criterios ja escolhidos.
 """
 
 from database.connection import execute, insert, query_all, query_one
+from database.orm import db
 from models.utils import iso, numero
 
 _COLUNAS = (
@@ -14,7 +15,16 @@ _COLUNAS = (
 )
 
 
-class Criterio:
+class Criterio(db.Model):
+    __tablename__ = "criterio"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    etapa_id = db.Column(db.Integer, db.ForeignKey("etapa.id"), nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    peso = db.Column(db.Numeric(5, 2), nullable=False)
+    nota_maxima = db.Column(db.Numeric(5, 2), nullable=False)
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "criterio"
 
     # -----------------------------------------------------------------

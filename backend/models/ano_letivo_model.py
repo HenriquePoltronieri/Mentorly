@@ -1,4 +1,4 @@
-"""Model do Ano Letivo (Marco 6). SQL direto, sem ORM.
+"""Model do Ano Letivo (Marco 6).
 
 Cada escola tem os seus anos, e e este cadastro que diz quais existem e
 qual e o atual. Turma e etapa guardam o numero do ano como FK composta
@@ -12,6 +12,7 @@ ano de outra.
 import pymysql
 
 from database.connection import execute, insert, query_all, query_one, transacao
+from database.orm import db
 from models.utils import iso
 
 STATUS_VALIDOS = ("planejamento", "atual", "encerrado")
@@ -20,7 +21,14 @@ STATUS_VALIDOS = ("planejamento", "atual", "encerrado")
 _COLUNAS = "id, coordenacao_id, ano, status, created_at, updated_at"
 
 
-class AnoLetivo:
+class AnoLetivo(db.Model):
+    __tablename__ = "ano_letivo"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    ano = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.Enum("planejamento", "atual", "encerrado"), nullable=False)
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "ano_letivo"
 
     # -----------------------------------------------------------------

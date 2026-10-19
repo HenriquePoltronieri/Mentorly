@@ -4,8 +4,9 @@
 em `Iniciar Mentorly.cmd`. O primeiro uso pede a criação da sua conta administrativa.
 Guia: [hospedagem, planos, acessos e backups](docs/hospedagem-e-acessos.md).
 
-A administração também é Flutter. O backend Python usa MySQL com SQL direto,
-sem ORM. Revisão adicional: [QA administrativo](docs/qa-admin-2026-10-15.md).
+A administração também é Flutter. O backend Python usa MySQL, Models mapeadas
+com Flask-SQLAlchemy e métodos de persistência SQL existentes. Revisão adicional:
+[QA administrativo](docs/qa-admin-2026-10-15.md).
 
 **Notas:** uma atividade de 2 pontos não completa sozinha uma etapa de 10.
 O boletim mostra pontuação parcial e identifica planejamento incompleto.
@@ -45,7 +46,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 ### Backend
 - Python 3
 - Flask 3.1.3
-- SQL direto via PyMySQL 1.2.3 (sem ORM)
+- Flask-SQLAlchemy 3.1.1 (Models `db.Model`) e PyMySQL 1.2.3
 - MySQL 8 (com Stored Procedures)
 - PyJWT 2.15.1 (autenticação) e Werkzeug 3.1.9 (hash de senha)
 - openpyxl 3.1.5 (importação de planilhas XLSX)
@@ -57,7 +58,7 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ---
 
-## Funcionalidades
+## Funcionalidades Implementadas
 
 São 27 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
@@ -74,7 +75,7 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 9. Gerenciar professores: cadastrar, editar, convidar, desativar e reativar
 10. Visualizar, vincular e desvincular professores de turmas
 11. Relatório de turmas e atividades
-12. Desempenho acadêmico: boletim por turma e fechamento/reabertura de etapa
+12. Fechamento e reabertura de etapa, com aviso de alunos incompletos
 
 **Professor**
 13. Primeiro acesso por convite e login
@@ -99,6 +100,8 @@ tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/fu
 
 ## Arquitetura
 
+Diagrama de classes do domínio: [docs/diagrama-classes.md](docs/diagrama-classes.md).
+
 ```
 FLUTTER
 Tela
@@ -121,8 +124,10 @@ Route                      (Blueprint + decorator de papel)
   uso tem a sua classe com um método `execute()`. O cálculo acadêmico fica em
   `services/academico/calculo.py` e o boletim em `services/academico/boletim.py`.
 - **Model** — SQL de uma entidade (CRUD e consultas simples), com PyMySQL.
-- **Repository** — apenas `repositories/consultas.py`, para as consultas que chamam
-  Stored Procedures.
+- **Mapeamento** — as entidades CRUD herdam de `db.Model`; o schema SQL existente
+  continua responsável pelas constraints e procedures.
+- **Repository** — `repositories/consultas.py` encapsula Stored Procedures e relatórios;
+  `repositories/admin_consultas.py` reúne consultas administrativas com joins.
 - **Autenticação** — JWT com `{sub, tipo, coordenacao_id, exp}`. A escola sempre é lida do
   token, nunca de um parâmetro da requisição.
 
@@ -260,15 +265,16 @@ interno de 20 chamadas de IA por Professor a cada 15 minutos, descrito acima):
 - uma resposta fora do contrato é repetida uma vez; timeout, rede, chave e limite de uso não são
   repetidos.
 
-A separação não é absolutamente rígida: existem poucos acessos diretos Controller → Model e
-Controller → Repository, e alguns modais Flutter usam o `ApiService` diretamente. Eles estão
+A separação não é absolutamente rígida: alguns modais Flutter usam o
+`ApiService` diretamente. Eles estão
 descritos em [docs/architecture.md](docs/architecture.md).
 
 ---
 
 ## Models
 
-Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
+Todas ficam em `backend/models/` e herdam de `db.Model`. Os métodos existentes de
+persistência usam PyMySQL; o mapeamento ORM espelha as colunas do schema SQL.
 
 | Model | Tabela | O que representa |
 |---|---|---|
@@ -284,18 +290,22 @@ Todas ficam em `backend/models/` e fazem SQL direto, sem ORM.
 | `Atividade` | `atividade` | Atividade ligada a turma, etapa e critério |
 | `Nota` | `nota` | Nota de um aluno em uma atividade |
 | `CodigoVerificacao` | `codigo_verificacao` | Códigos da verificação em duas etapas |
+| `Administrador` | `administrador` | Operador do painel administrativo |
+| `Plano` | `plano` | Tipo de plano oferecido |
+| `AcessoEscola` | `acesso_escola` | Estado, validade e versão do acesso da escola |
+| `AcessoHistorico` | `acesso_historico` | Auditoria das alterações de acesso |
 
 ---
 
 ## Repository e Procedures
 
-`backend/repositories/consultas.py` reúne as consultas que chamam procedures. As procedures
+`backend/repositories/consultas.py` reúne consultas especiais, incluindo as que chamam procedures. As procedures
 estão em `backend/database/procedures.sql` e são instaladas automaticamente na inicialização.
 Todas recebem o id da escola (ou do professor), nunca o sistema inteiro.
 
 | Procedure | Descrição | Consultas utilizadas |
 |---|---|---|
-| `sp_relatorio_turmas_atividades` | Turmas da escola com contagem de atividades | LEFT JOIN, GROUP BY, ORDER BY |
+| `sp_relatorio_turmas_atividades` | Procedure legada instalada; o relatório atual usa consulta agregada no Repository | LEFT JOIN, GROUP BY, ORDER BY |
 | `sp_buscar_atividades` | Busca de atividades por termo, com ordenação | WHERE (LIKE), ORDER BY, LEFT JOIN |
 | `sp_professores_por_coordenacao` | Professores da escola com contagem de turmas | LEFT JOIN, GROUP BY |
 | `sp_resumo_sistema` | Totais da escola | Subconsultas agregadas (COUNT) |
@@ -326,7 +336,7 @@ Professor sem token ou com o papel errado respondem 401/403.
 |---|---|---|---|
 | GET | `/api/classes` | Qualquer | Listar (Professor vê só as dele); `?ano_letivo=` filtra pelo ano |
 | GET | `/api/classes/<id>` | Qualquer | Buscar por ID |
-| GET | `/api/classes/relatorio/atividades` | Coord. | Relatório de turmas (procedure) |
+| GET | `/api/classes/relatorio/atividades` | Qualquer | Relatório das turmas da escola ou vinculadas ao Professor |
 | POST | `/api/classes` | Coord. | Criar turma |
 | PUT | `/api/classes/<id>` | Coord. | Atualizar |
 | DELETE | `/api/classes/<id>` | Coord. | Excluir |
@@ -335,9 +345,9 @@ Professor sem token ou com o papel errado respondem 401/403.
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/activities` | Qualquer | Listar (filtro `?class_id=`) |
-| GET | `/api/activities/buscar` | Qualquer | Buscar por termo (procedure) |
-| GET | `/api/activities/<id>` | Qualquer | Buscar por ID |
+| GET | `/api/activities` | Prof. | Listar (filtro `?class_id=`) |
+| GET | `/api/activities/buscar` | Prof. | Buscar por termo (procedure) |
+| GET | `/api/activities/<id>` | Prof. | Buscar por ID |
 | POST | `/api/activities` | Prof. | Criar |
 | PUT | `/api/activities/<id>` | Prof. | Atualizar |
 | DELETE | `/api/activities/<id>` | Prof. | Excluir |

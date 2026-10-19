@@ -1,4 +1,4 @@
-"""Model da Turma. SQL direto, sem ORM.
+"""Model da Turma.
 
 A tabela e `turma` (portugues), mas a API continua expondo /api/classes com
 as chaves name/description porque as telas de coordenacao ja leem assim.
@@ -9,6 +9,7 @@ turma de outra.
 """
 
 from database.connection import execute, insert, query_all, query_one
+from database.orm import db
 from models.utils import iso
 
 
@@ -19,7 +20,17 @@ _COLUNAS = (
 )
 
 
-class Turma:
+class Turma(db.Model):
+    __tablename__ = "turma"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    nome = db.Column(db.String(120), nullable=False)
+    descricao = db.Column(db.Text)
+    disciplina = db.Column(db.String(100))
+    turno = db.Column(db.String(30))
+    ano_letivo = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "turma"
 
     # -----------------------------------------------------------------

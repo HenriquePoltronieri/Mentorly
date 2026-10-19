@@ -6,9 +6,16 @@ um bug no service nao consegue misturar dados de coordenacoes diferentes.
 """
 
 from database.connection import execute, query_all, query_one, transacao
+from database.orm import db
 
 
-class ProfessorTurma:
+class ProfessorTurma(db.Model):
+    __tablename__ = "professor_turma"
+    id = db.Column(db.Integer, primary_key=True)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    professor_id = db.Column(db.Integer, db.ForeignKey("professor.id"), nullable=False)
+    turma_id = db.Column(db.Integer, db.ForeignKey("turma.id"), nullable=False)
+    created_at = db.Column(db.DateTime)
     TABELA = "professor_turma"
 
     @staticmethod

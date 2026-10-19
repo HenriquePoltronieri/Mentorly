@@ -1,4 +1,4 @@
-"""Model do Aluno. SQL direto, sem ORM.
+"""Model do Aluno.
 
 O aluno chega na escola pela turma. Por isso nenhuma consulta aqui recebe
 coordenacao_id diretamente: quem valida a posse da turma e o service, antes
@@ -6,13 +6,22 @@ de chamar estes metodos.
 """
 
 from database.connection import execute, insert, query_all, query_one, transacao
+from database.orm import db
 from models.utils import iso
 from erros import RecursoNaoEncontrado
 
 _COLUNAS = "id, turma_id, nome, matricula, email, created_at, updated_at"
 
 
-class Aluno:
+class Aluno(db.Model):
+    __tablename__ = "aluno"
+    id = db.Column(db.Integer, primary_key=True)
+    turma_id = db.Column(db.Integer, db.ForeignKey("turma.id"), nullable=False)
+    nome = db.Column(db.String(150), nullable=False)
+    matricula = db.Column(db.String(50))
+    email = db.Column(db.String(150))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "aluno"
 
     # -----------------------------------------------------------------

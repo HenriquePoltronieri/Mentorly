@@ -32,6 +32,13 @@ def resumo_da_escola(coordenacao_id):
 
 
 def relatorio_turmas_atividades(coordenacao_id, professor_id):
+    if professor_id is None:
+        return query_all(
+            "SELECT t.id, t.nome AS turma, COUNT(a.id) AS total_atividades "
+            "FROM turma t LEFT JOIN atividade a ON a.turma_id=t.id "
+            "WHERE t.coordenacao_id=%s GROUP BY t.id, t.nome ORDER BY t.nome",
+            (coordenacao_id,),
+        )
     return query_all(
         "SELECT t.id, t.nome AS turma, COUNT(a.id) AS total_atividades "
         "FROM turma t INNER JOIN professor_turma pt ON pt.turma_id=t.id "

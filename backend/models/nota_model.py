@@ -6,10 +6,19 @@ em vez de estourar erro de duplicata.
 """
 
 from database.connection import execute, query_all, query_one, transacao
+from database.orm import db
 from models.utils import iso, numero
 
 
-class Nota:
+class Nota(db.Model):
+    __tablename__ = "nota"
+    id = db.Column(db.Integer, primary_key=True)
+    atividade_id = db.Column(db.Integer, db.ForeignKey("atividade.id"), nullable=False)
+    aluno_id = db.Column(db.Integer, db.ForeignKey("aluno.id"), nullable=False)
+    valor = db.Column(db.Numeric(5, 2), nullable=False)
+    observacao = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "nota"
 
     # -----------------------------------------------------------------

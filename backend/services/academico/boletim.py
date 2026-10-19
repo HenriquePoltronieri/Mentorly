@@ -2,11 +2,12 @@
 
 Reaproveita o motor central (calculo.py) uma vez por aluno - nao recalcula
 nada por conta propria, so agrega o resultado de cada um. Apenas o Professor
-tem acesso a esta funcionalidade; quem valida a turma e o controller
-(turma_acessivel / Turma.find_by_id_para_professor), nao esta funcao.
+tem acesso a esta funcionalidade; o Service valida o vinculo da turma.
 """
 
 from models.aluno_model import Aluno
+from models.turma_model import Turma
+from erros import RecursoNaoEncontrado
 from models.dados_academicos_model import carregar_dados_turma
 from services.academico.calculo import calcular_consolidado_geral, calcular_todas_etapas
 
@@ -37,3 +38,11 @@ def montar_boletim_turma(turma, coordenacao_id):
         "ano_letivo": ano_letivo,
         "alunos": boletim,
     }
+
+
+class BoletimTurmaProfessorService:
+    def execute(self, turma_id, professor_id, coordenacao_id):
+        turma = Turma.find_by_id_para_professor(turma_id, professor_id)
+        if not turma:
+            raise RecursoNaoEncontrado('Turma nao encontrada')
+        return montar_boletim_turma(turma, coordenacao_id)

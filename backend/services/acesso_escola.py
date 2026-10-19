@@ -2,7 +2,9 @@
 from datetime import timedelta
 from services.horario import agora_brasilia
 
-from database.connection import query_one, query_all, execute, transacao
+from database.connection import query_one, query_all, execute
+from models.acesso_escola_model import AcessoEscola, Plano
+from repositories.admin_consultas import escolas_com_acesso
 from services import entrada
 
 SITUACOES = {'teste': 'Teste gratuito', 'paga': 'Assinatura paga',
@@ -47,10 +49,7 @@ def cadastrar_escolas_existentes():
 
 
 def listar():
-    linhas = query_all('SELECT c.id,c.nome,c.email,a.plano_codigo,a.situacao,a.valido_ate,a.versao, '
-                       'p.nome AS plano_nome FROM coordenacao c '
-                       'LEFT JOIN acesso_escola a ON a.coordenacao_id=c.id '
-                       'LEFT JOIN plano p ON p.codigo=a.plano_codigo ORDER BY c.nome,c.id')
+    linhas = escolas_com_acesso()
     return [{**l, 'acesso': apresentar(l if l.get('situacao') else None)} for l in linhas]
 
 
@@ -60,7 +59,7 @@ def alterar(escola_id, admin_id, dados):
     if not isinstance(situacao, str) or situacao not in SITUACOES:
         raise ValueError('Escolha uma situação de acesso válida.')
     plano = entrada.texto(dados.get('plano_codigo'), 'O plano', 40)
-    if not query_one('SELECT codigo FROM plano WHERE codigo=%s', (plano,)):
+    if not Plano.existe(plano):
         raise ValueError('Escolha um plano cadastrado.')
     motivo = entrada.texto(dados.get('motivo'), 'O motivo', 500)
     if not motivo:
@@ -74,12 +73,5 @@ def alterar(escola_id, admin_id, dados):
     if situacao in ('teste', 'paga') and (prazo is None or prazo < hoje()):
         raise ValueError('Teste e assinatura paga precisam de validade a partir de hoje.')
     versao = entrada.inteiro(dados.get('versao'), 'A versão do acesso')
-    with transacao() as c:
-        c.execute('SELECT versao FROM acesso_escola WHERE coordenacao_id=%s FOR UPDATE', (escola_id,))
-        atual = c.fetchone()
-        if not atual or atual['versao'] != versao:
-            raise ValueError('Este acesso já foi alterado. Atualize a página antes de salvar novamente.')
-        c.execute('UPDATE acesso_escola SET plano_codigo=%s,situacao=%s,valido_ate=%s,versao=versao+1 '
-                  'WHERE coordenacao_id=%s', (plano, situacao, prazo, escola_id))
-        c.execute('INSERT INTO acesso_historico(coordenacao_id,administrador_id,situacao,plano_codigo,valido_ate,motivo) '
-                  'VALUES (%s,%s,%s,%s,%s,%s)', (escola_id, admin_id, situacao, plano, prazo, motivo))
+    AcessoEscola.atualizar_com_historico(escola_id, admin_id, versao, plano,
+                                        situacao, prazo, motivo)

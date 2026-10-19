@@ -1,11 +1,48 @@
-"""Model da Coordenacao (a escola). SQL direto, sem ORM."""
+"""Model da Coordenacao (a escola)."""
 
 from database.connection import execute, insert, query_all, query_one, transacao
+from database.orm import db
 from models.utils import iso
 
 
-class Coordenacao:
+class Coordenacao(db.Model):
+    __tablename__ = "coordenacao"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(150), nullable=False, unique=True)
+    senha_hash = db.Column(db.String(255), nullable=False)
+    telefone = db.Column(db.String(30))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     TABELA = "coordenacao"
+
+    @staticmethod
+    def excluir_com_dependencias(escola_id, email_confirmacao):
+        """Exclusao atomica; o e-mail e conferido na mesma transacao bloqueada."""
+        with transacao() as cursor:
+            cursor.execute('SELECT id,email FROM coordenacao WHERE id=%s FOR UPDATE', (escola_id,))
+            escola = cursor.fetchone()
+            if not escola:
+                raise ValueError('Esta escola ja nao existe. Atualize a lista.')
+            if email_confirmacao != escola['email']:
+                raise ValueError('Digite exatamente o e-mail da escola para confirmar a exclusao.')
+
+            cursor.execute('DELETE FROM codigo_verificacao WHERE email=%s', (escola['email'],))
+            cursor.execute(
+                'DELETE cv FROM codigo_verificacao cv '
+                'INNER JOIN professor p ON p.email=cv.email '
+                'WHERE p.coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM atividade WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute(
+                'DELETE al FROM aluno al INNER JOIN turma t ON t.id=al.turma_id '
+                'WHERE t.coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM professor_turma WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM professor WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM criterio WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM etapa WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM turma WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM ano_letivo WHERE coordenacao_id=%s', (escola_id,))
+            cursor.execute('DELETE FROM coordenacao WHERE id=%s', (escola_id,))
 
     # -----------------------------------------------------------------
     # Leitura

@@ -9,6 +9,8 @@ from config import DEBUG
 from erros import AcessoNegado
 from database.connection import init_database, install_procedures, install_schema
 from database.connection import encerrar_conexao_requisicao
+from database.orm import db
+from sqlalchemy.engine import URL
 from services.rate_limit import LimiteExcedido
 from routes.activity_routes import activity_blueprint
 from routes.auth_routes import auth_blueprint
@@ -27,6 +29,12 @@ def create_app():
     config.validar_producao()
     app = Flask(__name__)
     app.secret_key = config.SECRET_KEY
+    app.config['SQLALCHEMY_DATABASE_URI'] = URL.create(
+        'mysql+pymysql', username=config.DB_CONFIG['user'],
+        password=config.DB_CONFIG['password'], host=config.DB_CONFIG['host'],
+        port=config.DB_CONFIG['port'], database=config.DB_CONFIG['database'],
+    )
+    db.init_app(app)
     app.config.update(SESSION_COOKIE_NAME='mentorly_admin',
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict',
                       SESSION_COOKIE_SECURE=config.PRODUCAO,

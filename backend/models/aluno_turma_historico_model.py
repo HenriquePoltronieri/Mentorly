@@ -1,11 +1,23 @@
 """Historico de matriculas por turma, com SQL direto."""
 
 from database.connection import query_all, transacao
+from database.orm import db
 from models.utils import iso
 from erros import RecursoNaoEncontrado
 
 
-class AlunoTurmaHistorico:
+class AlunoTurmaHistorico(db.Model):
+    __tablename__ = "aluno_turma_historico"
+    id = db.Column(db.Integer, primary_key=True)
+    aluno_id = db.Column(db.Integer, db.ForeignKey("aluno.id"), nullable=False)
+    coordenacao_id = db.Column(db.Integer, db.ForeignKey("coordenacao.id"), nullable=False)
+    turma_id = db.Column(db.Integer, db.ForeignKey("turma.id"), nullable=False)
+    ano_letivo = db.Column(db.Integer, nullable=False)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date)
+    motivo = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime)
     @staticmethod
     def find_by_aluno(aluno_id):
         return query_all(
