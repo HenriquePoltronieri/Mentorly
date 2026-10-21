@@ -26,3 +26,6 @@ backups/
 docs/*.log
 docs/arquivos-fluxos-professor.txt
 docs/flutter-analyze-fluxos.txt
+
+# Logs gerados pelos iniciadores locais.
+mentorly-server*.log

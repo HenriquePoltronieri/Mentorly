@@ -23,6 +23,7 @@ import '../features/coordenacao/screens/professores/cadastroProfessorScreen.dart
 import '../features/coordenacao/screens/professores/listaProfessoresScreen.dart';
 import '../features/coordenacao/screens/turmas/gerenciarTurmasScreen.dart';
 import '../features/coordenacao/screens/turmas/listaTurmasProfessorScreen.dart';
+import '../features/coordenacao/screens/turmas/relatorioTurmasScreen.dart';
 import '../features/coordenacao/screens/alunos/listaAlunosTurmaScreen.dart';
 // telas professor
 import '../features/professor/screens/dashboardScreen.dart';
@@ -64,6 +65,7 @@ class AppRoutes {
   static const String gerenciarTurmas = '/coordenacao/gerenciar-turmas';
   static const String listaTurmasProfessor = '/coordenacao/turmas';
   static const String listaAlunosTurma = '/coordenacao/alunos';
+  static const String relatorioTurmas = '/coordenacao/relatorio-turmas';
 
   // professor
   static const String chatIa = '/professor/ia-chat';
@@ -133,6 +135,7 @@ class AppRoutes {
     gerenciarTurmas: (context) => GerenciarTurmasScreen(),
     listaTurmasProfessor: (context) => ListaTurmasProfessorScreen(),
     listaAlunosTurma: (context) => ListaAlunosTurmaScreen(),
+    relatorioTurmas: (context) => const RelatorioTurmasScreen(),
 
     // professor
     chatIa: (context) => const ChatIaScreen(),

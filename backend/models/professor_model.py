@@ -5,7 +5,7 @@ que devolva professores de todas as escolas.
 """
 
 import hashlib
-from database.connection import execute, insert, query_all, query_one
+from database.connection import execute, insert, query_all, query_one, transacao
 from database.orm import db
 from models.utils import booleano, iso
 
@@ -90,6 +90,33 @@ class Professor(db.Model):
             (coordenacao_id, nome, email, disciplina,
              hash_convite(convite_token), convite_expira_em),
         )
+
+    @staticmethod
+    def criar_com_turmas(coordenacao_id, nome, email, disciplina,
+                         convite_token, convite_expira_em, turma_ids):
+        """Cria o professor e seus vinculos em uma unica transacao.
+
+        O caso de uso valida os dados e as turmas; a persistencia permanece no
+        Model, como exigido pela arquitetura do projeto. Se um vinculo falhar,
+        o professor tambem nao fica parcialmente cadastrado.
+        """
+        with transacao() as cursor:
+            cursor.execute(
+                "INSERT INTO professor "
+                "(coordenacao_id, nome, email, disciplina, convite_token, "
+                "convite_expira_em) VALUES (%s, %s, %s, %s, %s, %s)",
+                (coordenacao_id, nome, email, disciplina,
+                 hash_convite(convite_token), convite_expira_em),
+            )
+            professor_id = cursor.lastrowid
+            for turma_id in turma_ids:
+                cursor.execute(
+                    "INSERT INTO professor_turma "
+                    "(coordenacao_id, professor_id, turma_id) "
+                    "VALUES (%s, %s, %s)",
+                    (coordenacao_id, professor_id, turma_id),
+                )
+        return professor_id
 
     @staticmethod
     def definir_senha(professor_id, senha_hash, convite_token=None):

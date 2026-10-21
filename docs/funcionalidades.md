@@ -114,7 +114,7 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
 
 ## Situação dos testes
 
-Os testes automáticos abaixo passam no estado atual do repositório (10/10/2026). Nenhum chama a
+Os testes automáticos abaixo passam no estado atual do repositório (21/10/2026). Nenhum chama a
 Groq nem envia e-mail.
 
 | Teste | O que cobre | Resultado |
@@ -134,8 +134,8 @@ Groq nem envia e-mail.
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado | 8 verificações, 0 falhas |
 | `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |
-| `flutter test` | Login e primeiro acesso, sessão inválida, limites (429), IA 9A–9D, avisos de exclusão, mensagens de convite, lista de atividades e modelos | 107 testes, OK |
-| `flutter analyze` | Análise estática do Flutter | 0 warnings, 0 errors; 101 infos de estilo |
+| `flutter test` | Login e primeiro acesso, sessão inválida, limites (429), IA 9A–9D, avisos de exclusão, mensagens de convite, relatório de turmas, lista de atividades e modelos | 149 testes, OK |
+| `flutter analyze --no-fatal-infos` | Análise estática do Flutter | 0 warnings, 0 errors; 92 infos de estilo |
 
 Esses testes cobrem a API e a lógica e a maior parte das telas por testes de widget, não a interface
 inteira. O teste manual de ponta a ponta, pelas telas do aplicativo, está previsto no

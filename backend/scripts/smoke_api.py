@@ -244,8 +244,12 @@ def main():
             {"turma_ids": [turma_a["id"]]},
         ).status_code == 404, "vincular professor de B pelo token de A e recusado")
 
-        checar(coord_a.get("/api/classes/relatorio/atividades").status_code == 403,
-               "coordenacao nao consulta relatorio de atividades")
+        relatorio_coord = coord_a.get("/api/classes/relatorio/atividades")
+        itens_relatorio = relatorio_coord.get_json() or []
+        checar(relatorio_coord.status_code == 200
+               and any(item["id"] == turma_a["id"] for item in itens_relatorio)
+               and all(item["id"] != turma_b["id"] for item in itens_relatorio),
+               "coordenacao consulta relatorio somente da propria escola")
 
         # ---------------------------------------------------------
         print("\n[3] Professor ve so as turmas vinculadas")
@@ -4744,7 +4748,7 @@ def main():
         app_m10.logger.disabled = True
         cab = {"Authorization": "Bearer %s" % coord_a.token}
         for erro in (KeyError("coluna_secreta_m10"), IndexError("indice_secreto_m10")):
-            with patch("controllers.class_controller.buscar_turma", side_effect=erro), \
+            with patch("controllers.class_controller.BuscarTurmaService.execute", side_effect=erro), \
                     app_m10.test_client() as c10:
                 r = c10.get("/api/classes/%d" % turma_orig["id"], headers=cab)
             texto10 = r.get_data(as_text=True)

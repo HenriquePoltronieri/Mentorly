@@ -142,6 +142,12 @@ class _CoordenacaoHomeScreenState extends State<CoordenacaoHomeScreen> {
                               'Escolha as turmas de cada professor',
                               Icons.link,
                               AppRoutes.listaTurmasProfessor),
+                          const SizedBox(height: 16),
+                          _tarefa(
+                              'Relatório de turmas',
+                              'Compare a quantidade de atividades por turma',
+                              Icons.assessment_outlined,
+                              AppRoutes.relatorioTurmas),
                           const Divider(height: 48),
                           _tarefa(
                               'Anos letivos',

@@ -167,12 +167,12 @@ class PermissoesTest(TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_professor_email_invalido_nao_grava(self):
-        with patch("services.coordenacao.cadastrar_professor.transacao") as gravar:
+        with patch("services.coordenacao.cadastrar_professor.Professor.criar_com_turmas") as gravar:
             with self.assertRaises(ValueError): CadastrarProfessorService().execute(1, "Ana", "invalido")
             gravar.assert_not_called()
 
     def test_professor_turma_alheia_nao_grava(self):
-        with patch("services.coordenacao.cadastrar_professor.Turma.find_by_id", return_value=None), patch("services.coordenacao.cadastrar_professor.transacao") as gravar:
+        with patch("services.coordenacao.cadastrar_professor.Turma.find_by_id", return_value=None), patch("services.coordenacao.cadastrar_professor.Professor.criar_com_turmas") as gravar:
             with self.assertRaises(ValueError): CadastrarProfessorService().execute(1, "Ana", "a@example.invalid", turma_ids=[999])
             gravar.assert_not_called()
 

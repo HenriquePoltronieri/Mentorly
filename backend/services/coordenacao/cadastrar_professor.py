@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
 import re
-from database.connection import transacao
 from models.turma_model import Turma
-from models.professor_model import hash_convite
 
 from auth.jwt_utils import gerar_token_convite
 from config import CONVITE_EXPIRACAO_HORAS
@@ -55,13 +53,15 @@ class CadastrarProfessorService:
         token = gerar_token_convite()
         expira_em = datetime.now() + timedelta(hours=CONVITE_EXPIRACAO_HORAS)
 
-        with transacao() as cursor:
-            cursor.execute("INSERT INTO professor (coordenacao_id,nome,email,disciplina,convite_token,convite_expira_em) VALUES (%s,%s,%s,%s,%s,%s)",
-                           (coordenacao_id, nome, email, disciplina, hash_convite(token), expira_em))
-            professor_id = cursor.lastrowid
-            for turma_id in ids:
-                cursor.execute("INSERT INTO professor_turma (coordenacao_id,professor_id,turma_id) VALUES (%s,%s,%s)",
-                               (coordenacao_id, professor_id, turma_id))
+        professor_id = Professor.criar_com_turmas(
+            coordenacao_id,
+            nome,
+            email,
+            disciplina,
+            token,
+            expira_em,
+            ids,
+        )
 
         escola = Coordenacao.find_by_id(coordenacao_id)
         enviado = enviar_convite_professor(

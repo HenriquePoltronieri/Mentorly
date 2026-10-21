@@ -63,6 +63,31 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 São 27 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
 tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
 
+### Correspondência com o vídeo da atividade (itens 11 a 21)
+
+Esta numeração reproduz a ordem usada na demonstração gravada. Alguns itens pertencem a uma
+funcionalidade maior da lista completa abaixo, mas todos possuem fluxo de ponta a ponta:
+**tela Flutter → API Flask → Controller em classe → Service de caso de uso → Model/Repository →
+MySQL**. O envio de convite também passa pelo `email_service`, que encapsula o SMTP.
+
+| Item do vídeo | Funcionalidade demonstrada | Correspondência na lista completa |
+|---|---|---|
+| 11 | Login do Professor | 13 |
+| 12 | Cadastro e login da Coordenação | 1 |
+| 13 | Editar aluno | 7 |
+| 14 | Adicionar alunos com planilha | 6 |
+| 15 | Cadastrar professor | 9 |
+| 16 | Vincular professor a uma turma | 10 |
+| 17 | Lançar nota | 16 |
+| 18 | Consultar o desempenho do aluno | 20 |
+| 19 | Configurar ano letivo | 2 e 3 |
+| 20 | Administrador excluir conta | 27 |
+| 21 | Enviar convite no e-mail do professor | 9 |
+
+O detalhamento técnico e verificável de cada fluxo — tela, endpoint, Controller, Service e
+Model/Repository — está na [matriz de funcionalidades](docs/funcionalidades.md). O diagrama exigido
+pela atividade está em [docs/diagrama-classes.md](docs/diagrama-classes.md).
+
 **Coordenação**
 1. Cadastro e login da Coordenação (cada cadastro é uma escola)
 2. Anos letivos (atual, em planejamento ou encerrado) e etapas com nota mínima e máxima
@@ -558,8 +583,8 @@ python scripts/test_migracao_transferencia_aluno.py  # migration de histórico d
 python scripts/test_migracao_professor_habilitado.py # migration do status administrativo
 
 cd ../frontend/app_mentorly
-flutter analyze   # 0 warnings e 0 errors; 101 infos de estilo
-flutter test      # 107 testes
+flutter analyze --no-fatal-infos  # 0 warnings e 0 errors; 92 infos de estilo
+flutter test      # 149 testes
 ```
 
 Nenhum teste chama a Groq nem envia e-mail: o provedor e o SMTP são substituídos por dublês.
