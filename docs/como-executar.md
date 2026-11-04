@@ -120,7 +120,7 @@ provedor e o SMTP são substituídos por dublês).
 
 ```bash
 python scripts/smoke_db.py                      # conexão, isolamento entre escolas, ano letivo e procedures
-python scripts/smoke_api.py                     # a API de ponta a ponta (944 verificações)
+python scripts/smoke_api.py                     # a API de ponta a ponta (951 verificações)
 python scripts/test_calculo.py                  # motor de cálculo, sem banco (20 testes)
 python scripts/test_config_dev.py               # padrões seguros de FLASK_DEBUG e DEV_EXPOSE_AUTH_CODES (12)
 python scripts/test_rate_limit.py               # limite de requisições (15)
@@ -168,8 +168,8 @@ privacidade usam os valores reais.
 No Flutter, a partir de `frontend/app_mentorly`:
 
 ```bash
-flutter analyze   # 0 warnings e 0 errors; restam 101 infos de estilo (file_names, withOpacity)
-flutter test      # 107 testes: login e sessão, IA (9A a 9D), exclusões, convites, limites, lista de atividades e modelos
+flutter analyze   # 0 warnings e 0 errors; restam infos de estilo (file_names, withOpacity)
+flutter test      # 151 testes: cadastro verificado, login, sessão, IA, acessos, convites e fluxos acadêmicos
 ```
 
 ### E-mail em desenvolvimento
@@ -180,6 +180,11 @@ que o convite não saiu. Para testar o primeiro acesso do professor localmente, 
 explicitamente `DEV_EXPOSE_AUTH_CODES=true` no `backend/.env`: então a tela de cadastro de professor
 mostra o link do convite, a API devolve o código e o e-mail é impresso no console do Flask.
 `DEV_EXPOSE_AUTH_CODES=false` é o padrão seguro e deve ser mantido fora do ambiente local.
+
+No cadastro da Coordenação, o e-mail passa por duas validações: formato no Flutter e no Flask,
+e posse da caixa postal por um código de seis dígitos. A conta só é gravada depois que o código
+correto é enviado junto ao cadastro. Sem SMTP e com `DEV_EXPOSE_AUTH_CODES=false`, novos cadastros
+ficam bloqueados de propósito, pois não haveria como provar que o endereço pertence ao usuário.
 
 ---
 
@@ -209,6 +214,11 @@ flutter run -d edge --web-port=3000
 
 A porta 3000 importa: é ela que o `APP_BASE_URL` do backend usa para montar o link do
 convite do professor.
+
+Se `FRONTEND_URL` for alterado, reinicie o backend e gere um novo convite. Mensagens antigas
+continuam com o endereço que foi gravado nelas. Em ambiente local, `localhost` só funciona no
+mesmo computador em que o Mentorly está rodando; para abrir em outro aparelho é necessário usar
+um endereço publicado ou acessível na rede.
 
 ### Emulador Android
 

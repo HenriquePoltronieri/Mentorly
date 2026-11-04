@@ -41,6 +41,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
   final List<String> _criteriosPersonalizados = [];
   final List<String> _criteriosSelecionados = [];
   final Map<String, TextEditingController> _pesoControllers = {};
+  final Map<String, TextEditingController> _maximoControllers = {};
 
   bool _carregando = false;
   bool _salvo = false;
@@ -56,6 +57,9 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
   @override
   void dispose() {
     for (final controller in _pesoControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _maximoControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -84,6 +88,26 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     return double.tryParse(texto.replaceAll(',', '.')) ?? 0;
   }
 
+  String _chaveMaximo(String nome, int numero) => '$numero::$nome';
+
+  TextEditingController _maximoController(String nome, int numero) {
+    final chave = _chaveMaximo(nome, numero);
+    return _maximoControllers.putIfAbsent(chave, () {
+      final etapa = _controller.etapaPorNumero(numero);
+      final existente = _controller.criterios
+          .where((c) => c.nome == nome && c.etapaId == etapa?.id?.toString());
+      final valor = existente.isEmpty ? null : existente.first.notaMaxima;
+      return TextEditingController(
+          text: _controller.rascunhosMaximos[chave] ??
+              (valor == null ? '' : _formatarPeso(valor)));
+    });
+  }
+
+  double _maximoDigitado(String nome, int numero) =>
+      double.tryParse(
+          _maximoController(nome, numero).text.trim().replaceAll(',', '.')) ??
+      0;
+
   double get _somaPesos => _criteriosSelecionados
       .map(_pesoDigitado)
       .fold(0.0, (soma, peso) => soma + peso);
@@ -99,10 +123,24 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
             (peso * 100 - (peso * 100).round()).abs() < .000001;
       });
 
+  bool get _maximosValidos => _controller.etapas.every((etapa) {
+        final total = _criteriosSelecionados.fold<double>(
+            0, (soma, nome) => soma + _maximoDigitado(nome, etapa.numero));
+        return _criteriosSelecionados.every((nome) {
+              final valor = _maximoDigitado(nome, etapa.numero);
+              return valor.isFinite && valor > 0 && valor <= 999.99;
+            }) &&
+            etapa.notaMaxima != null &&
+            (total - etapa.notaMaxima!).abs() < .001;
+      });
+
   void _guardarRascunho() {
     _controller.criteriosSelecionados = List.of(_criteriosSelecionados);
     _controller.rascunhosPesos.addAll({
       for (final e in _pesoControllers.entries) e.key: e.value.text,
+    });
+    _controller.rascunhosMaximos.addAll({
+      for (final e in _maximoControllers.entries) e.key: e.value.text,
     });
   }
 
@@ -116,7 +154,25 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
               100;
       _pesoController(_criteriosSelecionados[i]).text = _formatarPeso(peso);
     }
+    _redistribuirMaximos();
     _guardarRascunho();
+  }
+
+  void _redistribuirMaximos() {
+    if (_criteriosSelecionados.isEmpty) return;
+    for (final etapa in _controller.etapas) {
+      final totalCentavos = ((etapa.notaMaxima ?? 0) * 100).round();
+      var usados = 0;
+      for (var i = 0; i < _criteriosSelecionados.length; i++) {
+        final nome = _criteriosSelecionados[i];
+        final centavos = i == _criteriosSelecionados.length - 1
+            ? totalCentavos - usados
+            : (totalCentavos * _pesoDigitado(nome) / 100).round();
+        usados += centavos;
+        _maximoController(nome, etapa.numero).text =
+            _formatarPeso(centavos / 100);
+      }
+    }
   }
 
   Future<void> _carregarEstadoAtual() async {
@@ -132,6 +188,11 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       for (final nome in jaConfigurados) {
         _pesoController(nome).text =
             _controller.rascunhosPesos[nome] ?? _pesoController(nome).text;
+      }
+      for (final etapa in _controller.etapas) {
+        for (final nome in jaConfigurados) {
+          _maximoController(nome, etapa.numero);
+        }
       }
     });
 
@@ -197,6 +258,11 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
       });
       return false;
     }
+    if (!_maximosValidos) {
+      setState(() => _mensagemErro =
+          'Em cada etapa, a soma dos máximos por critério precisa ser igual aos pontos da etapa.');
+      return false;
+    }
 
     setState(() {
       _carregando = true;
@@ -206,16 +272,25 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     try {
       await _controller.salvarConfiguracao({
         for (final nome in _criteriosSelecionados) nome: _pesoDigitado(nome),
+      }, {
+        for (final nome in _criteriosSelecionados)
+          nome: [
+            for (final etapa in _controller.etapas)
+              _maximoDigitado(nome, etapa.numero)
+          ],
       });
 
       if (mounted) setState(() => _salvo = true);
       return true;
     } catch (e) {
       if (!mounted) return false;
+      final mensagem =
+          e is ApiException ? e.mensagem : 'Não foi possível salvar: $e';
       setState(() {
-        _mensagemErro =
-            e is ApiException ? e.mensagem : 'Não foi possível salvar: $e';
+        _mensagemErro = mensagem;
       });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensagem)));
       return false;
     } finally {
       if (mounted) setState(() => _carregando = false);
@@ -243,6 +318,41 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     Navigator.pushNamed(context, AppRoutes.cadastroProfessor);
   }
 
+  Widget _acoes() => SafeArea(
+      child: Material(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                TextButton.icon(
+                  onPressed: _carregando ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Voltar'),
+                ),
+                if (_totalProfessores == 0)
+                  TextButton(
+                    onPressed: _carregando || !_pesosValidos || !_maximosValidos
+                        ? null
+                        : _salvarECadastrarProfessor,
+                    child: const Text('Salvar e cadastrar professor'),
+                  ),
+                FilledButton(
+                  onPressed: _carregando ||
+                          !_pesosValidos ||
+                          !_maximosValidos ||
+                          _criteriosSelecionados.any((n) =>
+                              _pesoDigitado(n) < 0 || _pesoDigitado(n) > 100)
+                      ? null
+                      : _concluir,
+                  child: _carregando
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(_salvo ? 'Concluído' : 'Concluir configuração'),
+                )
+              ]))));
+
   @override
   Widget build(BuildContext context) {
     final todosOsCriterios = [
@@ -253,6 +363,7 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
     return Scaffold(
       appBar: const BarraMentorly(
           professor: false, aba: 'ano', titulo: 'Ano letivo · Passo 3 de 3'),
+      bottomNavigationBar: _acoes(),
       body: ConteudoPagina(
           largura: 680,
           child: Padding(
@@ -364,6 +475,65 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
                       )),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  const Text('Máximo de pontos por etapa',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'A Coordenação define quanto pode ser distribuído em cada tipo. A soma deve fechar os pontos da etapa.',
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._controller.etapas.map((etapa) {
+                    final total = _criteriosSelecionados.fold<double>(
+                        0,
+                        (soma, nome) =>
+                            soma + _maximoDigitado(nome, etapa.numero));
+                    final valido = etapa.notaMaxima != null &&
+                        (total - etapa.notaMaxima!).abs() < .001;
+                    return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      '${etapa.nome} · ${_formatarPeso(etapa.notaMaxima ?? 0)} pontos',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                      spacing: 12,
+                                      runSpacing: 10,
+                                      children: _criteriosSelecionados
+                                          .map((nome) => SizedBox(
+                                              width: 190,
+                                              child: TextField(
+                                                  controller: _maximoController(
+                                                      nome, etapa.numero),
+                                                  keyboardType:
+                                                      const TextInputType
+                                                          .numberWithOptions(
+                                                          decimal: true),
+                                                  decoration: InputDecoration(
+                                                      labelText: nome,
+                                                      suffixText: 'pts'),
+                                                  onChanged: (_) => setState(
+                                                      _guardarRascunho))))
+                                          .toList()),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                      'Distribuição: ${_formatarPeso(total)} de ${_formatarPeso(etapa.notaMaxima ?? 0)} pontos${valido ? '' : ' — ajuste os valores'}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: valido
+                                              ? Colors.green[800]
+                                              : Colors.orange[800]))
+                                ])));
+                  }),
                 ],
                 if (_mensagemErro != null)
                   Padding(
@@ -394,43 +564,6 @@ class _ConfigCriteriosScreenState extends State<ConfigCriteriosScreen> {
                       ],
                     ),
                   ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    TextButton.icon(
-                      onPressed:
-                          _carregando ? null : () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      label: const Text('Voltar'),
-                    ),
-                    if (_totalProfessores == 0)
-                      TextButton(
-                        onPressed: _carregando || !_pesosValidos
-                            ? null
-                            : _salvarECadastrarProfessor,
-                        child: const Text('Salvar e cadastrar professor'),
-                      ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _carregando ||
-                              !_pesosValidos ||
-                              _criteriosSelecionados.any((n) =>
-                                  _pesoDigitado(n) < 0 ||
-                                  _pesoDigitado(n) > 100)
-                          ? null
-                          : _concluir,
-                      child: _carregando
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              _salvo ? 'Concluído' : 'Concluir configuração'),
-                    ),
-                  ],
-                ),
               ],
             ),
           )),

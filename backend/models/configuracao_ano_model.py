@@ -34,9 +34,11 @@ class ConfiguracaoAno:
                 # Colação do banco decide se o nome já existe (case/acento).
                 ids = []
                 for criterio in criterios:
+                    nota_maxima = criterio["notas_maximas"][ordem - 1]
                     cursor.execute("INSERT INTO criterio (coordenacao_id, etapa_id, nome, peso, nota_maxima) "
-                                   "VALUES (%s,%s,%s,%s,10) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), peso=VALUES(peso)",
-                                   (coordenacao_id, etapa_id, criterio["nome"], criterio["peso"]))
+                                   "VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE "
+                                   "id=LAST_INSERT_ID(id), peso=VALUES(peso), nota_maxima=VALUES(nota_maxima)",
+                                   (coordenacao_id, etapa_id, criterio["nome"], criterio["peso"], nota_maxima))
                     ids.append(cursor.lastrowid)
                 marcadores = ",".join(["%s"] * len(ids))
                 cursor.execute("DELETE FROM criterio WHERE etapa_id=%s AND coordenacao_id=%s AND id NOT IN (" + marcadores + ")",

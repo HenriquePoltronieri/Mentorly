@@ -12,6 +12,7 @@ parecer duplicidade.
 """
 
 import math
+import re
 from datetime import date, datetime
 
 # Limites do schema.sql (VARCHAR) e do DECIMAL(5,2) (ate 999,99).
@@ -37,6 +38,42 @@ ORDEM_MAXIMA = 1000
 
 class EntradaInvalida(ValueError):
     """Dado enviado com tipo, tamanho ou valor impossivel (vira 400)."""
+
+
+_ROTULO_DOMINIO = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+)
+_PARTE_LOCAL_EMAIL = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$")
+
+
+def email(valor, rotulo="O e-mail"):
+    """Normaliza e valida um endereço; a existência é provada pelo código."""
+    resultado = texto(valor, rotulo, LIMITE_EMAIL).lower()
+    if not resultado:
+        raise EntradaInvalida("Informe o e-mail")
+    partes = resultado.split("@")
+    if len(partes) != 2:
+        raise EntradaInvalida("Informe um e-mail válido")
+    local, dominio = partes
+    rotulos = dominio.split(".")
+    if (not local or len(local) > 64 or not _PARTE_LOCAL_EMAIL.fullmatch(local) or
+            local.startswith(".") or
+            local.endswith(".") or ".." in local or len(rotulos) < 2 or
+            len(rotulos[-1]) < 2 or
+            any(not _ROTULO_DOMINIO.fullmatch(item) for item in rotulos)):
+        raise EntradaInvalida("Informe um e-mail válido")
+    return resultado
+
+
+def telefone_brasileiro(valor, rotulo="O telefone"):
+    """Aceita com ou sem máscara e devolve somente os 10/11 dígitos."""
+    resultado = texto(valor, rotulo, LIMITE_TELEFONE)
+    if not resultado:
+        return None
+    digitos = re.sub(r"\D", "", resultado)
+    if len(digitos) not in (10, 11):
+        raise EntradaInvalida("Informe DDD e telefone completos")
+    return digitos
 
 
 def texto(valor, rotulo, limite, *, aparar=True):

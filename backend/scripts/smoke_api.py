@@ -36,6 +36,7 @@ from services import rate_limit
 LIMITES_REAIS = dict(rate_limit.LIMITES)
 rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
 from database.connection import execute, insert, query_all, query_one
+from models.codigo_model import CodigoVerificacao
 from models.professor_model import hash_convite
 
 SUFIXO = "smoke-api@mentorly.local"
@@ -124,11 +125,14 @@ def montar_escola(cliente_flask, rotulo):
     justamente esses ids que os testes de isolamento tentam cruzar.
     """
     coord = Cliente(cliente_flask)
+    email_coord = "%s.%s" % (rotulo.lower(), SUFIXO)
+    CodigoVerificacao.criar(email_coord, "123456")
     resposta = coord.post("/api/auth/cadastro-coordenacao", {
         "nome": "Escola %s" % rotulo,
-        "email": "%s.%s" % (rotulo.lower(), SUFIXO),
+        "email": email_coord,
         "senha": "senha123",
         "telefone": "31999990000",
+        "codigoVerificacao": "123456",
     })
     assert resposta.status_code == 201, resposta.get_json()
     coord.token = resposta.get_json()["token"]
@@ -1731,8 +1735,10 @@ def main():
 
         # --- escola sem ano atual
         coord_e = Cliente(cliente_flask)
+        CodigoVerificacao.criar("e.%s" % SUFIXO, "123456")
         resposta = coord_e.post("/api/auth/cadastro-coordenacao", {
             "nome": "Escola E", "email": "e.%s" % SUFIXO, "senha": "senha123",
+            "codigoVerificacao": "123456",
         })
         coord_e.token = resposta.get_json()["token"]
         checar(anos_de(coord_e) == [],

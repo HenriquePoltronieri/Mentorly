@@ -43,9 +43,35 @@ def validar_configuracao(etapas, criterios):
         if not nome or chave in nomes:
             raise ValueError("Os critérios precisam ter nomes diferentes e preenchidos.")
         nomes.add(chave)
-        criterios_validos.append({"nome": nome, "peso": _decimal(criterio.get("peso"), "Peso", 100)})
+        maximos_brutos = criterio.get("notas_maximas")
+        if maximos_brutos is None:
+            # Compatibilidade com clientes antigos: a parcela de pontos segue
+            # o peso do criterio em cada etapa.
+            peso = _decimal(criterio.get("peso"), "Peso", 100)
+            maximos = [
+                (etapa["nota_maxima"] * peso / Decimal("100")).quantize(Decimal("0.01"))
+                for etapa in etapas_validas
+            ]
+        else:
+            if not isinstance(maximos_brutos, list) or len(maximos_brutos) != len(etapas_validas):
+                raise ValueError("Informe o máximo do critério em cada etapa.")
+            peso = _decimal(criterio.get("peso"), "Peso", 100)
+            maximos = [
+                _decimal(valor, "Máximo do critério na etapa %d" % (indice + 1), 999.99)
+                for indice, valor in enumerate(maximos_brutos)
+            ]
+            if any(valor <= 0 for valor in maximos):
+                raise ValueError("O máximo de cada critério precisa ser maior que zero.")
+        criterios_validos.append({"nome": nome, "peso": peso, "notas_maximas": maximos})
     if sum(c["peso"] for c in criterios_validos) != Decimal("100"):
         raise ValueError("A soma dos pesos precisa ser exatamente 100%.")
+    for indice, etapa in enumerate(etapas_validas):
+        total = sum(c["notas_maximas"][indice] for c in criterios_validos)
+        if total != etapa["nota_maxima"]:
+            raise ValueError(
+                "Etapa %d: a soma dos máximos dos critérios precisa ser %s pontos (está em %s)."
+                % (indice + 1, etapa["nota_maxima"], total)
+            )
     return etapas_validas, criterios_validos
 
 

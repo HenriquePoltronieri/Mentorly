@@ -155,7 +155,12 @@ class _ListaTurmasScreenState extends State<ListaTurmasScreen> {
                 .where((v) => v != null && v.toString().trim().isNotEmpty)
                 .join(' · '),
           ),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          trailing: IconButton(
+            tooltip: 'Abrir grade de notas',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.gradeNotas,
+                arguments: Map<String, dynamic>.from(turma as Map)),
+          ),
           onTap: () {
             Navigator.pushNamed(context, AppRoutes.turmaAlunos,
                 arguments: turma);

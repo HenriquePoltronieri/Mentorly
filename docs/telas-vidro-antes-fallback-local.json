@@ -1,0 +1,39 @@
+{
+  "acesso_frio_ms": 1752.51,
+  "recursos_iniciais": [
+    {
+      "arquivo": "/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+      "duracao_ms": 142,
+      "fim_ms": 945
+    },
+    {
+      "arquivo": "/main.dart.js",
+      "duracao_ms": 59,
+      "fim_ms": 232
+    },
+    {
+      "arquivo": "/canvaskit/chromium/canvaskit.wasm",
+      "duracao_ms": 56,
+      "fim_ms": 226
+    },
+    {
+      "arquivo": "/assets/assets/fonts/Poppins-SemiBold.ttf",
+      "duracao_ms": 22,
+      "fim_ms": 824
+    },
+    {
+      "arquivo": "/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+      "duracao_ms": 21,
+      "fim_ms": 824
+    },
+    {
+      "arquivo": "/flutter_bootstrap.js",
+      "duracao_ms": 18,
+      "fim_ms": 35
+    }
+  ],
+  "login_painel_coordenacao_ms": 1141.1,
+  "login_painel_professor_ms": 1502.76,
+  "frame_mediano_ms": 6.9,
+  "frames_acima_33ms": 0
+}

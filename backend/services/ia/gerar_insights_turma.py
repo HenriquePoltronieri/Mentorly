@@ -13,6 +13,7 @@ import re
 from collections import defaultdict
 
 from models.aluno_model import Aluno
+from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
 from services.ia.client import MENSAGEM_INDISPONIVEL, AIClient, AIResponseError
@@ -104,12 +105,18 @@ class GerarInsightsTurmaService:
     def __init__(self, client=None):
         self.client = client or AIClient()
 
-    def execute(self, turma_id, professor_id, coordenacao_id):
+    def execute(self, turma_id, professor_id, coordenacao_id, etapa_id=None):
         turma = Turma.find_by_id_para_professor(turma_id, professor_id)
         if not turma or turma.get("coordenacao_id") != coordenacao_id:
             raise RecursoNaoEncontrado("Turma nao encontrada")
 
-        etapa, regra_etapa = etapa_atual(coordenacao_id, turma["ano_letivo"])
+        if etapa_id is not None:
+            etapa = Etapa.find_by_id(etapa_id, coordenacao_id)
+            if not etapa or etapa.get("ano_letivo") != turma["ano_letivo"]:
+                raise RecursoNaoEncontrado("Etapa nao encontrada")
+            regra_etapa = "selecionada pelo professor"
+        else:
+            etapa, regra_etapa = etapa_atual(coordenacao_id, turma["ano_letivo"])
         if not etapa:
             raise DadosInsuficientesError(
                 "A turma ainda nao possui uma etapa atual configurada."

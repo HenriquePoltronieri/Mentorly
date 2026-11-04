@@ -182,9 +182,11 @@ class ProfessorController:
 
     def insights_turma(self, turma_id):
         limitar_ia(usuario_atual_id())
+        dados_requisicao = request.get_json(silent=True) or {}
         try:
             dados = GerarInsightsTurmaService().execute(
-                turma_id, usuario_atual_id(), coordenacao_atual()
+                turma_id, usuario_atual_id(), coordenacao_atual(),
+                dados_requisicao.get('etapa_id')
             )
         except RecursoNaoEncontrado as erro:
             return jsonify({"error": str(erro)}), 404

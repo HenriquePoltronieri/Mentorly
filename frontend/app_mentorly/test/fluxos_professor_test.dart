@@ -72,12 +72,20 @@ void main() {
       await t.pumpWidget(app(AdicionarAtividadeModal(
           turmas: [TurmaModel(id: '7', nome: '7A', anoLetivo: 2026)])));
       await t.pumpAndSettle();
-      final campos = find.byType(TextFormField);
-      expect(t.widget<TextFormField>(campos.at(1)).controller!.text, '20');
-      await t.enterText(campos.at(0), 'Atividade teste');
-      await t.ensureVisible(campos.at(2));
+      await t.enterText(
+          find.byKey(const ValueKey('atividade_titulo')), 'Atividade teste');
+      await t.drag(find.byType(ListView), const Offset(0, -500));
       await t.pumpAndSettle();
-      await t.tap(campos.at(2));
+      expect(
+          t
+              .widget<TextFormField>(
+                  find.byKey(const ValueKey('atividade_valor')))
+              .controller!
+              .text,
+          '20');
+      await t.ensureVisible(find.byKey(const ValueKey('atividade_data')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('atividade_data')));
       await t.pumpAndSettle();
       expect(find.byType(DatePickerDialog), findsOneWidget);
       await t.tap(find.text('OK'));
@@ -90,6 +98,21 @@ void main() {
       expect(find.text('Lançar notas agora?'), findsOneWidget);
     },
         () => MockClient((r) async {
+              if (r.method == 'GET' &&
+                  r.url.path == '/api/config/criterios/etapa/2') {
+                return json([
+                  {
+                    'id': 11,
+                    'nome': 'Provas',
+                    'peso': 100,
+                    'nota_maxima': 20,
+                    'etapa_id': 2
+                  }
+                ]);
+              }
+              if (r.method == 'GET' && r.url.path == '/api/activities') {
+                return json([]);
+              }
               if (r.method == 'GET') {
                 return json([
                   {
@@ -118,7 +141,8 @@ void main() {
                 'title': 'Atividade teste',
                 'class_id': 7,
                 'nota_maxima': 20,
-                'etapa_id': 2
+                'etapa_id': 2,
+                'criterio_id': 11
               });
             }));
   });
@@ -160,6 +184,9 @@ void main() {
           find.text('Notas salvas! Estatísticas atualizadas.'), findsOneWidget);
     },
         () => MockClient((r) async {
+              if (r.method == 'GET' && r.url.path.endsWith('/anexos')) {
+                return json([]);
+              }
               if (r.method == 'POST') {
                 posts.add(jsonDecode(r.body) as Map<String, dynamic>);
                 return json({'lancadas': 2});

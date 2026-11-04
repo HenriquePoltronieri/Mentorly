@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 
 // Campo de texto padrao usado nos formularios
@@ -11,6 +12,7 @@ class CustomTextfield extends StatefulWidget {
   final TextInputType? keyboardType;
   final TextInputAction textInputAction;
   final ValueChanged<String>? onFieldSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
 
   const CustomTextfield({
     super.key,
@@ -22,6 +24,7 @@ class CustomTextfield extends StatefulWidget {
     this.keyboardType,
     this.textInputAction = TextInputAction.next,
     this.onFieldSubmitted,
+    this.inputFormatters,
   });
 
   @override
@@ -43,6 +46,7 @@ class _CustomTextfieldState extends State<CustomTextfield> {
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
           onFieldSubmitted: widget.onFieldSubmitted,
+          inputFormatters: widget.inputFormatters,
           obscureText: widget.senha && _oculta,
           autocorrect: !widget.senha,
           autovalidateMode: AutovalidateMode.onUserInteraction,

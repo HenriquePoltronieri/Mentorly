@@ -39,12 +39,14 @@ class AuthService {
     required String email,
     required String senha,
     required String telefone,
+    required String codigoVerificacao,
   }) async {
     final resposta = await _api.post('/auth/cadastro-coordenacao', {
       'nome': nome,
       'email': email,
       'senha': senha,
       'telefone': telefone,
+      'codigoVerificacao': codigoVerificacao,
     });
     return _guardarSessao(resposta);
   }

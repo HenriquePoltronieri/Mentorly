@@ -40,6 +40,8 @@ class AuthController:
                 dados.get("email"),
                 dados.get("senha"),
                 dados.get("telefone"),
+                dados.get("codigoVerificacao"),
+                exigir_verificacao=True,
             )
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400

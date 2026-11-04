@@ -122,7 +122,11 @@ void main() {
       await t.pumpWidget(
           tela(const GradeNotasScreen(), args: {'id': 7, 'nome': '7A'}));
       await t.pumpAndSettle();
-      await t.enterText(find.byType(TextFormField).at(1), '11');
+      await t.drag(find.byType(ListView).first, const Offset(0, -1600));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const ValueKey('grade-2-8')), '11');
+      await t.drag(find.byType(ListView).first, const Offset(0, 1600));
+      await t.pumpAndSettle();
       await t.enterText(find.byType(TextFormField).first, 'Aluno inexistente');
       await t.pumpAndSettle();
       await t.tap(find.text('Salvar alterações'));
@@ -162,11 +166,14 @@ void main() {
           find.textContaining('1 campos mudaram no servidor'), findsOneWidget);
       await t.pumpWidget(const SizedBox());
     },
-        () => MockClient((r) async => resposta({
-              'notas': [
-                {'alunoId': 2, 'aluno': 'Ana', 'valor': 9}
-              ]
-            })));
+        () => MockClient((r) async {
+              if (r.url.path.endsWith('/anexos')) return resposta([]);
+              return resposta({
+                'notas': [
+                  {'alunoId': 2, 'aluno': 'Ana', 'valor': 9}
+                ]
+              });
+            }));
   });
   testWidgets('excluir uma nota preserva o rascunho dos demais alunos',
       (t) async {
@@ -204,6 +211,9 @@ void main() {
       await t.pumpWidget(const SizedBox());
     },
         () => MockClient((r) async {
+              if (r.method == 'GET' && r.url.path.endsWith('/anexos')) {
+                return resposta([]);
+              }
               if (r.method == 'DELETE') {
                 excluiu = true;
                 return resposta({});

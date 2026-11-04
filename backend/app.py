@@ -63,9 +63,9 @@ def create_app():
                         response.status_code, duracao, getattr(g, "consultas_db", 0))
         return response
 
-    # Limite de upload das planilhas. Sem isso, um arquivo enorme fica
+    # Limite de upload de planilhas e anexos. Sem isso, um arquivo enorme fica
     # inteiro na memoria antes de o service conseguir recusar.
-    app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(coordenacao_blueprint)
@@ -148,7 +148,7 @@ def create_app():
 
     @app.errorhandler(413)
     def arquivo_grande(_erro):
-        return jsonify({"error": "Arquivo muito grande (limite de 5 MB)"}), 413
+        return jsonify({"error": "Arquivo muito grande (limite de 10 MB)"}), 413
 
     from pymysql import IntegrityError
 

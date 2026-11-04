@@ -5,7 +5,9 @@ from services.professor.trabalho import (painel_trabalho, turma_autorizada, list
                                         criar_acompanhamento, concluir_acompanhamento)
 from services.professor.estatisticas_turma import EstatisticasTurmaService
 from models.atividade_model import Atividade
+from models.criterio_model import Criterio
 from models.ano_letivo_model import AnoLetivo
+from services.academico.boletim import montar_boletim_turma
 from database.connection import query_all
 from services.entrada import inteiro
 from erros import RecursoNaoEncontrado
@@ -35,14 +37,24 @@ def grade_dados(turma_id):
     etapa = inteiro(etapa, 'Etapa') if etapa is not None else None
     dados = EstatisticasTurmaService().execute(usuario_atual_id(), coordenacao_atual(), turma_id, etapa)
     atividades = Atividade.find_all_by_professor(usuario_atual_id(), turma_id)
+    criterios = Criterio.find_all_by_coordenacao(
+        coordenacao_atual(), turma['ano_letivo'])
+    boletim = montar_boletim_turma(turma, coordenacao_atual())
+    resultados = {a['aluno_id']: a for a in boletim['alunos']}
     situacoes = query_all('SELECT s.aluno_id,s.atividade_id,s.situacao FROM atividade_situacao s '
                          'JOIN atividade a ON a.id=s.atividade_id WHERE a.turma_id=%s', (turma_id,))
     mapa = {(s['aluno_id'], s['atividade_id']): s['situacao'] for s in situacoes}
     for aluno in dados['alunos']:
+        resultado = resultados.get(aluno['id'], {})
+        aluno['resultado_etapas'] = resultado.get('etapas', [])
+        aluno['consolidado'] = resultado.get('consolidado')
         for atividade in aluno['atividades']:
             atividade['situacao'] = mapa.get((aluno['id'], atividade['id']), atividade['status'])
-    return {**dados, 'somente_leitura': bool(ano and ano['status'] == 'encerrado'), 'atividades_cadastro': [Atividade.to_dict(a) for a in atividades
-                                            if etapa is None or a['etapa_id'] == etapa]}
+    return {**dados,
+            'somente_leitura': bool(ano and ano['status'] == 'encerrado'),
+            'criterios': [Criterio.to_dict(c) for c in criterios],
+            'atividades_cadastro': [Atividade.to_dict(a) for a in atividades
+                                     if etapa is None or a['etapa_id'] == etapa]}
 
 
 @trabalho_blueprint.get('/turmas/<int:turma_id>/grade')

@@ -4,6 +4,7 @@ import '../../../app/theme.dart';
 import '../../../core/services/apiService.dart';
 import '../../../core/services/authService.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/utils/telefone_formatter.dart';
 import '../../../core/widgets/customTextfield.dart';
 import '../../../core/widgets/customButton.dart';
 import '../../../core/widgets/identidade_visual.dart';
@@ -55,11 +56,22 @@ class _TelaLoginState extends State<TelaLogin> {
     try {
       final auth = AuthService();
       if (_cadastro) {
-        await auth.cadastrarCoordenacao(
-            nome: _nome.text.trim(),
-            email: _email.text.trim(),
-            senha: _senha.text,
-            telefone: _telefone.text.trim());
+        final email = _email.text.trim().toLowerCase();
+        final enviado = await auth.enviarCodigoDuasEtapas(email);
+        if (!enviado) {
+          throw ApiException(503,
+              'Não foi possível enviar o código. Confira o e-mail e tente novamente.');
+        }
+        if (!mounted) return;
+        await Navigator.pushNamed(context, AppRoutes.twoFactor, arguments: {
+          'email': email,
+          'nome': _nome.text.trim(),
+          'senha': _senha.text,
+          'telefone':
+              TelefoneBrasileiroFormatter.somenteDigitos(_telefone.text),
+          'cadastroCoordenacao': true,
+        });
+        return;
       } else if (widget.professor) {
         await auth.loginProfessor(
             email: _email.text.trim(), senha: _senha.text);
@@ -68,9 +80,13 @@ class _TelaLoginState extends State<TelaLogin> {
       }
       final acesso = await ApiService().get('/acesso');
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context,
-          acesso['liberado'] != true ? AppRoutes.acesso :
-          widget.professor ? AppRoutes.dashboard : AppRoutes.coordenacaoHome);
+      Navigator.pushReplacementNamed(
+          context,
+          acesso['liberado'] != true
+              ? AppRoutes.acesso
+              : widget.professor
+                  ? AppRoutes.dashboard
+                  : AppRoutes.coordenacaoHome);
     } catch (e) {
       if (mounted) {
         setState(() => _erro = e is ApiException
@@ -150,9 +166,10 @@ class _TelaLoginState extends State<TelaLogin> {
                       label: 'Telefone',
                       controller: _telefone,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: const [TelefoneBrasileiroFormatter()],
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _enviar(),
-                      validator: Validators.validarCampoObrigatorio),
+                      validator: Validators.validarTelefone),
                 ],
                 const SizedBox(height: 24),
                 if (_erro != null) ...[

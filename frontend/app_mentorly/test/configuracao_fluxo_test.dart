@@ -64,6 +64,8 @@ void main() {
                               ...c.value as Map,
                               'id': 100 + c.key,
                               'etapa_id': e.key + 1,
+                              'nota_maxima':
+                                  (c.value['notas_maximas'] as List)[e.key],
                             })
                         .toList(),
                   })
@@ -137,7 +139,8 @@ void main() {
                     find.widgetWithText(FilledButton, 'Concluir configuração')))
                 .onPressed,
             isNull);
-        await tester.enterText(campos.at(1), '40');
+        await tester.enterText(
+            find.byKey(const ValueKey('peso_Trabalhos')), '40');
         // Volta pelo AppBar e avança de novo: mantém pesos e notas digitados.
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();

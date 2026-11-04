@@ -8,6 +8,8 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.academico import calculo
+from services.config.configuracao_ano import validar_configuracao
+from services.activity.validacao import validar_limite_do_criterio
 
 
 class CalculoTest(unittest.TestCase):
@@ -113,6 +115,48 @@ class CalculoTest(unittest.TestCase):
         self.assertEqual(resultado["atividades_avaliadas"], 1)
         self.assertEqual(resultado["atividades_sem_nota"], 1)
         self.assertFalse(resultado["fechada"])
+
+    def test_maximo_do_criterio_define_a_base_planejada(self):
+        self.etapa.update(nota_minima=18, nota_maxima=30)
+        self.criterios = [
+            {"id": 1, "nome": "Provas", "peso": 50, "nota_maxima": 20},
+            {"id": 2, "nome": "Trabalhos", "peso": 50, "nota_maxima": 10},
+        ]
+        self.atividades = {
+            1: [{"id": 1, "nota_maxima": 20}],
+            2: [{"id": 2, "nota_maxima": 10}],
+        }
+        self.notas = {1: 10, 2: 10}
+        resultado = calculo.calcular_desempenho_etapa(1, 1, self.etapa)
+        self.assertEqual(resultado["nota_calculada"], 22.5)
+        self.assertEqual(resultado["criterios"][0]["pontos_previstos"], 20)
+
+
+class ConfiguracaoDosMaximosTest(unittest.TestCase):
+    def test_maximos_precisam_fechar_os_pontos_de_cada_etapa(self):
+        etapas = [
+            {"nome": "Etapa 1", "nota_minima": 18, "nota_maxima": 30},
+            {"nome": "Etapa 2", "nota_minima": 12, "nota_maxima": 20},
+        ]
+        criterios = [
+            {"nome": "Provas", "peso": 60, "notas_maximas": [20, 12]},
+            {"nome": "Trabalhos", "peso": 40, "notas_maximas": [10, 8]},
+        ]
+        _, validados = validar_configuracao(etapas, criterios)
+        self.assertEqual(float(validados[0]["notas_maximas"][0]), 20)
+        criterios[1]["notas_maximas"][1] = 7
+        with self.assertRaisesRegex(ValueError, "soma dos máximos"):
+            validar_configuracao(etapas, criterios)
+
+    @patch("services.activity.validacao.Criterio.find_by_id")
+    @patch("services.activity.validacao.Atividade.find_por_criterio")
+    def test_atividade_nao_ultrapassa_limite_da_coordenacao(
+            self, atividades, criterio):
+        criterio.return_value = {"id": 2, "nome": "Provas", "nota_maxima": 10}
+        atividades.return_value = [{"id": 1, "nota_maxima": 7}]
+        with self.assertRaisesRegex(ValueError, "pode valer até 3.00"):
+            validar_limite_do_criterio(1, 1, 2, 4, coordenacao_id=1)
+        validar_limite_do_criterio(1, 1, 2, 3, coordenacao_id=1)
 
 
 class FronteiraDaNotaMinimaTest(unittest.TestCase):

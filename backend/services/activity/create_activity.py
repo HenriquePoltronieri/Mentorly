@@ -7,6 +7,7 @@ from services import entrada
 from services.config.anos_letivos import exigir_ano_nao_encerrado
 from services.activity.validacao import (
     validar_etapa_e_criterio,
+    validar_limite_do_criterio,
     validar_nota_maxima,
 )
 from erros import RecursoNaoEncontrado, AcessoNegado
@@ -83,6 +84,10 @@ class CreateActivityService:
             coordenacao_id, etapa_id, criterio_id, ano_turma=turma["ano_letivo"]
         )
         nota_maxima = validar_nota_maxima(nota_maxima)
+        validar_limite_do_criterio(
+            turma_id, etapa_id, criterio_id, nota_maxima,
+            coordenacao_id=coordenacao_id,
+        )
 
         atividade_id = Atividade.create(
             coordenacao_id, turma_id, professor_id, titulo, descricao,

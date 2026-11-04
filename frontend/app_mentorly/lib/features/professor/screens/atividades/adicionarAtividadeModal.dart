@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../../app/routes.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../../coordenacao/models/turmaModel.dart';
 import '../../../coordenacao/services/etapasService.dart';
+import '../../../coordenacao/services/criteriosService.dart';
 import '../../models/atividadeModel.dart';
 import '../../models/sugestaoAtividadeModel.dart';
 import '../../services/atividadesService.dart';
+import '../../services/atividade_anexos_service.dart';
+import '../../widgets/atividade_anexos.dart';
 import 'gerarAtividadeIaDialog.dart';
 
 class AdicionarAtividadeModal extends StatefulWidget {
@@ -25,10 +29,14 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
   late final TextEditingController _titulo, _descricao, _valor, _data;
   TurmaModel? _turma;
   List<Map<String, dynamic>> _etapas = [];
+  List<Map<String, dynamic>> _criterios = [];
+  List<AtividadeModel> _atividadesDaTurma = [];
   int? _etapa;
+  int? _criterio;
   bool _carregando = false, _salvando = false;
   String? _erro;
   int _versaoCarga = 0;
+  final List<PlatformFile> _novosAnexos = [];
   @override
   void initState() {
     super.initState();
@@ -55,8 +63,10 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
     setState(() {
       _carregando = true;
       _etapa = null;
+      _criterio = null;
       _erro = null;
       _etapas = [];
+      _criterios = [];
     });
     try {
       final lista =
@@ -85,6 +95,26 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               : _etapas.isNotEmpty
                   ? _etapas.first['id'] as int
                   : null;
+      if (_etapa != null) {
+        final respostas = await Future.wait([
+          CriteriosService().listarCriterios(_etapa!),
+          if (_turma != null)
+            AtividadesService().listarAtividades(turmaId: _turma!.id)
+          else
+            Future.value(<AtividadeModel>[]),
+        ]);
+        if (!mounted || versao != _versaoCarga) return;
+        _criterios = respostas[0]
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((e) => ((e['peso'] as num?) ?? 0) > 0)
+            .toList();
+        _atividadesDaTurma = respostas[1] as List<AtividadeModel>;
+        _criterio = _criterios.any((c) => c['id'] == base?.criterioId)
+            ? base!.criterioId
+            : _criterios.isNotEmpty
+                ? _criterios.first['id'] as int
+                : null;
+      }
       _padrao();
     } catch (e) {
       if (mounted && versao == _versaoCarga) {
@@ -100,11 +130,59 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
   }
 
   void _padrao() {
-    if (_valor.text.isEmpty && _etapa != null) {
-      _valor.text = _etapas
-              .firstWhere((e) => e['id'] == _etapa)['nota_maxima']
-              ?.toString() ??
-          '';
+    if (_valor.text.isEmpty && _criterio != null) {
+      final restante = _restante;
+      if (restante != null && restante > 0) {
+        _valor.text = _formatar(restante);
+      }
+    }
+  }
+
+  double? get _limite {
+    final encontrados = _criterios.where((c) => c['id'] == _criterio);
+    return encontrados.isEmpty
+        ? null
+        : (encontrados.first['nota_maxima'] as num?)?.toDouble();
+  }
+
+  double get _distribuido => _atividadesDaTurma
+      .where((a) =>
+          a.etapaId == _etapa &&
+          a.criterioId == _criterio &&
+          a.id != widget.atividade?.id)
+      .fold(0, (soma, a) => soma + (a.notaMaxima ?? 0));
+
+  double? get _restante => _limite == null ? null : _limite! - _distribuido;
+
+  String _formatar(double valor) => valor == valor.roundToDouble()
+      ? valor.toInt().toString()
+      : valor.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+
+  Future<void> _trocarEtapa(int? etapa) async {
+    setState(() {
+      _etapa = etapa;
+      _criterio = null;
+      _criterios = [];
+      if (widget.atividade == null && widget.modelo == null) _valor.clear();
+    });
+    if (etapa == null) return;
+    try {
+      final lista = await CriteriosService().listarCriterios(etapa);
+      if (!mounted || _etapa != etapa) return;
+      setState(() {
+        _criterios = lista
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((e) => ((e['peso'] as num?) ?? 0) > 0)
+            .toList();
+        _criterio = _criterios.isEmpty ? null : _criterios.first['id'] as int;
+        _padrao();
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _erro = e is ApiException
+            ? e.mensagem
+            : 'Não foi possível carregar os tipos de pontuação.');
+      }
     }
   }
 
@@ -112,12 +190,58 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
     if (_turma == null) return;
     final sugestao = await showDialog<SugestaoAtividadeModel>(
         context: context,
-        builder: (_) =>
-            GerarAtividadeIaDialog(turmaId: _turma!.id, etapaId: _etapa));
+        builder: (_) => GerarAtividadeIaDialog(
+            turmaId: _turma!.id, etapaId: _etapa, criterioId: _criterio));
     if (sugestao != null && mounted) {
       _titulo.text = sugestao.titulo;
       _descricao.text = sugestao.descricaoFormatada();
     }
+  }
+
+  Future<void> _selecionarAnexos() async {
+    final escolha = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const [
+        'pdf',
+        'png',
+        'jpg',
+        'jpeg',
+        'docx',
+        'xlsx',
+        'pptx',
+        'txt',
+        'csv'
+      ],
+      withData: true,
+    );
+    if (escolha == null || !mounted) return;
+    final disponiveis = _novosAnexos.length < 10 ? 10 - _novosAnexos.length : 0;
+    final validos = escolha.files
+        .where((arquivo) =>
+            arquivo.bytes != null && arquivo.size <= 8 * 1024 * 1024)
+        .take(disponiveis)
+        .toList();
+    setState(() => _novosAnexos.addAll(validos));
+    if (validos.length != escolha.files.length) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Alguns arquivos não foram adicionados. Use arquivos válidos de até 8 MB e no máximo 10 anexos.')));
+    }
+  }
+
+  Future<int> _enviarAnexos(String atividadeId) async {
+    var falhas = 0;
+    final service = AtividadeAnexosService();
+    for (final arquivo in _novosAnexos) {
+      try {
+        await service.enviar(atividadeId,
+            bytes: arquivo.bytes!, nome: arquivo.name);
+      } catch (_) {
+        falhas++;
+      }
+    }
+    return falhas;
   }
 
   Future<void> _salvar() async {
@@ -134,9 +258,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               turmaId: _turma!.id,
               nome: _titulo.text.trim(),
               etapaId: _etapa!,
-              criterioId: _etapa == widget.modelo?.etapaId
-                  ? widget.modelo?.criterioId
-                  : null,
+              criterioId: _criterio,
               notaMaxima: valor,
               descricao: _descricao.text.trim(),
               dataEntrega: _data.text)
@@ -145,15 +267,20 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
               turmaId: _turma!.id,
               nome: _titulo.text.trim(),
               etapaId: _etapa!,
-              criterioId: _etapa == widget.atividade!.etapaId
-                  ? widget.atividade!.criterioId
-                  : null,
+              criterioId: _criterio,
               notaMaxima: valor,
               descricao: _descricao.text.trim(),
               dataEntrega: _data.text);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Atividade salva com sucesso!')));
+      final tinhaAnexosNovos = _novosAnexos.isNotEmpty;
+      final falhas = await _enviarAnexos(atividade.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(falhas == 0
+              ? tinhaAnexosNovos
+                  ? 'Atividade e arquivos salvos com sucesso!'
+                  : 'Atividade salva com sucesso!'
+              : 'Atividade salva, mas $falhas arquivo(s) não foram enviados.')));
       final lancar = widget.atividade == null &&
           await showDialog<bool>(
                   context: context,
@@ -242,6 +369,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                           }),
                 const SizedBox(height: 16),
                 TextFormField(
+                    key: const ValueKey('atividade_titulo'),
                     controller: _titulo,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(labelText: 'Título'),
@@ -264,16 +392,48 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                       validator: (v) => v == null
                           ? 'Escolha uma etapa aberta configurada pela escola.'
                           : null,
-                      onChanged: (v) => setState(() {
-                            _etapa = v;
-                            if (widget.atividade == null &&
-                                widget.modelo == null) {
-                              _valor.clear();
-                            }
-                            _padrao();
-                          })),
+                      onChanged: _trocarEtapa),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                    key: ValueKey('criterio-$_etapa-$_criterio'),
+                    initialValue: _criterio,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Tipo de pontuação / critério'),
+                    items: _criterios
+                        .map((c) => DropdownMenuItem<int>(
+                            value: c['id'] as int,
+                            child: Text(c['nome'].toString())))
+                        .toList(),
+                    validator: (v) => v == null
+                        ? 'A Coordenação precisa configurar um critério para esta etapa.'
+                        : null,
+                    onChanged: _salvando
+                        ? null
+                        : (v) => setState(() {
+                              _criterio = v;
+                              if (widget.atividade == null &&
+                                  widget.modelo == null) {
+                                _valor.clear();
+                              }
+                              _padrao();
+                            })),
+                if (_criterio != null && _limite != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: .45),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(
+                          'Limite definido pela Coordenação: ${_formatar(_limite!)} pts · Já distribuídos: ${_formatar(_distribuido)} pts · Restam: ${_formatar((_restante ?? 0).clamp(0, double.infinity).toDouble())} pts')),
+                ],
                 const SizedBox(height: 16),
                 TextFormField(
+                    key: const ValueKey('atividade_valor'),
                     controller: _valor,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -281,12 +441,17 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                         const InputDecoration(labelText: 'Valor / nota máxima'),
                     validator: (v) {
                       final n = double.tryParse((v ?? '').replaceAll(',', '.'));
-                      return n == null || !n.isFinite || n <= 0 || n > 999.99
-                          ? 'Informe um valor entre 0,01 e 999,99.'
-                          : null;
+                      if (n == null || !n.isFinite || n <= 0 || n > 999.99) {
+                        return 'Informe um valor entre 0,01 e 999,99.';
+                      }
+                      if (_restante != null && n > _restante! + .000001) {
+                        return 'O máximo disponível neste critério é ${_formatar((_restante!).clamp(0, double.infinity).toDouble())}.';
+                      }
+                      return null;
                     }),
                 const SizedBox(height: 16),
                 TextFormField(
+                    key: const ValueKey('atividade_data'),
                     controller: _data,
                     readOnly: true,
                     decoration: const InputDecoration(
@@ -312,6 +477,44 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                     maxLines: 4,
                     decoration: const InputDecoration(
                         labelText: 'Descrição (opcional)')),
+                const SizedBox(height: 12),
+                if (widget.atividade != null)
+                  AtividadeAnexos(atividadeId: widget.atividade!.id)
+                else
+                  Card(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Arquivos da atividade',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600)),
+                                const Text(
+                                    'Anexe material de apoio para consultar durante a correção.'),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                    onPressed:
+                                        _salvando ? null : _selecionarAnexos,
+                                    icon: const Icon(Icons.attach_file),
+                                    label: const Text('Escolher arquivos')),
+                                ..._novosAnexos.asMap().entries.map((entrada) =>
+                                    ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: const Icon(
+                                            Icons.insert_drive_file_outlined),
+                                        title: Text(entrada.value.name),
+                                        subtitle: Text(
+                                            '${(entrada.value.size / 1024).ceil()} KB'),
+                                        trailing: IconButton(
+                                            tooltip: 'Remover',
+                                            onPressed: _salvando
+                                                ? null
+                                                : () => setState(() =>
+                                                    _novosAnexos
+                                                        .removeAt(entrada.key)),
+                                            icon: const Icon(Icons.close))))
+                              ]))),
                 const SizedBox(height: 12),
                 TextButton.icon(
                     onPressed: _salvando ? null : _gerar,

@@ -5,6 +5,8 @@ import '../../../../app/routes.dart';
 import '../../../../core/services/apiService.dart';
 import '../../../../core/widgets/estrutura_pagina.dart';
 import '../../models/atividadeModel.dart';
+import '../../models/insightsTurmaModel.dart';
+import '../../services/insightsIaService.dart';
 import '../../services/rascunho_notas_service.dart';
 
 class GradeNotasScreen extends StatefulWidget {
@@ -16,7 +18,10 @@ class GradeNotasScreen extends StatefulWidget {
 class _GradeNotasScreenState extends State<GradeNotasScreen> {
   Map<String, dynamic>? _turma, _dados;
   bool _iniciou = false, _carregando = true, _salvando = false;
+  bool _gerandoIa = false;
   String? _erro;
+  String? _erroIa;
+  InsightsTurmaModel? _insights;
   int? _etapa;
   String _busca = '', _estado = '';
   bool _soPendentes = false;
@@ -66,6 +71,10 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
       _campos.clear();
       _originais.clear();
       _dados = Map<String, dynamic>.from(d as Map);
+      final etapas = _dados!['etapas'] as List;
+      if (_etapa == null && etapas.isNotEmpty) {
+        _etapa = etapas.first['id'] as int;
+      }
       (_dados!['alunos'] as List)
           .sort((a, b) => a['nome'].toString().compareTo(b['nome'].toString()));
       for (final al in _dados!['alunos'] as List) {
@@ -169,7 +178,12 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
         if (texto == _originais[chave]) continue;
         final n = double.tryParse(texto.replaceAll(',', '.'));
         final maximo = (atividade['nota_maxima'] as num?)?.toDouble();
-        if (n == null || !n.isFinite || n < 0 || maximo == null || n > maximo || RegExp(r'[.,]\d{3,}').hasMatch(texto)) {
+        if (n == null ||
+            !n.isFinite ||
+            n < 0 ||
+            maximo == null ||
+            n > maximo ||
+            RegExp(r'[.,]\d{3,}').hasMatch(texto)) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(
                   'Revise a nota de ${al['nome']} em ${atividade['title']}. Remova os filtros para localizar o campo.')));
@@ -232,7 +246,8 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
     final api = ApiService();
     try {
       final filtro = _etapa == null ? '' : '?etapa_id=$_etapa';
-      final uri = await api.autorizarDownload('/professor/turmas/${_turma!['id']}/resumo-reuniao$filtro');
+      final uri = await api.autorizarDownload(
+          '/professor/turmas/${_turma!['id']}/resumo-reuniao$filtro');
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('download');
       }
@@ -242,6 +257,153 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
             content: Text('Não foi possível abrir o resumo para impressão.')));
       }
     }
+  }
+
+  Future<void> _gerarInsights() async {
+    if (_turma?['id'] == null || _gerandoIa) return;
+    setState(() {
+      _gerandoIa = true;
+      _erroIa = null;
+    });
+    try {
+      final turmaId = int.tryParse(_turma!['id'].toString());
+      if (turmaId == null) throw StateError('Turma inválida');
+      final resultado =
+          await InsightsIaService().gerar(turmaId, etapaId: _etapa);
+      if (mounted) setState(() => _insights = resultado);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _erroIa = e is ApiException
+            ? e.mensagem
+            : 'Não foi possível gerar as sugestões agora.');
+      }
+    } finally {
+      if (mounted) setState(() => _gerandoIa = false);
+    }
+  }
+
+  String _numero(num? valor) {
+    if (valor == null) return '—';
+    final n = valor.toDouble();
+    return n == n.roundToDouble()
+        ? n.toInt().toString()
+        : n.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+  }
+
+  double? _notaDigitada(dynamic alunoId, dynamic atividadeId) {
+    final texto = _campos[_chave(alunoId, atividadeId)]?.text.trim() ?? '';
+    return texto.isEmpty ? null : double.tryParse(texto.replaceAll(',', '.'));
+  }
+
+  String _resumoCriterio(
+      dynamic aluno, dynamic criterio, List<dynamic> atividades) {
+    final doCriterio = atividades
+        .where((a) => a['criterio_id'].toString() == criterio['id'].toString())
+        .toList();
+    final notas = doCriterio
+        .map((a) => _notaDigitada(aluno['id'], a['id']))
+        .whereType<double>()
+        .toList();
+    if (notas.isEmpty) return '—';
+    final distribuido = doCriterio.fold<double>(
+        0, (soma, a) => soma + ((a['nota_maxima'] as num?)?.toDouble() ?? 0));
+    final pendentes = doCriterio.length - notas.length;
+    return '${_numero(notas.fold<double>(0, (a, b) => a + b))} / ${_numero(distribuido)}${pendentes > 0 ? '\n$pendentes sem nota' : ''}';
+  }
+
+  Map<String, dynamic>? _resultadoSelecionado(dynamic aluno) {
+    final resultados = aluno['resultado_etapas'] as List? ?? const [];
+    final encontrados =
+        resultados.where((e) => e['etapa_id'].toString() == _etapa.toString());
+    return encontrados.isEmpty
+        ? null
+        : Map<String, dynamic>.from(encontrados.first as Map);
+  }
+
+  String _totalEtapa(dynamic aluno) {
+    final resultado = _resultadoSelecionado(aluno);
+    if (resultado == null) return '—';
+    final valor = resultado['nota_calculada'] ?? resultado['nota_parcial'];
+    if (valor == null) return '—';
+    return '${_numero(valor as num)} / ${_numero(resultado['nota_maxima'] as num?)}${resultado['nota_calculada'] == null ? '\nparcial' : ''}';
+  }
+
+  Widget _painelAtencao(List<dynamic> alunos) {
+    final atencao = alunos.where((a) {
+      final resultado = _resultadoSelecionado(a);
+      return resultado?['situacao'] == 'abaixo_do_minimo';
+    }).toList();
+    return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+            padding: const EdgeInsets.all(16),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Atenção pedagógica',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(atencao.isEmpty
+                              ? 'Nenhum alerta de nota nesta etapa.'
+                              : '${atencao.length} aluno(s) precisam de conferência nesta etapa.')
+                        ]),
+                    FilledButton.icon(
+                        onPressed: _gerandoIa ? null : _gerarInsights,
+                        icon: _gerandoIa
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(_gerandoIa
+                            ? 'Analisando…'
+                            : 'Gerar sugestões com IA'))
+                  ]),
+              if (atencao.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ...atencao.take(5).map((a) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                        '• ${a['nome']} · resultado abaixo do mínimo na etapa')))
+              ],
+              if (_erroIa != null) ...[
+                const SizedBox(height: 10),
+                Text(_erroIa!, style: const TextStyle(color: Colors.red))
+              ],
+              if (_insights != null) ...[
+                const Divider(height: 24),
+                Text('Sugestões da IA · ${_insights!.etapa}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text(_insights!.resumo),
+                ..._insights!.pontosAtencao.map((p) => Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p.titulo,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          Text('Evidência: ${p.evidencia}'),
+                          Text('Sugestão: ${p.sugestao}')
+                        ]))),
+                ..._insights!.sugestoesGerais.map((s) => Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('• $s'))),
+                const SizedBox(height: 8),
+                const Text(
+                    'A IA apenas sugere ações. As notas e alertas oficiais são calculados pelo Mentorly e a decisão continua com o professor.',
+                    style: TextStyle(fontSize: 12, color: Colors.black54))
+              ]
+            ])));
   }
 
   @override
@@ -298,6 +460,9 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
     final atividades = (_dados!['atividades_cadastro'] as List)
         .where((a) => _etapa == null || a['etapa_id'] == _etapa)
         .toList();
+    final criterios = (_dados!['criterios'] as List? ?? const [])
+        .where((c) => c['etapa_id'] == _etapa && ((c['peso'] as num?) ?? 0) > 0)
+        .toList();
     final alunos = (_dados!['alunos'] as List)
         .where((a) =>
             a['nome'].toString().toLowerCase().contains(_busca.toLowerCase()) &&
@@ -344,7 +509,11 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                   value: e['id'] as int,
                                   child: Text(e['nome'].toString())))
                         ],
-                        onChanged: (v) => setState(() => _etapa = v))),
+                        onChanged: (v) => setState(() {
+                              _etapa = v;
+                              _insights = null;
+                              _erroIa = null;
+                            }))),
                 FilterChip(
                     label: const Text('Somente com pendências'),
                     selected: _soPendentes,
@@ -355,12 +524,63 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                     label: const Text('Resumo para reunião')),
               ]),
           const SizedBox(height: 20),
+          if (_etapa != null && criterios.isNotEmpty) ...[
+            Text('Planejamento da etapa',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            const Text(
+                'Os limites são definidos pela Coordenação. Os pontos distribuídos vêm das atividades criadas pelo professor.'),
+            const SizedBox(height: 10),
+            Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: criterios.map((c) {
+                  final distribuido = atividades
+                      .where((a) => a['criterio_id'] == c['id'])
+                      .fold<double>(
+                          0,
+                          (soma, a) =>
+                              soma +
+                              ((a['nota_maxima'] as num?)?.toDouble() ?? 0));
+                  final limite = (c['nota_maxima'] as num?)?.toDouble() ?? 0;
+                  final restante = limite - distribuido;
+                  return SizedBox(
+                      width: 230,
+                      child: Card(
+                          margin: EdgeInsets.zero,
+                          child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(c['nome'].toString(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                        '${_numero(distribuido)} de ${_numero(limite)} pts distribuídos'),
+                                    Text(
+                                        restante >= 0
+                                            ? '${_numero(restante)} pts restantes'
+                                            : '${_numero(-restante)} pts acima do limite',
+                                        style: TextStyle(
+                                            color: restante < 0
+                                                ? Colors.red[700]
+                                                : Colors.black54,
+                                            fontSize: 12))
+                                  ]))));
+                }).toList()),
+            const SizedBox(height: 20),
+          ],
+          _painelAtencao(alunos),
+          const SizedBox(height: 20),
           const Text(
-              'Deslize a tabela para os lados para consultar todas as atividades.',
+              'O boletim começa pelos totais de cada tipo e da etapa. Depois vêm as atividades individuais para lançamento. Deslize para os lados para consultar tudo.',
               style: TextStyle(fontSize: 12)),
           const SizedBox(height: 8),
-          if (atividades.isEmpty)
-            const Text('Nenhuma atividade nesta seleção.')
+          if (atividades.isEmpty && criterios.isEmpty)
+            const Text(
+                'A Coordenação ainda não configurou os tipos de pontuação desta etapa.')
           else if (alunos.isEmpty)
             const Text('Nenhum aluno corresponde aos filtros.')
           else
@@ -373,11 +593,33 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                     child: DataTable(
                         headingRowColor:
                             const WidgetStatePropertyAll(Color(0xFFEAF0F8)),
+                        headingRowHeight: 78,
                         dataRowMinHeight: 76,
                         dataRowMaxHeight: 96,
                         columnSpacing: 20,
                         columns: [
                           const DataColumn(label: Text('Aluno')),
+                          ...criterios.map((c) {
+                            final distribuido = atividades
+                                .where((a) => a['criterio_id'] == c['id'])
+                                .fold<double>(
+                                    0,
+                                    (soma, a) =>
+                                        soma +
+                                        ((a['nota_maxima'] as num?)
+                                                ?.toDouble() ??
+                                            0));
+                            return DataColumn(
+                                label: SizedBox(
+                                    width: 135,
+                                    child: Text(
+                                        '${c['nome']}\n${_numero(distribuido)} de ${_numero(c['nota_maxima'] as num?)} pts distribuídos',
+                                        maxLines: 3)));
+                          }),
+                          const DataColumn(
+                              label: SizedBox(
+                                  width: 120,
+                                  child: Text('Total da etapa\ncalculado'))),
                           ...atividades.map((a) => DataColumn(
                               label: SizedBox(
                                   width: 150,
@@ -406,6 +648,17 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                   DataCell(SizedBox(
                                       width: 180,
                                       child: Text(al['nome'].toString()))),
+                                  ...criterios.map((c) => DataCell(SizedBox(
+                                      width: 135,
+                                      child: Text(
+                                          _resumoCriterio(al, c, atividades),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600))))),
+                                  DataCell(SizedBox(
+                                      width: 120,
+                                      child: Text(_totalEtapa(al),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700)))),
                                   ...atividades.map((a) {
                                     final chave = _chave(al['id'], a['id']);
                                     final detalhes = (al['atividades'] as List)
@@ -415,6 +668,8 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                     return DataCell(SizedBox(
                                         width: 150,
                                         child: TextFormField(
+                                            key: ValueKey(
+                                                'grade-${al['id']}-${a['id']}'),
                                             controller: _campos[chave],
                                             enabled: !_salvando &&
                                                 _editavel(a) &&
@@ -426,9 +681,7 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                                 TextInputAction.next,
                                             decoration: InputDecoration(
                                                 isDense: true,
-                                                hintText: _editavel(a)
-                                                    ? 'Pendente'
-                                                    : 'Consulta',
+                                                hintText: '—',
                                                 helperText: [
                                                   'Ausente',
                                                   'Não entregou',

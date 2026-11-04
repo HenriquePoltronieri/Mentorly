@@ -8,9 +8,7 @@ class EnviarCodigoService:
     """Gera e envia o codigo de verificacao em duas etapas."""
 
     def execute(self, email):
-        email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
-        if not email:
-            raise ValueError("Informe o email")
+        email = entrada.email(email)
 
         codigo = gerar_codigo_verificacao()
         CodigoVerificacao.criar(email, codigo)

@@ -10,6 +10,7 @@ from services.activity.create_activity import parse_data
 from services.activity.validacao import (
     validar_ano_da_etapa,
     validar_etapa_e_criterio,
+    validar_limite_do_criterio,
     validar_nota_maxima,
 )
 from erros import RecursoNaoEncontrado
@@ -128,6 +129,17 @@ class UpdateActivityService:
             atual, etapa_id, criterio_id, nota_maxima
         ):
             raise ValueError(MENSAGEM_ATIVIDADE_COM_NOTAS)
+
+        if (nota_maxima is not None or etapa_id is not None or
+                criterio_id is not None or turma_final != atual["turma_id"]):
+            validar_limite_do_criterio(
+                turma_final,
+                etapa_id if etapa_id is not None else atual["etapa_id"],
+                criterio_id if criterio_id is not None else atual["criterio_id"],
+                nota_maxima if nota_maxima is not None else atual["nota_maxima"],
+                atividade_id=atividade_id,
+                coordenacao_id=coordenacao_id,
+            )
 
         Atividade.update(
             atividade_id, titulo, descricao, turma_id,

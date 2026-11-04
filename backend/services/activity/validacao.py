@@ -13,6 +13,7 @@ confirmaria que aquele id existe em algum lugar do sistema.
 """
 
 from models.criterio_model import Criterio
+from models.atividade_model import Atividade
 from models.etapa_model import Etapa
 from services import entrada
 from erros import RecursoNaoEncontrado
@@ -104,3 +105,24 @@ def validar_etapa_e_criterio(coordenacao_id, etapa_id, criterio_id,
         raise RecursoNaoEncontrado("Criterio nao encontrado nesta etapa")
 
     return etapa["id"], criterio["id"]
+
+
+def validar_limite_do_criterio(turma_id, etapa_id, criterio_id, valor,
+                               atividade_id=None, coordenacao_id=None):
+    """Impede distribuir mais pontos que o máximo definido pela Coordenação."""
+    criterio = Criterio.find_by_id(criterio_id, coordenacao_id)
+    if not criterio:
+        raise RecursoNaoEncontrado("Criterio nao encontrado")
+    limite = float(criterio.get("nota_maxima") or 0)
+    atividades = Atividade.find_por_criterio(turma_id, etapa_id, criterio_id)
+    distribuido = sum(
+        float(a.get("nota_maxima") or 0) for a in atividades
+        if atividade_id is None or a["id"] != atividade_id
+    )
+    if distribuido + float(valor) > limite + 1e-9:
+        restante = max(0, limite - distribuido)
+        raise ValueError(
+            "A Coordenação definiu no máximo %.2f pontos para %s nesta etapa. "
+            "Já foram distribuídos %.2f; esta atividade pode valer até %.2f."
+            % (limite, criterio["nome"], distribuido, restante)
+        )

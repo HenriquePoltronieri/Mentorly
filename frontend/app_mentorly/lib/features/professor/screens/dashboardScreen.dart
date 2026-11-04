@@ -238,11 +238,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       title: Text(t['nome'].toString()),
                                       subtitle:
                                           Text('${t['totalAlunos']} alunos'),
-                                      trailing: const Icon(Icons.chevron_right),
+                                      trailing: IconButton(
+                                          tooltip: 'Abrir grade de notas',
+                                          icon: const Icon(
+                                              Icons.table_chart_outlined),
+                                          onPressed: () => Navigator.pushNamed(
+                                              context, AppRoutes.gradeNotas,
+                                              arguments:
+                                                  Map<String, dynamic>.from(
+                                                      t as Map))),
                                       onTap: () => Navigator.pushNamed(
                                           context, AppRoutes.turmaAlunos,
-                                          arguments: Map<String, dynamic>.from(
-                                              t as Map))))))
+                                          arguments: Map<String, dynamic>.from(t as Map))))))
                           .toList())),
           const SizedBox(height: 20),
           _secao(

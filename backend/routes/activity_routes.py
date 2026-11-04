@@ -1,6 +1,6 @@
 from flask import Blueprint
 
-from auth.decorators import professor_required
+from auth.decorators import professor_required, token_na_url_so_neste_download
 from controllers.activity_controller import ActivityController
 
 activity_blueprint = Blueprint("activities", __name__, url_prefix="/api/activities")
@@ -45,3 +45,28 @@ def update_activity(activity_id):
 @professor_required
 def delete_activity(activity_id):
     return activity_controller.delete_activity(activity_id)
+
+
+@activity_blueprint.get("/<int:activity_id>/anexos")
+@professor_required
+def listar_anexos(activity_id):
+    return activity_controller.listar_anexos(activity_id)
+
+
+@activity_blueprint.post("/<int:activity_id>/anexos")
+@professor_required
+def enviar_anexo(activity_id):
+    return activity_controller.enviar_anexo(activity_id)
+
+
+@activity_blueprint.get("/<int:activity_id>/anexos/<int:anexo_id>/download")
+@professor_required
+@token_na_url_so_neste_download
+def baixar_anexo(activity_id, anexo_id):
+    return activity_controller.baixar_anexo(activity_id, anexo_id)
+
+
+@activity_blueprint.delete("/<int:activity_id>/anexos/<int:anexo_id>")
+@professor_required
+def excluir_anexo(activity_id, anexo_id):
+    return activity_controller.excluir_anexo(activity_id, anexo_id)

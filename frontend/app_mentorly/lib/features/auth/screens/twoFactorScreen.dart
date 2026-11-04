@@ -3,19 +3,8 @@ import '../../../app/routes.dart';
 import '../../../core/services/authService.dart';
 import '../../../core/services/apiService.dart';
 
-// tela de verificacao em duas etapas, aberta logo apos o cadastro
-// recebe o email via Navigator.pushNamed(..., arguments: {'email': '...'})
-//
-// IMPORTANTE PRO BACKEND:
-// endpoint esperado -> POST {baseUrl}/api/auth/confirmar-codigo
-// body enviado -> { "email": "...", "codigo": "123456" }
-// resposta esperada em caso de sucesso (200) ->
-// { "token": "...", "nome": "..." }
-// resposta esperada em caso de erro (400/401) ->
-// { "erro": "código inválido ou expirado" }
-//
-// endpoint pra reenviar o codigo -> POST {baseUrl}/api/auth/enviar-codigo
-// body enviado -> { "email": "..." }
+// Confirma que a Coordenação controla o endereço informado. A conta só é
+// criada quando o backend aceita o mesmo código que foi enviado por e-mail.
 class TwoFactorScreen extends StatefulWidget {
   const TwoFactorScreen({super.key});
 
@@ -31,14 +20,16 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
   bool _reenviando = false;
   String? _mensagemErro;
   String? _email;
+  Map<String, dynamic>? _argumentos;
   bool _jaPegouArgumentos = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_jaPegouArgumentos) {
-      final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-      _email = args?['email'];
+      _argumentos =
+          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+      _email = _argumentos?['email']?.toString();
       _jaPegouArgumentos = true;
     }
   }
@@ -57,18 +48,31 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
     });
 
     try {
-      final valido = await _authService.confirmarCodigoDuasEtapas(_email!, _codigoController.text.trim());
-
-      if (valido && mounted) {
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          AppRoutes.coordenacaoHome,
-          (rota) => false, // limpa o historico, nao deixa voltar pro cadastro
+      if (_email == null) {
+        throw ApiException(400, 'E-mail do cadastro não encontrado.');
+      }
+      if (_argumentos?['cadastroCoordenacao'] == true) {
+        await _authService.cadastrarCoordenacao(
+          nome: _argumentos!['nome'].toString(),
+          email: _email!,
+          senha: _argumentos!['senha'].toString(),
+          telefone: _argumentos!['telefone'].toString(),
+          codigoVerificacao: _codigoController.text.trim(),
         );
+        final acesso = await ApiService().get('/acesso');
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(
+            context,
+            acesso['liberado'] == true
+                ? AppRoutes.coordenacaoHome
+                : AppRoutes.acesso,
+            (_) => false);
       } else {
-        setState(() {
-          _mensagemErro = 'Código inválido ou expirado';
-        });
+        final valido = await _authService.confirmarCodigoDuasEtapas(
+            _email!, _codigoController.text.trim());
+        if (!valido) {
+          setState(() => _mensagemErro = 'Código inválido ou expirado');
+        }
       }
     } on ApiException catch (e) {
       setState(() {
@@ -93,7 +97,11 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
     });
 
     try {
-      await _authService.enviarCodigoDuasEtapas(_email!);
+      if (_email == null) throw ApiException(400, 'E-mail não encontrado.');
+      final enviado = await _authService.enviarCodigoDuasEtapas(_email!);
+      if (!enviado) {
+        throw ApiException(503, 'Não foi possível enviar o código.');
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

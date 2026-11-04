@@ -55,7 +55,9 @@ def base_pontos(atividades, criterio, nota_maxima_etapa):
     Se ha 20 pontos planejados, a ponderacao os distribui na escala de 10.
     """
     planejados = sum(float(a.get('nota_maxima') or 0) for a in atividades)
-    parcela = float(nota_maxima_etapa or 0) * float(criterio.get('peso') or 0) / 100
+    parcela = float(criterio.get('nota_maxima') or 0)
+    if parcela <= 0:
+        parcela = float(nota_maxima_etapa or 0) * float(criterio.get('peso') or 0) / 100
     return max(planejados, parcela), planejados, parcela
 
 

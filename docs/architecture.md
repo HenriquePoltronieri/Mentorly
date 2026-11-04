@@ -74,6 +74,14 @@ uma camada é pulada.
 
   calcula notas, não decide aprovação e não escreve no banco.
 
+- **Anexos privados.** Arquivos de atividades passam por validação de formato e tamanho, ficam
+
+  ligados à atividade no MySQL e são baixados por uma autorização de curta duração. Eles não são
+
+  publicados em uma pasta estática; assim, respeitam o vínculo do Professor com a turma e entram
+
+  no mesmo fluxo de backup dos demais dados.
+
 ## No Flutter
 
 - **Tela** — o que o usuário vê e usa. Cuida de botões, campos e listas e exibe o que o backend

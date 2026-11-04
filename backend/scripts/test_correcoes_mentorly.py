@@ -14,6 +14,7 @@ os.environ["DEV_EXPOSE_AUTH_CODES"] = "false"
 from app import create_app
 from database.connection import execute, insert, init_database, install_schema, install_procedures, query_one
 from models.professor_model import hash_convite
+from models.codigo_model import CodigoVerificacao
 from services import email_service, rate_limit
 
 
@@ -28,8 +29,10 @@ class CorrecoesTest(unittest.TestCase):
         rate_limit.limiter.reset()
         self.client = create_app().test_client()
         self.email = "teste-%s@escola.invalid" % uuid.uuid4().hex
+        CodigoVerificacao.criar(self.email, "123456")
         resposta = self.client.post("/api/auth/cadastro-coordenacao", json={
-            "nome": "Escola de teste", "email": self.email, "senha": "senha123", "telefone": "11999999999"})
+            "nome": "Escola de teste", "email": self.email, "senha": "senha123",
+            "telefone": "11999999999", "codigoVerificacao": "123456"})
         self.assertEqual(resposta.status_code, 201, resposta.json)
         self.escola = resposta.json["usuario"]["id"]
         self.coord = {"Authorization": "Bearer " + resposta.json["token"]}
@@ -135,12 +138,16 @@ class CorrecoesTest(unittest.TestCase):
 
     def test_coordenacao_recebe_403_em_toda_area_academica(self):
         for metodo, rota in (("get", "/api/activities"), ("get", "/api/activities/buscar"), ("get", "/api/activities/1"),
-                             ("get", "/api/classes/relatorio/atividades"), ("get", "/api/coordenacao/turmas/1/boletim"),
+                             ("get", "/api/coordenacao/turmas/1/boletim"),
                              ("get", "/api/professor/turmas/1/boletim"), ("get", "/api/professor/alunos/1/estatisticas"),
                              ("get", "/api/professor/dashboard"), ("post", "/api/config/etapas/1/fechar"),
                              ("post", "/api/config/etapas/1/reabrir"), ("get", "/api/atividades/1/notas")):
             with self.subTest(rota=rota):
                 self.assertEqual(getattr(self.client, metodo)(rota, headers=self.coord).status_code, 403)
+        self.assertEqual(
+            self.client.get('/api/classes/relatorio/atividades', headers=self.coord).status_code,
+            200,
+        )
         self.assertNotIn("total_atividades", self.client.get("/api/dashboard/resumo", headers=self.coord).json)
 
     def test_professor_fecha_apenas_ano_vinculado(self):

@@ -1,0 +1,22 @@
+{
+  "/api/coordenacao/professores": {
+    "ms": 4093.3,
+    "status": 200
+  },
+  "/api/config/etapas": {
+    "ms": 10208.18,
+    "status": 200
+  },
+  "/api/config/anos-letivos": {
+    "ms": 2044.68,
+    "status": 200
+  },
+  "/api/classes": {
+    "ms": 4103.32,
+    "status": 200
+  },
+  "/api/dashboard/resumo": {
+    "ms": 2094.45,
+    "status": 200
+  }
+}

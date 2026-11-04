@@ -7,6 +7,7 @@ import '../../../../core/widgets/identidade_visual.dart';
 import '../../models/atividadeModel.dart';
 import '../../models/notaModel.dart';
 import '../../widgets/professorTopBar.dart';
+import '../../widgets/atividade_anexos.dart';
 import 'corrigirRespostaIaDialog.dart';
 import 'lancarNotasModal.dart';
 
@@ -416,7 +417,10 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                           }
                                         },
                                   icon: const Icon(Icons.upload_file),
-                                  label: const Text('Importar notas'))
+                                  label: const Text('Importar notas')),
+                              if (_atividade != null)
+                                AtividadeAnexos(
+                                    atividadeId: _atividade!.id, compacto: true)
                             ]),
                             if (_notas.isEmpty)
                               const Text(

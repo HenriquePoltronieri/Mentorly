@@ -16,6 +16,7 @@ class ConfigAnoLetivoController {
   List<CriterioAvaliacaoModel> criterios = [];
   final Map<int, List<String>> rascunhosNotas = {};
   final Map<String, String> rascunhosPesos = {};
+  final Map<String, String> rascunhosMaximos = {};
   List<String>? criteriosSelecionados;
   int? anoLetivo;
   String? _sessaoRascunho;
@@ -49,6 +50,7 @@ class ConfigAnoLetivoController {
     _sessaoRascunho = _api.token;
     rascunhosNotas.clear();
     rascunhosPesos.clear();
+    rascunhosMaximos.clear();
     criteriosSelecionados = null;
     etapas = [];
     criterios = [];
@@ -97,7 +99,8 @@ class ConfigAnoLetivoController {
     etapa.notaMaxima = maxima;
   }
 
-  Future<void> salvarConfiguracao(Map<String, double> pesos) async {
+  Future<void> salvarConfiguracao(Map<String, double> pesos,
+      Map<String, List<double>> maximosPorCriterio) async {
     if (anoLetivo == null) throw Exception('Escolha um ano letivo.');
     final resposta =
         await _api.put('/config/anos-letivos/$anoLetivo/configuracao', {
@@ -108,8 +111,13 @@ class ConfigAnoLetivoController {
                 'nota_maxima': e.notaMaxima,
               })
           .toList(),
-      'criterios':
-          pesos.entries.map((e) => {'nome': e.key, 'peso': e.value}).toList(),
+      'criterios': pesos.entries
+          .map((e) => {
+                'nome': e.key,
+                'peso': e.value,
+                'notas_maximas': maximosPorCriterio[e.key],
+              })
+          .toList(),
     });
     _lerConfiguracao(resposta as List);
   }

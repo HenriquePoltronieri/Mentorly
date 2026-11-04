@@ -9,7 +9,9 @@ A Coordenacao continua podendo LER (relatorio e busca), sempre filtrada
 pela escola dela.
 """
 
-from flask import jsonify, request
+from io import BytesIO
+
+from flask import jsonify, request, send_file
 
 from auth.decorators import coordenacao_atual, eh_professor, usuario_atual_id
 from services.activity.create_activity import CreateActivityService
@@ -18,6 +20,7 @@ from services.activity.get_activities import GetActivitiesService
 from services.activity.get_activity import GetActivityService
 from services.activity.buscar_atividades import BuscarAtividadesService
 from services.activity.update_activity import UpdateActivityService
+from services.activity.anexos import AnexosAtividadeService
 from services.entrada import inteiro
 from erros import RecursoNaoEncontrado
 
@@ -28,6 +31,8 @@ def _professor_id_ou_none():
 
 
 class ActivityController:
+    anexos = AnexosAtividadeService()
+
     def list_activities(self):
         turma_id = request.args.get("class_id", type=int)
         if turma_id is None:
@@ -119,3 +124,48 @@ class ActivityController:
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
         return "", 204
+
+    def listar_anexos(self, activity_id):
+        try:
+            return jsonify(self.anexos.listar(
+                activity_id, usuario_atual_id(), coordenacao_atual()))
+        except RecursoNaoEncontrado as erro:
+            return jsonify({"error": str(erro)}), 404
+
+    def enviar_anexo(self, activity_id):
+        arquivo = request.files.get("arquivo")
+        if arquivo is None:
+            return jsonify({"error": "Envie o arquivo no campo 'arquivo'"}), 400
+        try:
+            anexo = self.anexos.enviar(
+                activity_id, usuario_atual_id(), coordenacao_atual(),
+                arquivo.filename, arquivo.read())
+            return jsonify(anexo), 201
+        except RecursoNaoEncontrado as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400
+
+    def baixar_anexo(self, activity_id, anexo_id):
+        try:
+            anexo = self.anexos.baixar(
+                activity_id, anexo_id, usuario_atual_id(), coordenacao_atual())
+            return send_file(
+                BytesIO(anexo["conteudo"]),
+                mimetype=anexo["tipo_mime"],
+                as_attachment=True,
+                download_name=anexo["nome_original"],
+                max_age=0,
+            )
+        except RecursoNaoEncontrado as erro:
+            return jsonify({"error": str(erro)}), 404
+
+    def excluir_anexo(self, activity_id, anexo_id):
+        try:
+            self.anexos.excluir(
+                activity_id, anexo_id, usuario_atual_id(), coordenacao_atual())
+            return "", 204
+        except RecursoNaoEncontrado as erro:
+            return jsonify({"error": str(erro)}), 404
+        except ValueError as erro:
+            return jsonify({"error": str(erro)}), 400

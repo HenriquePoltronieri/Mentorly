@@ -1,6 +1,6 @@
 # Funcionalidades
 
-O Mentorly tem hoje **27 funcionalidades demonstráveis**, contadas de forma conservadora: cada
+O Mentorly tem hoje **28 funcionalidades demonstráveis**, contadas de forma conservadora: cada
 linha abaixo tem tela no aplicativo, endpoint na API e regra no backend. Todas passam pelas
 camadas explicadas em [architecture.md](architecture.md).
 
@@ -41,13 +41,14 @@ Repository `repositories/consultas.py`.
 | 23 | Gerar atividade com IA, revisar e salvar pelo fluxo normal | `gerarAtividadeIaDialog` (dentro de `adicionarAtividadeModal`) | `GeracaoAtividadeIaService` | `POST /api/professor/turmas/<id>/atividades/gerar` | `GerarAtividadeIaService`, `AIClient` | `Turma`, `Etapa`, `Criterio` (a criação usa `Atividade`) |
 | 24 | Corrigir resposta discursiva com IA: sugestão revisada pelo Professor, nota lançada pelo fluxo normal | `corrigirRespostaIaDialog` (dentro de `atividadeNotasScreen`) | `CorrecaoAssistidaIaService` | `POST /api/professor/atividades/<id>/correcao-assistida` | `CorrigirRespostaIaService`, `AIClient` | `Atividade`, `Etapa` (a nota é gravada por `LancarNotasService`, não pela IA) |
 | 25 | Feedback e plano de recuperação por IA para um aluno em uma etapa (somente leitura) | `feedbackIaDialog` (dentro de `alunoDetailScreen`) | `FeedbackIaService` | `POST /api/professor/alunos/<id>/feedback-ia` | `GerarFeedbackIaService`, `AIClient` | `calculo.py`, `Aluno`, `Etapa` (nenhuma escrita) |
+| 26 | Anexar, listar, baixar e remover arquivos privados da atividade | `adicionarAtividadeModal`, `atividadeNotasScreen` | `AtividadeAnexosService` | `GET`/`POST /api/activities/<id>/anexos`, `GET`/`DELETE /<anexo_id>` | `AnexosAtividadeService` | `AtividadeAnexo` |
 
 ## Administração do Mentorly
 
 | # | Funcionalidade | Tela Flutter | Service/Controller Dart | Endpoint | Service backend | Model / Repository |
 |---|---|---|---|---|---|---|
-| 26 | Gerenciar o acesso das escolas: liberar, suspender e reativar conta, com plano, validade e motivo | `adminScreen`, `_EditarAcesso` | `AdminService.salvar` | `PUT /api/admin/escolas/<id>/acesso` | `AlterarAcessoAdminService` | `AcessoEscola`, `AcessoHistorico` |
-| 27 | Excluir definitivamente uma conta de Coordenação após confirmar o e-mail, incluindo dados pedagógicos vinculados | `adminScreen`, `_ExcluirEscola` | `AdminService.excluir` | `DELETE /api/admin/escolas/<id>` | `ExcluirEscolaService` | `Coordenacao.excluir_com_dependencias` |
+| 27 | Gerenciar o acesso das escolas: liberar, suspender e reativar conta, com plano, validade e motivo | `adminScreen`, `_EditarAcesso` | `AdminService.salvar` | `PUT /api/admin/escolas/<id>/acesso` | `AlterarAcessoAdminService` | `AcessoEscola`, `AcessoHistorico` |
+| 28 | Excluir definitivamente uma conta de Coordenação após confirmar o e-mail, incluindo dados pedagógicos vinculados | `adminScreen`, `_ExcluirEscola` | `AdminService.excluir` | `DELETE /api/admin/escolas/<id>` | `ExcluirEscolaService` | `Coordenacao.excluir_com_dependencias` |
 
 O Professor também edita e exclui aluno nas turmas dele (`PUT`/`DELETE /api/professor/alunos/<id>`,
 os mesmos Services da funcionalidade 7), e importa alunos por planilha.
@@ -78,16 +79,17 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
     avisam o que será apagado em cascata.
 - **Segurança e robustez.** Entradas inválidas respondem 400, não 500; "não encontrado" é uma
   exceção própria (`RecursoNaoEncontrado`) e bug interno responde 500 genérico; o JWT só vale no
-  cabeçalho (exceto nos 3 downloads de modelo de planilha); sessão inválida no app limpa a sessão e
+  cabeçalho (exceto nas rotas GET de download explicitamente marcadas); sessão inválida no app limpa a sessão e
   volta ao login; login, códigos, convites e IA têm limite de requisições (429 com `Retry-After`).
 - **Bloqueio de alterações em etapa fechada** (atividade, nota e configuração), até a Coordenação reabrir.
 
 ## Fora da lista
 
 - `GET /api/dashboard/resumo` (totais da escola) existe na API e é testado, mas ainda não tem tela.
-- A verificação em duas etapas (`/api/auth/enviar-codigo`, `/confirmar-codigo`) existe no backend e
-  no `AuthService`, mas está fora do fluxo de login. A decisão sobre usá-la está em aberto
-  ([roadmap.md](roadmap.md)).
+- A verificação por código (`/api/auth/enviar-codigo`) faz parte do cadastro da Coordenação:
+  primeiro o formato é validado, depois o código é enviado, e a conta só é criada quando o
+  backend consome o código correto e ainda válido. O endpoint `/confirmar-codigo` permanece
+  disponível para outros fluxos de verificação.
 
 ## Como chegar em cada tela
 
@@ -110,18 +112,20 @@ os mesmos Services da funcionalidade 7), e importa alunos por planilha.
   atividade**, o botão **Gerar com IA** (23) preenche o formulário com uma sugestão revisada, e quem
   salva continua sendo o **Adicionar**; na tela de notas, o botão ✨ de cada aluno abre a **correção
   assistida** (24), que só preenche o campo de nota, e quem grava continua sendo o **Salvar notas**;
+  o botão **Arquivos da atividade** abre os materiais privados usados na correção (26);
   na tela de desempenho do aluno, cada etapa tem **Gerar feedback com IA** (25), somente leitura.
 
 ## Situação dos testes
 
-Os testes automáticos abaixo passam no estado atual do repositório (21/10/2026). Nenhum chama a
+Os testes automáticos abaixo passam no estado atual do repositório (04/11/2026). Nenhum chama a
 Groq nem envia e-mail.
 
 | Teste | O que cobre | Resultado |
 |---|---|---|
 | `python scripts/smoke_db.py` | Escrita, leitura, isolamento por FK composta, regras do ano letivo no banco e procedures | OK |
 | `python scripts/smoke_api.py` | API de ponta a ponta: papéis, isolamento, ano letivo, transferência, professores, IA (9A–9D com provedor simulado) e as regras de integridade e segurança da auditoria final | 944 verificações, 0 falhas |
-| `python scripts/test_calculo.py` | Regras do motor de cálculo, inclusive a fronteira da nota mínima, sem banco | 20 testes, OK |
+| `python scripts/test_calculo.py` | Regras do motor de cálculo, inclusive a fronteira da nota mínima, sem banco | 23 testes, OK |
+| `python scripts/test_anexos_atividade.py` | Formatos, assinatura real, tamanho, limite de quantidade, vínculo do Professor e etapa fechada | 6 testes, OK |
 | `python scripts/test_config_dev.py` | Padrões seguros de `FLASK_DEBUG` e `DEV_EXPOSE_AUTH_CODES`; ausência de segredos nos testes | 12 testes, OK |
 | `python scripts/test_rate_limit.py` | Janela deslizante, `Retry-After`, limpeza de memória e concorrência | 15 testes, OK |
 | `python scripts/test_erros_nao_encontrado.py` | 404 só para recurso inexistente; `KeyError`/`IndexError` viram 500 genérico; trava de código-fonte | 12 testes, OK |
@@ -134,7 +138,7 @@ Groq nem envia e-mail.
 | `python scripts/test_migracao_ano_letivo.py` | Migração do ano letivo sobre um banco no formato antigo: preserva dados, é idempotente e retoma uma execução interrompida | 24 verificações, 0 falhas |
 | `python scripts/test_migracao_transferencia_aluno.py` | Migração do histórico de turma sobre um banco legado | 8 verificações, 0 falhas |
 | `python scripts/test_migracao_professor_habilitado.py` | Migração de `habilitado`: legado, preservação e idempotência | 8 verificações, 0 falhas |
-| `flutter test` | Login e primeiro acesso, sessão inválida, limites (429), IA 9A–9D, avisos de exclusão, mensagens de convite, relatório de turmas, lista de atividades e modelos | 149 testes, OK |
+| `flutter test` | Login e primeiro acesso, sessão inválida, limites (429), IA 9A–9D, avisos de exclusão, mensagens de convite, relatório de turmas, lista de atividades e modelos | 151 testes, OK |
 | `flutter analyze --no-fatal-infos` | Análise estática do Flutter | 0 warnings, 0 errors; 92 infos de estilo |
 
 Esses testes cobrem a API e a lógica e a maior parte das telas por testes de widget, não a interface

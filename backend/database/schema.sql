@@ -308,6 +308,29 @@ CREATE TABLE IF NOT EXISTS atividade (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
+-- anexos privados da atividade. O conteudo fica no banco para participar
+-- dos backups e nunca e servido por uma pasta publica.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS atividade_anexo (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    coordenacao_id INT NOT NULL,
+    atividade_id   INT NOT NULL,
+    professor_id   INT NOT NULL,
+    nome_original  VARCHAR(200) NOT NULL,
+    tipo_mime      VARCHAR(100) NOT NULL,
+    tamanho_bytes  INT UNSIGNED NOT NULL,
+    conteudo       LONGBLOB NOT NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_anexo_atividade (coordenacao_id, atividade_id),
+    CONSTRAINT fk_anexo_atividade
+        FOREIGN KEY (atividade_id) REFERENCES atividade (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_anexo_professor
+        FOREIGN KEY (professor_id) REFERENCES professor (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
 -- nota: uma por (atividade, aluno). Lancada so pelo Professor.
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS nota (
