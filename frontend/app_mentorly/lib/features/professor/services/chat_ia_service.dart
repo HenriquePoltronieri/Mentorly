@@ -173,11 +173,28 @@ class ConversaIa extends ChangeNotifier {
           .skip(anteriores.length > 10 ? anteriores.length - 10 : 0)
           .map((m) => {'role': m['role'], 'content': m['content']})
           .toList();
+      Map<String, dynamic>? focoAnterior;
+      for (final mensagem in anteriores.reversed) {
+        if (mensagem['role'] != 'assistant' || mensagem['atalhos'] is! List) {
+          continue;
+        }
+        final atalhos = mensagem['atalhos'] as List;
+        if (atalhos.isEmpty || atalhos.first is! Map) continue;
+        final atalho = (atalhos.first as Map).cast<String, dynamic>();
+        if (atalho['turma_id'] is int) {
+          focoAnterior = {
+            'turma_id': atalho['turma_id'],
+            if (atalho['aluno_id'] is int) 'aluno_id': atalho['aluno_id'],
+          };
+          break;
+        }
+      }
       final resposta = await ApiService().post('/professor/ia/chat', {
         'mensagem': texto,
         if (turmaId != null) 'turma_id': turmaId,
         if (alunoId != null) 'aluno_id': alunoId,
         'historico': recentes,
+        if (focoAnterior != null) 'foco_anterior': focoAnterior,
       });
       if (ApiService().token != token) return;
       mensagens.add({

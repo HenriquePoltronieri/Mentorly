@@ -81,6 +81,10 @@ class ChatTest(TestCase):
     def test_contrato_invalido_nao_e_exibido(self):
         with self.assertRaises(AIResponseError): _validar({"fatos": [], "medidas": ["inventado"]})
 
+    def test_resposta_academica_vazia_e_rejeitada(self):
+        with self.assertRaises(AIResponseError):
+            _validar({"tipo": "academico", "fatos": [], "medidas": []})
+
     def test_pedido_fora_do_escopo_nao_vira_resumo_repetido(self):
         client, stats = MagicMock(), MagicMock()
         resposta = ChatProfessorService(client, stats).execute(
@@ -94,7 +98,12 @@ class ChatTest(TestCase):
         client, stats = MagicMock(), MagicMock()
         stats.execute.return_value = fixture()
         client.gerar.return_value = {"tipo": "academico", "fatos": [{"turma_ref": "Turma 1", "aluno_ref": None, "metrica": "resumo"}], "medidas": []}
-        saida = ChatProfessorService(client, stats).execute(1, 1, {"turma_id": 7, "mensagem": "Resumo", "historico": [{"role": "user", "content": "Oi"}]})
+        saida = ChatProfessorService(client, stats).execute(1, 1, {
+            "turma_id": 7,
+            "mensagem": "Resumo",
+            "historico": [{"role": "user", "content": "Oi"}],
+            "foco_anterior": {"turma_id": 7, "aluno_id": 3},
+        })
         payload = client.gerar.call_args.args[0]
         self.assertEqual(payload["historico"][0]["content"], "Oi")
         self.assertEqual(payload["turmas"][0]["referencia"], "Turma 1")
@@ -105,8 +114,44 @@ class ChatTest(TestCase):
         self.assertNotIn("matricula", str(payload))
         self.assertNotIn("telefone", str(payload))
         self.assertNotIn("'id'", str(payload))
+        self.assertEqual(payload["foco_anterior"], {
+            "turma_ref": "Turma 1", "aluno_ref": "Aluno 1"
+        })
         self.assertIn("Turma teste", saida["resposta"])
         stats.execute.assert_called_once_with(1, 1, 7)
+
+    def test_resposta_identica_para_pergunta_nova_e_gerada_novamente(self):
+        stats = MagicMock()
+        stats.execute.return_value = fixture()
+        repetida = {
+            "tipo": "academico",
+            "fatos": [{"turma_ref": "Turma 1", "aluno_ref": None, "metrica": "resumo"}],
+            "medidas": [],
+        }
+        anterior = renderizar({
+            "tipo": "academico",
+            "fatos": [{"turma_id": 7, "aluno_id": None, "metrica": "resumo"}],
+            "medidas": [],
+        }, [fixture()])["resposta"]
+        client = MagicMock()
+        client.gerar.side_effect = [repetida, {
+            "tipo": "academico",
+            "fatos": [{"turma_ref": "Turma 1", "aluno_ref": None, "metrica": "dificuldade"}],
+            "medidas": [],
+        }]
+
+        saida = ChatProfessorService(client, stats).execute(1, 1, {
+            "turma_id": 7,
+            "mensagem": "Onde a turma tem mais dificuldade?",
+            "historico": [
+                {"role": "user", "content": "Resuma a turma"},
+                {"role": "assistant", "content": anterior},
+            ],
+        })
+
+        self.assertEqual(client.gerar.call_count, 2)
+        self.assertTrue(client.gerar.call_args.args[0]["evitar_repeticao"])
+        self.assertIn("menor média", saida["resposta"])
 
     def test_limite_mensagem_e_historico(self):
         s = ChatProfessorService(MagicMock(), MagicMock())

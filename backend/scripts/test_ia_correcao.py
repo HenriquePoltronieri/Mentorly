@@ -458,7 +458,7 @@ class AIClientCasoTest(unittest.TestCase):
                 with self.assertRaises(AIResponseError):
                     cliente.gerar({}, self._caso())
 
-    def test_timeout_e_falha_do_provedor_nao_sao_repetidos(self):
+    def test_timeout_e_repetido_uma_vez(self):
         for erro in (TimeoutError("tempo excedido"),):
             chamadas = []
 
@@ -468,7 +468,7 @@ class AIClientCasoTest(unittest.TestCase):
 
             with self.assertRaises(AIProviderError):
                 self._cliente(abrir).gerar({}, self._caso())
-            self.assertEqual(len(chamadas), 1)
+            self.assertEqual(len(chamadas), 2)
 
     def test_sem_chave_falha_sem_tentar_rede(self):
         chamadas = []

@@ -343,6 +343,38 @@ void main() {
       await t.pumpWidget(const SizedBox());
     }, () => MockClient((_) async => resposta(gradeTodasEtapasFixture())));
   });
+  testWidgets('falha 500 da IA vira mensagem amigável na grade', (t) async {
+    t.view.physicalSize = const Size(1400, 1000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await http.runWithClient(() async {
+      await t.pumpWidget(
+          tela(const GradeNotasScreen(), args: {'id': 7, 'nome': '7A'}));
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.text('Gerar sugestões com IA'), 400,
+          scrollable: gradeScrollable());
+      await t.drag(gradeScrollable(), const Offset(0, -180));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Gerar sugestões com IA'));
+      await t.pumpAndSettle();
+      expect(
+          find.text(
+              'Não foi possível gerar as sugestões agora. Tente novamente em instantes.'),
+          findsOneWidget);
+      expect(find.text('Erro interno do servidor.'), findsNothing);
+      await t.pumpWidget(const SizedBox());
+    },
+        () => MockClient((r) async {
+              if (r.method == 'POST' && r.url.path.endsWith('/insights')) {
+                return http.Response(
+                    jsonEncode({'error': 'Erro interno do servidor.'}), 500,
+                    headers: {
+                      'content-type': 'application/json; charset=utf-8'
+                    });
+              }
+              return resposta(gradeComResumoFixture());
+            }));
+  });
   testWidgets('recuperação de rascunho preserva nota alterada no servidor',
       (t) async {
     await RascunhoNotasService('atividade.8').gravar({

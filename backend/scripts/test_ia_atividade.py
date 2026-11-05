@@ -363,7 +363,7 @@ class AIClientCasoTest(unittest.TestCase):
             self._cliente(abrir).gerar({}, caso_gerar_atividade(2, "mista"))
         self.assertEqual(len(chamadas), 2)
 
-    def test_timeout_e_indisponibilidade_nao_sao_repetidos(self):
+    def test_timeout_e_repetido_uma_vez(self):
         chamadas = []
 
         def abrir(*args, **kwargs):
@@ -372,7 +372,7 @@ class AIClientCasoTest(unittest.TestCase):
 
         with self.assertRaises(AIProviderError):
             self._cliente(abrir).gerar({}, caso_gerar_atividade(2, "mista"))
-        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(len(chamadas), 2)
 
     def test_sem_chave_falha_sem_tentar_rede(self):
         chamadas = []

@@ -7,6 +7,7 @@ banco, nao altera dados e nao participa de nenhuma regra de nota.
 import json
 import logging
 import time
+from http.client import HTTPException
 from typing import Callable, NamedTuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -24,9 +25,11 @@ MENSAGEM_INDISPONIVEL = (
 # JSON sai truncado e o provedor recusa (json_validate_failed). Medido com o
 # openai/gpt-oss-20b da Groq: 900 falhava, ~1400 tokens bastam com folga em 2500.
 MAX_TOKENS_RESPOSTA = 2500
-# A saida do modelo e probabilistica: uma resposta invalida e repetida uma vez.
-# Falhas de rede, timeout, chave ou limite de uso nao sao repetidas.
+# A saida do modelo e probabilistica e a rede pode oscilar: uma resposta
+# invalida ou uma falha transitoria e repetida uma vez. Erros permanentes
+# (chave, permissao, modelo inexistente e limite 429) retornam imediatamente.
 TENTATIVAS_RESPOSTA = 2
+ESPERA_RETRY_SEGUNDOS = 0.25
 
 SYSTEM_PROMPT = """Voce e um assistente pedagogico do Mentorly.
 Responda em portugues do Brasil e use exclusivamente os dados academicos
@@ -75,7 +78,9 @@ class AIConfigurationError(AIError):
 
 
 class AIProviderError(AIError):
-    pass
+    def __init__(self, mensagem, *, transitorio=False):
+        super().__init__(mensagem)
+        self.transitorio = transitorio
 
 
 class AIResponseError(AIError):
@@ -187,6 +192,15 @@ class AIClient:
                     "Resposta de IA invalida: modelo=%s tentativa=%d; repetindo",
                     self.model, tentativa,
                 )
+                time.sleep(ESPERA_RETRY_SEGUNDOS)
+            except AIProviderError as erro:
+                if not erro.transitorio or tentativa == TENTATIVAS_RESPOSTA:
+                    raise
+                logger.warning(
+                    "Falha transitoria da IA: modelo=%s tentativa=%d; repetindo",
+                    self.model, tentativa,
+                )
+                time.sleep(ESPERA_RETRY_SEGUNDOS)
 
     def _gerar_uma_vez(self, payload, caso):
         corpo = json.dumps({
@@ -232,14 +246,19 @@ class AIClient:
             )
             if erro.code == 400 and _geracao_json_falhou(erro):
                 raise AIResponseError(MENSAGEM_INDISPONIVEL) from erro
-            raise AIProviderError(MENSAGEM_INDISPONIVEL) from erro
-        except (URLError, TimeoutError, OSError) as erro:
+            raise AIProviderError(
+                MENSAGEM_INDISPONIVEL,
+                transitorio=erro.code >= 500,
+            ) from erro
+        except (URLError, TimeoutError, OSError, HTTPException) as erro:
             logger.warning(
                 "Chamada de IA indisponivel: modelo=%s duracao_ms=%d tipo=%s",
                 self.model, int((time.monotonic() - inicio) * 1000),
                 type(erro).__name__,
             )
-            raise AIProviderError(MENSAGEM_INDISPONIVEL) from erro
+            raise AIProviderError(
+                MENSAGEM_INDISPONIVEL, transitorio=True
+            ) from erro
 
         duracao = int((time.monotonic() - inicio) * 1000)
         logger.info(

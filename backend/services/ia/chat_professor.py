@@ -52,6 +52,10 @@ reforco, recuperacao, conversa, reagrupamento, coordenacao, conferir.
 Evite repetir fatos que já aparecem no histórico, salvo se o Professor pedir
 para rever ou detalhar a mesma informação. Se a pergunta acadêmica estiver
 ambígua demais, classifique como esclarecer.
+Quando houver foco_anterior, use esse aluno ou turma nas perguntas de
+continuação, como "quais medidas aplicar?". Quando evitar_repeticao for true,
+a pergunta atual é diferente e você deve selecionar fatos ou medidas que
+avancem a conversa, sem devolver a mesma resposta anterior.
 Nunca invente uma referência. Retorne apenas JSON:
 { "tipo": "academico",
   "fatos": [{"turma_ref": "Turma 1", "aluno_ref": null, "metrica": "resumo"}],
@@ -89,6 +93,8 @@ def _validar(dados):
     if any(not isinstance(m, str) or m not in MEDIDAS for m in dados["medidas"]):
         raise AIResponseError(MENSAGEM_INDISPONIVEL)
     if tipo != "academico" and (dados["fatos"] or dados["medidas"]):
+        raise AIResponseError(MENSAGEM_INDISPONIVEL)
+    if tipo == "academico" and not dados["fatos"] and not dados["medidas"]:
         raise AIResponseError(MENSAGEM_INDISPONIVEL)
     return {**dados, "tipo": tipo}
 
@@ -333,6 +339,9 @@ class ChatProfessorService:
             if not isinstance(h, dict) or h.get("role") not in ("user", "assistant") or not isinstance(h.get("content"), str) or len(h["content"]) > 4000:
                 raise ValueError("Histórico de conversa inválido.")
             recentes.append({"role": h["role"], "content": h["content"]})
+        foco_anterior = dados.get("foco_anterior")
+        if foco_anterior is not None and not isinstance(foco_anterior, dict):
+            raise ValueError("Foco anterior inválido.")
         turma_id = dados.get("turma_id")
         aluno_id = dados.get("aluno_id")
         if aluno_id is not None:
@@ -362,10 +371,40 @@ class ChatProfessorService:
             {"role": item["role"], "content": _substituir_identificadores(item["content"], substituicoes)}
             for item in recentes
         ]
-        resultado = self.client.gerar({
+        foco_privado = None
+        if foco_anterior:
+            foco_turma = inteiro(foco_anterior.get("turma_id"), "Turma")
+            foco_aluno = foco_anterior.get("aluno_id")
+            foco_aluno = inteiro(foco_aluno, "Aluno") if foco_aluno is not None else None
+            turma_ref = next((ref for ref, tid in mapa_turmas.items() if tid == foco_turma), None)
+            aluno_ref = None
+            if turma_ref and foco_aluno is not None:
+                aluno_ref = next((ref for (tref, ref), aid in mapa_alunos.items()
+                                  if tref == turma_ref and aid == foco_aluno), None)
+            if turma_ref and (foco_aluno is None or aluno_ref):
+                foco_privado = {"turma_ref": turma_ref, "aluno_ref": aluno_ref}
+        payload = {
             "mensagem": mensagem_privada,
             "historico": historico_privado,
             "turmas": contexto,
-        }, CASO_CHAT)
+            **({"foco_anterior": foco_privado} if foco_privado else {}),
+        }
+        resultado = self.client.gerar(payload, CASO_CHAT)
         resultado = _resolver_referencias(resultado, mapa_turmas, mapa_alunos)
-        return renderizar(resultado, turmas)
+        resposta = renderizar(resultado, turmas)
+
+        ultima_resposta = next((item["content"] for item in reversed(recentes)
+                                if item["role"] == "assistant"), None)
+        ultima_pergunta = next((item["content"] for item in reversed(recentes)
+                                if item["role"] == "user"), None)
+        pergunta_nova = (ultima_pergunta is None or
+                         mensagem.strip().casefold() != ultima_pergunta.strip().casefold())
+        if (ultima_resposta and pergunta_nova and
+                resposta["resposta"].strip() == ultima_resposta.strip()):
+            payload["evitar_repeticao"] = True
+            resultado = self.client.gerar(payload, CASO_CHAT)
+            resultado = _resolver_referencias(resultado, mapa_turmas, mapa_alunos)
+            resposta = renderizar(resultado, turmas)
+            if resposta["resposta"].strip() == ultima_resposta.strip():
+                return renderizar({"tipo": "esclarecer", "fatos": [], "medidas": []}, turmas)
+        return resposta

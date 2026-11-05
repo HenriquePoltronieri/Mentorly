@@ -221,6 +221,7 @@ void main() {
       await t.tap(find.byTooltip('Enviar mensagem'));
       await t.pumpAndSettle();
       expect((pedidos.last['historico'] as List).length, 2);
+      expect(pedidos.last['foco_anterior'], {'turma_id': 7, 'aluno_id': 2});
       expect(find.byTooltip('Copiar resposta'), findsWidgets);
       await t.tap(find.text('Nova conversa'));
       await t.pumpAndSettle();
@@ -238,7 +239,12 @@ void main() {
               if (++chamadas == 1) {
                 return json({'error': 'IA indisponível.'}, 503);
               }
-              return json({'resposta': 'Resumo real da turma.', 'atalhos': []});
+              return json({
+                'resposta': 'Resumo real da turma.',
+                'atalhos': [
+                  {'turma_id': 7, 'aluno_id': 2, 'nome': 'Ana'}
+                ]
+              });
             }));
   });
 

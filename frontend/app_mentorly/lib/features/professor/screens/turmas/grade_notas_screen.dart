@@ -273,9 +273,9 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
       if (mounted) setState(() => _insights = resultado);
     } catch (e) {
       if (mounted) {
-        setState(() => _erroIa = e is ApiException
+        setState(() => _erroIa = e is ApiException && e.statusCode < 500
             ? e.mensagem
-            : 'Não foi possível gerar as sugestões agora.');
+            : 'Não foi possível gerar as sugestões agora. Tente novamente em instantes.');
       }
     } finally {
       if (mounted) setState(() => _gerandoIa = false);

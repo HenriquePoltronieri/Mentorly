@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import unittest
+from http.client import IncompleteRead
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
@@ -221,11 +222,52 @@ class AIClientTest(unittest.TestCase):
             self._cliente(abrir).gerar({})
 
     def test_erro_de_rede_e_tratado_como_indisponibilidade(self):
+        chamadas = []
+
         def abrir(*args, **kwargs):
+            chamadas.append(1)
             raise URLError("indisponivel")
 
         with self.assertRaises(AIProviderError):
             self._cliente(abrir).gerar({})
+        self.assertEqual(len(chamadas), 2)
+
+    def test_falha_de_protocolo_e_repetida_sem_virar_erro_interno(self):
+        chamadas = []
+
+        def abrir(*args, **kwargs):
+            chamadas.append(1)
+            raise IncompleteRead(b"resposta incompleta")
+
+        with self.assertRaises(AIProviderError):
+            self._cliente(abrir).gerar({})
+        self.assertEqual(len(chamadas), 2)
+
+    def test_http_500_e_repetido_uma_vez(self):
+        chamadas = []
+
+        def abrir(requisicao, timeout):
+            chamadas.append(1)
+            raise HTTPError(
+                requisicao.full_url, 503, "indisponivel", {}, io.BytesIO(b"{}")
+            )
+
+        with self.assertRaises(AIProviderError):
+            self._cliente(abrir).gerar({})
+        self.assertEqual(len(chamadas), 2)
+
+    def test_http_401_nao_e_repetido(self):
+        chamadas = []
+
+        def abrir(requisicao, timeout):
+            chamadas.append(1)
+            raise HTTPError(
+                requisicao.full_url, 401, "nao autorizado", {}, io.BytesIO(b"{}")
+            )
+
+        with self.assertRaises(AIProviderError):
+            self._cliente(abrir).gerar({})
+        self.assertEqual(len(chamadas), 1)
 
     def test_json_invalido_e_rejeitado(self):
         cliente = self._cliente(lambda *args, **kwargs: RespostaFalsa(b"nao-json"))
@@ -289,14 +331,11 @@ class AIClientTest(unittest.TestCase):
         self.assertEqual(self._cliente(abrir).gerar({}), INSIGHTS)
         self.assertEqual(len(chamadas), 2)
 
-    def test_falhas_do_provedor_nao_sao_repetidas(self):
+    def test_falhas_permanentes_do_provedor_nao_sao_repetidas(self):
         for erro in (
             HTTPError("https://x", 401, "Unauthorized", {}, io.BytesIO(b"{}")),
             HTTPError("https://x", 429, "Too Many", {}, io.BytesIO(b"{}")),
             HTTPError("https://x", 400, "Bad", {}, io.BytesIO(b"{}")),
-            HTTPError("https://x", 500, "Erro", {}, None),
-            TimeoutError("tempo excedido"),
-            URLError("indisponivel"),
         ):
             chamadas = []
 
