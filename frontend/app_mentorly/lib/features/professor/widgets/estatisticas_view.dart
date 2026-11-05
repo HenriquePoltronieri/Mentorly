@@ -26,7 +26,9 @@ String notaAtividade(Map atividade) => atividade['nota'] == null
     : '${formatarPontos(atividade['nota'])} de ${formatarPontos(atividade['nota_maxima'])}';
 String pontosAvaliados(Map aluno) => aluno['pontos_obtidos'] == null
     ? 'Sem notas lançadas'
-    : '${formatarMetrica(aluno['pontos_obtidos'])}/${formatarMetrica(aluno['pontos_avaliados'])} pts avaliados';
+    : '${formatarPontos(aluno['pontos_obtidos'])} pontos obtidos em ${formatarPontos(aluno['pontos_avaliados'])} avaliados';
+String tipoAtividade(Map atividade) =>
+    atividade['criterio_nome']?.toString() ?? 'Sem tipo definido';
 
 class EstatisticasView extends StatefulWidget {
   final int turmaId;
@@ -131,7 +133,7 @@ class _EstatisticasViewState extends State<EstatisticasView> {
           ]),
           const SizedBox(height: 16),
           const Text(
-              'As notas e os gráficos mostram os pontos reais de cada atividade. A nota da etapa considera os pesos dos critérios. Alertas de nota só aparecem no período final da etapa ou após o fechamento. Sem nota, confirme o lançamento e a entrega.'),
+              'Leia primeiro o resumo da etapa. Depois compare cada atividade pelo nome, pelo tipo de pontuação e pela porcentagem alcançada. Atividades com valores diferentes nunca são comparadas apenas pelos pontos brutos.'),
           if (aluno)
             ...((d['acompanhamento_etapas'] as List?) ?? []).map((e) => Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -142,26 +144,39 @@ class _EstatisticasViewState extends State<EstatisticasView> {
                         children: [
                           Text('${e['etapa']} · ${e['risco']}',
                               style: TextStyle(
+                                  fontWeight: FontWeight.w600,
                                   color: corRisco(e['risco'].toString()))),
-                          Text(pontosAvaliados(e as Map)),
-                          Text(e['nota_minima'] == null
-                              ? 'Nota necessária para passar na etapa: não configurada.'
-                              : 'Nota necessária para passar na etapa: ${formatarPontos(e['nota_minima'])} de ${formatarPontos(e['nota_maxima'])}'),
+                          const SizedBox(height: 10),
+                          Wrap(spacing: 24, runSpacing: 10, children: [
+                            _dadoEtapa(
+                                'Total atual do aluno',
+                                e['pontos_ponderados'] == null
+                                    ? 'Ainda sem nota'
+                                    : '${formatarPontos(e['pontos_ponderados'])} pts'),
+                            _dadoEtapa(
+                                'Pontos já avaliados', pontosAvaliados(e as Map)),
+                            _dadoEtapa(
+                                'Mínimo para aprovação',
+                                e['nota_minima'] == null
+                                    ? 'Não configurado'
+                                    : '${formatarPontos(e['nota_minima'])} de ${formatarPontos(e['nota_maxima'])} pts'),
+                            if (e['fechada'] != true)
+                              _dadoEtapa(
+                                  'Ainda disponíveis',
+                                  '${formatarPontos(e['pontos_restantes'])} pts'),
+                            if ((e['pontos_nao_planejados'] as num? ?? 0) > 0)
+                              _dadoEtapa(
+                                  'Professor ainda precisa distribuir',
+                                  '${formatarPontos(e['pontos_nao_planejados'])} pts')
+                          ]),
                           if (e['pontos_obtidos'] != null &&
                               e['pontos_ponderados'] != null) ...[
-                            Text(
-                                'Pontuação na etapa com os pesos dos critérios: ${formatarPontos(e['pontos_ponderados'])} de ${formatarPontos(e['nota_maxima'])}'),
+                            const SizedBox(height: 10),
                             Text((e['pontos_faltantes'] as num?) == 0
-                                ? 'Mínimo da etapa alcançado nas atividades cadastradas.'
-                                : '${e['fechada'] == true ? 'Faltaram' : 'Faltam'} ${formatarPontos(e['pontos_faltantes'])} pontos na etapa para atingir o mínimo.'),
-                            if (e['fechada'] != true)
-                              Text(
-                                  'Pontos ainda disponíveis, incluindo avaliações a planejar: ${formatarMetrica(e['pontos_restantes'])}'),
-                            if ((e['pontos_nao_planejados'] as num? ?? 0) > 0)
-                              Text('Ainda faltam planejar ${formatarPontos(e['pontos_nao_planejados'])} pontos. Cadastre as próximas avaliações.'),
-                            const Text(
-                                'Projeção das atividades cadastradas; novas avaliações podem mudar o resultado.'),
+                                ? 'O aluno já alcançou o mínimo com os lançamentos atuais.'
+                                : 'Pelos lançamentos atuais, faltam ${formatarPontos(e['pontos_faltantes'])} pontos para o mínimo.'),
                           ],
+                          const SizedBox(height: 8),
                           ...((e['motivos'] as List?) ?? [])
                               .map((m) => Text(m.toString())),
                         ])))),
@@ -169,16 +184,13 @@ class _EstatisticasViewState extends State<EstatisticasView> {
           Wrap(spacing: 12, runSpacing: 12, children: [
             if (aluno) ...[
               _resumo(
-                  'Pontos nas atividades avaliadas',
-                  avaliadas.isEmpty
-                      ? 'Sem notas lançadas'
-                      : '${formatarPontos(pontos)} de ${formatarPontos(maximo)}'),
-              _resumo('Maior nota',
-                  avaliadas.isEmpty ? '—' : notaAtividade(avaliadas.last)),
-              _resumo('Menor nota',
-                  avaliadas.isEmpty ? '—' : notaAtividade(avaliadas.first)),
-              _resumo('Entregues / pendentes',
-                  '${d['entregues']} / ${d['pendentes']}')
+                  'Desempenho no que já foi avaliado',
+                  maximo <= 0
+                      ? 'Sem notas'
+                      : '${(pontos / maximo * 100).toStringAsFixed(0)}%'),
+              _resumo('Atividades avaliadas', '${avaliadas.length}'),
+              _resumo('Entregues', '${d['entregues']}'),
+              _resumo('Pendentes', '${d['pendentes']}')
             ] else ...[
               _resumo(
                   'Desempenho nas atividades',
@@ -200,15 +212,14 @@ class _EstatisticasViewState extends State<EstatisticasView> {
                   children: [
                     Text(
                         aluno
-                            ? 'Evolução por atividade'
+                            ? 'Aluno x turma, atividade por atividade'
                             : 'Média da turma por atividade',
                         style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 20),
-                    _linha(atividades, aluno),
+                    const SizedBox(height: 6),
                     const Text(
-                        'Pontuação real · cada atividade tem seu próprio valor máximo.'),
-                    if (aluno)
-                      const Text('Verde: aluno · Azul: média da turma'),
+                        'A comparação usa porcentagem, então uma atividade de 2 pontos e outra de 10 ficam na mesma escala de 0% a 100%.'),
+                    const SizedBox(height: 16),
+                    _linha(atividades, aluno),
                   ])),
           if (!aluno) ...[
             const SizedBox(height: 20),
@@ -286,7 +297,7 @@ class _EstatisticasViewState extends State<EstatisticasView> {
                 contentPadding: EdgeInsets.zero,
                 title: Text(a['titulo'].toString()),
                 subtitle: Text(
-                    '${a['status']} · ${a['data'].toString().split(' ').first.split('T').first}'),
+                    '${tipoAtividade(a)} · ${a['status']} · ${a['data'].toString().split(' ').first.split('T').first}'),
                 trailing: Text(a['nota'] == null ? '—' : notaAtividade(a)))),
           ],
         ]));
@@ -303,6 +314,13 @@ class _EstatisticasViewState extends State<EstatisticasView> {
                 style:
                     const TextStyle(fontWeight: FontWeight.w600, fontSize: 20))
           ])));
+  static Widget _dadoEtapa(String rotulo, String valor) => SizedBox(
+      width: 210,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(rotulo,
+            style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        Text(valor, style: const TextStyle(fontWeight: FontWeight.w600))
+      ]));
   Widget _linha(List<Map<String, dynamic>> atividades, bool aluno) {
     num? mediaPontos(Map<String, dynamic> a) {
       final campo = aluno ? 'media_turma_pontos' : 'media_pontos';

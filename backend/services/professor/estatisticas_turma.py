@@ -25,6 +25,7 @@ def _media(valores):
 
 def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje=None, criterios=None):
     hoje = hoje or agora_brasilia().date()
+    criterios_por_id = {c["id"]: c for c in (criterios or [])}
     selecionadas = [a for a in atividades if etapa_id is None or a["etapa_id"] == etapa_id]
     selecionadas.sort(key=lambda a: (str(a.get("data_entrega") or a.get("created_at") or ""), a["id"]))
     valores = {(n["aluno_id"], n["atividade_id"]): n for n in notas if n.get("valor") is not None}
@@ -54,7 +55,9 @@ def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje
             status = situacoes.get((al["id"], a["id"])) or (n.get("observacao") if n and n.get("observacao") in ("Ausente", "Não entregou") else "Entregue" if n else "Sem nota lançada")
             entregues += status == "Entregue"
             lista.append({"id": a["id"], "titulo": a["titulo"], "etapa_id": a["etapa_id"],
-                          "criterio_id": a.get("criterio_id"), "descricao": a.get("descricao"),
+                          "criterio_id": a.get("criterio_id"),
+                          "criterio_nome": criterios_por_id.get(a.get("criterio_id"), {}).get("nome") or "Sem tipo",
+                          "descricao": a.get("descricao"),
                           "observacao": n.get("observacao") if n else None,
                           "data": str(prazo or a.get("created_at") or ""), "nota": nota,
                           "nota_maxima": maximo or None, "nota_normalizada": normalizada,
@@ -88,6 +91,8 @@ def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje
     distribuicao = {r: sum(a["risco"] == r for a in ranking) for r in ("Alto", "Médio", "Em andamento", "Baixo", "Sem dados")}
     por_atividade = [{"id": a["id"], "titulo": a["titulo"], "media": medias[a["id"]],
                       "media_pontos": medias_pontos[a["id"]],
+                      "criterio_id": a.get("criterio_id"),
+                      "criterio_nome": criterios_por_id.get(a.get("criterio_id"), {}).get("nome") or "Sem tipo",
                       "nota_maxima": float(a["nota_maxima"]) if a.get("nota_maxima") is not None else None,
                       "data": str(a.get("data_entrega") or a.get("created_at") or ""), "etapa_id": a["etapa_id"]} for a in selecionadas]
     avaliadas = [a for a in por_atividade if a["media"] is not None]

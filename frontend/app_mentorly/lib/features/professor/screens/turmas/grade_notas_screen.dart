@@ -295,10 +295,43 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
     return texto.isEmpty ? null : double.tryParse(texto.replaceAll(',', '.'));
   }
 
+  String _chaveCriterio(String nome) => nome.trim().toLowerCase();
+
+  List<Map<String, dynamic>> _agruparCriterios(
+      List<dynamic> criterios, List<dynamic> atividades) {
+    final grupos = <String, Map<String, dynamic>>{};
+    for (final criterio in criterios) {
+      final nome = criterio['nome']?.toString() ?? 'Sem tipo';
+      final chave = _chaveCriterio(nome);
+      final grupo = grupos.putIfAbsent(
+          chave,
+          () => <String, dynamic>{
+                'nome': nome,
+                'ids': <String>{},
+                'maximo': 0.0,
+                'distribuido': 0.0,
+              });
+      (grupo['ids'] as Set<String>).add(criterio['id'].toString());
+      grupo['maximo'] = (grupo['maximo'] as double) +
+          ((criterio['nota_maxima'] as num?)?.toDouble() ?? 0);
+    }
+    for (final atividade in atividades) {
+      final id = atividade['criterio_id']?.toString();
+      final grupo = grupos.values
+          .where((g) => id != null && (g['ids'] as Set<String>).contains(id));
+      if (grupo.isNotEmpty) {
+        grupo.first['distribuido'] = (grupo.first['distribuido'] as double) +
+            ((atividade['nota_maxima'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    return grupos.values.toList();
+  }
+
   String _resumoCriterio(
-      dynamic aluno, dynamic criterio, List<dynamic> atividades) {
+      dynamic aluno, Map<String, dynamic> criterio, List<dynamic> atividades) {
+    final ids = criterio['ids'] as Set<String>;
     final doCriterio = atividades
-        .where((a) => a['criterio_id'].toString() == criterio['id'].toString())
+        .where((a) => ids.contains(a['criterio_id'].toString()))
         .toList();
     final notas = doCriterio
         .map((a) => _notaDigitada(aluno['id'], a['id']))
@@ -310,7 +343,7 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
 
   String _totalEtapa(dynamic aluno) {
     final atividades = (_dados!['atividades_cadastro'] as List)
-        .where((a) => a['etapa_id'] == _etapa);
+        .where((a) => _etapa == null || a['etapa_id'] == _etapa);
     final notas = atividades
         .map((a) => _notaDigitada(aluno['id'], a['id']))
         .whereType<double>()
@@ -322,6 +355,20 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
 
   Map<String, dynamic>? _acompanhamentoSelecionado(dynamic aluno) {
     final lista = aluno['acompanhamento_etapas'] as List? ?? const [];
+    if (_etapa == null) {
+      if (lista.isEmpty) return null;
+      const prioridade = {
+        'Alto': 0,
+        'Médio': 1,
+        'Em andamento': 2,
+        'Baixo': 3,
+        'Sem dados': 4,
+      };
+      final ordenados = List<dynamic>.from(lista)
+        ..sort((a, b) => (prioridade[a['risco']] ?? 5)
+            .compareTo(prioridade[b['risco']] ?? 5));
+      return Map<String, dynamic>.from(ordenados.first as Map);
+    }
     final encontrados =
         lista.where((e) => e['etapa_id'].toString() == _etapa.toString());
     return encontrados.isEmpty
@@ -413,6 +460,288 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
             ])));
   }
 
+  String _nomeCriterio(dynamic atividade, List<dynamic> criterios) {
+    final encontrados = criterios.where(
+        (c) => c['id'].toString() == atividade['criterio_id'].toString());
+    return encontrados.isEmpty
+        ? (atividade['criterio_nome']?.toString() ?? 'Sem tipo')
+        : encontrados.first['nome'].toString();
+  }
+
+  double _totalDistribuido(List<dynamic> atividades) => atividades.fold(
+      0, (soma, a) => soma + ((a['nota_maxima'] as num?)?.toDouble() ?? 0));
+
+  Future<void> _abrirAtividade(dynamic atividade) async {
+    _timer?.cancel();
+    await _guardar();
+    if (!mounted) return;
+    await Navigator.pushNamed(context, AppRoutes.atividadeNotas, arguments: {
+      'atividade':
+          AtividadeModel.fromJson(Map<String, dynamic>.from(atividade as Map))
+    });
+    if (mounted) _carregar();
+  }
+
+  Widget _campoNota(dynamic aluno, dynamic atividade) {
+    final chave = _chave(aluno['id'], atividade['id']);
+    final detalhes = (aluno['atividades'] as List)
+        .firstWhere((x) => x['id'].toString() == atividade['id'].toString());
+    return SizedBox(
+        width: 145,
+        child: TextFormField(
+            key: ValueKey('grade-${aluno['id']}-${atividade['id']}'),
+            controller: _campos[chave],
+            enabled: !_salvando &&
+                _editavel(atividade) &&
+                atividade['nota_maxima'] != null,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+                isDense: true,
+                labelText: 'Nota',
+                hintText: '—',
+                suffixText: 'de ${_numero(atividade['nota_maxima'] as num?)}',
+                helperText: ['Ausente', 'Não entregou', 'Não corrigido']
+                        .contains(detalhes['situacao'])
+                    ? detalhes['situacao'].toString()
+                    : null),
+            onChanged: (_) => _alterou(),
+            validator: (v) {
+              if ((v ?? '').trim().isEmpty) {
+                return _originais[chave]!.isEmpty
+                    ? null
+                    : 'Exclua na atividade';
+              }
+              final n = double.tryParse(v!.replaceAll(',', '.'));
+              final maximo = (atividade['nota_maxima'] as num?)?.toDouble();
+              if (n == null ||
+                  !n.isFinite ||
+                  n < 0 ||
+                  maximo == null ||
+                  n > maximo) {
+                return 'De 0 a ${maximo ?? '?'}';
+              }
+              return null;
+            }));
+  }
+
+  Widget _boletimRapido(
+      List<dynamic> alunos,
+      List<Map<String, dynamic>> criterios,
+      List<dynamic> atividades,
+      double totalOficial,
+      double minimoOficial) {
+    final distribuido = _totalDistribuido(atividades);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(_etapa == null ? 'Boletim geral' : 'Boletim rápido da etapa',
+          style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 4),
+      Text(
+          'Escala oficial: ${_numero(totalOficial)} pontos · mínimo para aprovação: ${_numero(minimoOficial)} pontos · ${_numero(distribuido)} pontos já distribuídos em atividades. O traço (—) significa que ainda não há nota lançada.'),
+      const SizedBox(height: 10),
+      DecoratedBox(
+          decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFCFD9E8)),
+              borderRadius: BorderRadius.circular(14)),
+          child: Scrollbar(
+              controller: _horizontal,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                  controller: _horizontal,
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                      headingRowColor:
+                          const WidgetStatePropertyAll(Color(0xFFEAF0F8)),
+                      headingRowHeight: 72,
+                      dataRowMinHeight: 68,
+                      dataRowMaxHeight: 80,
+                      columnSpacing: 26,
+                      columns: [
+                        const DataColumn(label: Text('Aluno')),
+                        ...criterios.map((c) => DataColumn(
+                            label: SizedBox(
+                                width: 145,
+                                child: Text(
+                                    '${c['nome']}\nMáximo: ${_numero(c['maximo'] as num?)} pts')))),
+                        DataColumn(
+                            label: SizedBox(
+                                width: 165,
+                                child: Text(
+                                    'Total do aluno\nEscala: ${_numero(totalOficial)} pts'))),
+                        const DataColumn(label: Text('Acompanhamento')),
+                      ],
+                      rows: alunos.map((al) {
+                        final acompanhamento = _acompanhamentoSelecionado(al);
+                        final risco =
+                            acompanhamento?['risco']?.toString() ?? 'Sem dados';
+                        final cor = risco == 'Alto'
+                            ? Colors.red
+                            : risco == 'Médio'
+                                ? Colors.orange
+                                : risco == 'Baixo'
+                                    ? Colors.green
+                                    : Colors.blueGrey;
+                        return DataRow(cells: [
+                          DataCell(SizedBox(
+                              width: 180, child: Text(al['nome'].toString()))),
+                          ...criterios.map((c) {
+                            final pontos = _resumoCriterio(al, c, atividades);
+                            return DataCell(SizedBox(
+                                width: 145,
+                                child: Text(
+                                    '$pontos de ${_numero(c['maximo'] as num?)} pts',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600))));
+                          }),
+                          DataCell(SizedBox(
+                              width: 165,
+                              child: Text(
+                                  '${_totalEtapa(al)} de ${_numero(totalOficial)} pts',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16)))),
+                          DataCell(Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                  color: cor.withValues(alpha: .12),
+                                  borderRadius: BorderRadius.circular(20)),
+                              child: Text(risco,
+                                  style: TextStyle(
+                                      color: cor,
+                                      fontWeight: FontWeight.w600))))
+                        ]);
+                      }).toList()))))
+    ]);
+  }
+
+  Widget _lancamentosPorAtividade(
+      List<dynamic> alunos, List<dynamic> criterios, List<dynamic> atividades) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Lançamento por atividade',
+          style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 4),
+      const Text(
+          'Cada bloco identifica claramente o tipo de pontuação, o nome da atividade e quanto ela vale.'),
+      const SizedBox(height: 12),
+      ...atividades.map((atividade) {
+        final tipo = _nomeCriterio(atividade, criterios);
+        return Card(
+            margin: const EdgeInsets.only(bottom: 14),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFBFCDE0), width: 1.4)),
+            clipBehavior: Clip.antiAlias,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                  width: double.infinity,
+                  color: const Color(0xFFEAF1FB),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  child: Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Chip(
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0xFFB8C8DE)),
+                            label: Text(tipo,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600))),
+                        Text(atividade['title'].toString(),
+                            style: Theme.of(context).textTheme.titleMedium),
+                        Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: const Color(0xFFDCE8FA),
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Text(
+                                'Valor máximo: ${_numero(atividade['nota_maxima'] as num?)} pts',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700))),
+                        TextButton.icon(
+                            onPressed: () => _abrirAtividade(atividade),
+                            icon: const Icon(Icons.open_in_new, size: 17),
+                            label: const Text('Abrir atividade'))
+                      ])),
+              Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: LayoutBuilder(builder: (context, limites) {
+                    final largura = limites.maxWidth < 700
+                        ? limites.maxWidth
+                        : (limites.maxWidth - 14) / 2;
+                    return Wrap(
+                        spacing: 14,
+                        runSpacing: 12,
+                        children: alunos.asMap().entries.map((item) {
+                          final al = item.value;
+                          return Container(
+                              width: largura,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                  color: item.key.isEven
+                                      ? const Color(0xFFF8FAFD)
+                                      : const Color(0xFFF3F7FC),
+                                  border: Border.all(
+                                      color: const Color(0xFFD5DFEC)),
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: Row(children: [
+                                Expanded(
+                                    child: Text(al['nome'].toString(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w500))),
+                                const SizedBox(width: 10),
+                                _campoNota(al, atividade)
+                              ]));
+                        }).toList());
+                  }))
+            ]));
+      })
+    ]);
+  }
+
+  Widget _metricaEscala(
+      {required IconData icone,
+      required String rotulo,
+      required String valor,
+      String? detalhe,
+      Color cor = const Color(0xFF214F9B)}) {
+    return Container(
+        width: 245,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+            color: cor.withValues(alpha: .07),
+            border: Border.all(color: cor.withValues(alpha: .24)),
+            borderRadius: BorderRadius.circular(12)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icone, color: cor, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(rotulo,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF53657A))),
+                const SizedBox(height: 3),
+                Text(valor,
+                    style: TextStyle(
+                        color: cor, fontSize: 18, fontWeight: FontWeight.w700)),
+                if (detalhe != null) ...[
+                  const SizedBox(height: 2),
+                  Text(detalhe,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF66778B)))
+                ]
+              ]))
+        ]));
+  }
+
   @override
   void dispose() {
     if (_timer?.isActive == true) {
@@ -467,9 +796,25 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
     final atividades = (_dados!['atividades_cadastro'] as List)
         .where((a) => _etapa == null || a['etapa_id'] == _etapa)
         .toList();
+    final etapas = _dados!['etapas'] as List;
+    final etapasConsideradas =
+        etapas.where((e) => _etapa == null || e['id'] == _etapa).toList();
+    final idsEtapas = etapasConsideradas.map((e) => e['id'].toString()).toSet();
     final criterios = (_dados!['criterios'] as List? ?? const [])
-        .where((c) => c['etapa_id'] == _etapa && ((c['peso'] as num?) ?? 0) > 0)
+        .where((c) =>
+            idsEtapas.contains(c['etapa_id'].toString()) &&
+            ((c['peso'] as num?) ?? 0) > 0)
         .toList();
+    final criteriosAgrupados = _agruparCriterios(criterios, atividades);
+    final etapaEncontrada = etapas.where((e) => e['id'] == _etapa);
+    final etapaSelecionada =
+        etapaEncontrada.isEmpty ? null : etapaEncontrada.first;
+    final totalOficial = etapasConsideradas.fold<double>(
+        0, (soma, e) => soma + ((e['nota_maxima'] as num?)?.toDouble() ?? 0));
+    final minimoOficial = etapasConsideradas.fold<double>(
+        0, (soma, e) => soma + ((e['nota_minima'] as num?)?.toDouble() ?? 0));
+    final totalDistribuido = _totalDistribuido(atividades);
+    final faltaDistribuir = totalOficial - totalDistribuido;
     final alunos = (_dados!['alunos'] as List)
         .where((a) =>
             a['nome'].toString().toLowerCase().contains(_busca.toLowerCase()) &&
@@ -480,7 +825,7 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
         .toList();
     return Form(
         key: _form,
-        child: ListView(children: [
+        child: ListView(key: const ValueKey('grade-lista'), children: [
           Text('Notas da turma',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
@@ -498,6 +843,7 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                 SizedBox(
                     width: 250,
                     child: TextFormField(
+                        key: const ValueKey('busca-aluno'),
                         decoration: const InputDecoration(
                             labelText: 'Buscar aluno',
                             prefixIcon: Icon(Icons.search)),
@@ -531,30 +877,92 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                     label: const Text('Resumo para reunião')),
               ]),
           const SizedBox(height: 20),
-          if (_etapa != null && criterios.isNotEmpty) ...[
-            Text('Planejamento da etapa',
+          Card(
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0xFFBFCDE0), width: 1.3)),
+              child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            etapaSelecionada?['nome']?.toString() ??
+                                'Todas as etapas',
+                            style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 4),
+                        const Text(
+                            'A escala e o mínimo vêm da configuração da Coordenação. As atividades mostram quanto dessa pontuação o professor já planejou.'),
+                        const SizedBox(height: 14),
+                        Wrap(spacing: 12, runSpacing: 12, children: [
+                          _metricaEscala(
+                              icone: Icons.flag_outlined,
+                              rotulo: 'Total oficial',
+                              valor: '${_numero(totalOficial)} pontos',
+                              detalhe: _etapa == null
+                                  ? 'Soma de todas as etapas'
+                                  : 'Valor total desta etapa'),
+                          _metricaEscala(
+                              icone: Icons.verified_outlined,
+                              rotulo: 'Mínimo para aprovação',
+                              valor: '${_numero(minimoOficial)} pontos',
+                              detalhe: _etapa == null
+                                  ? 'Soma dos mínimos das etapas'
+                                  : 'Mínimo desta etapa',
+                              cor: const Color(0xFF21734A)),
+                          _metricaEscala(
+                              icone: Icons.edit_note_outlined,
+                              rotulo: 'Já distribuído pelo professor',
+                              valor: '${_numero(totalDistribuido)} pontos',
+                              detalhe: 'Soma do valor máximo das atividades',
+                              cor: const Color(0xFF7A4B00)),
+                          _metricaEscala(
+                              icone: faltaDistribuir >= 0
+                                  ? Icons.pending_actions_outlined
+                                  : Icons.warning_amber_outlined,
+                              rotulo: faltaDistribuir >= 0
+                                  ? 'Ainda falta distribuir'
+                                  : 'Acima do total oficial',
+                              valor: '${_numero(faltaDistribuir.abs())} pontos',
+                              detalhe: faltaDistribuir >= 0
+                                  ? 'Pontuação ainda sem atividade'
+                                  : 'Revise o valor das atividades',
+                              cor: faltaDistribuir >= 0
+                                  ? const Color(0xFF5D6470)
+                                  : const Color(0xFFB42318))
+                        ])
+                      ]))),
+          const SizedBox(height: 20),
+          if (criteriosAgrupados.isNotEmpty) ...[
+            Text(
+                _etapa == null
+                    ? 'Distribuição por critério'
+                    : 'Planejamento da etapa',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             const Text(
-                'Os limites são definidos pela Coordenação. Os pontos distribuídos vêm das atividades criadas pelo professor.'),
+                'Em cada critério, compare o limite definido pela Coordenação com os pontos que já foram transformados em atividades.'),
             const SizedBox(height: 10),
             Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: criterios.map((c) {
-                  final distribuido = atividades
-                      .where((a) => a['criterio_id'] == c['id'])
-                      .fold<double>(
-                          0,
-                          (soma, a) =>
-                              soma +
-                              ((a['nota_maxima'] as num?)?.toDouble() ?? 0));
-                  final limite = (c['nota_maxima'] as num?)?.toDouble() ?? 0;
+                children: criteriosAgrupados.map((c) {
+                  final distribuido = c['distribuido'] as double;
+                  final limite = c['maximo'] as double;
                   final restante = limite - distribuido;
+                  final progresso = limite <= 0
+                      ? 0.0
+                      : (distribuido / limite).clamp(0.0, 1.0).toDouble();
                   return SizedBox(
-                      width: 230,
+                      width: 260,
                       child: Card(
                           margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Color(0xFFCFD9E8))),
                           child: Padding(
                               padding: const EdgeInsets.all(14),
                               child: Column(
@@ -562,13 +970,29 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                   children: [
                                     Text(c['nome'].toString(),
                                         style: const TextStyle(
-                                            fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 6),
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16)),
+                                    const SizedBox(height: 10),
                                     Text(
-                                        '${_numero(distribuido)} de ${_numero(limite)} pts distribuídos'),
+                                        'Total permitido: ${_numero(limite)} pts'),
+                                    Text(
+                                        'Já distribuído: ${_numero(distribuido)} pts',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    LinearProgressIndicator(
+                                        value: progresso,
+                                        minHeight: 7,
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: restante < 0
+                                            ? Colors.red[700]
+                                            : const Color(0xFF2C57D6),
+                                        backgroundColor:
+                                            const Color(0xFFE4EAF3)),
+                                    const SizedBox(height: 7),
                                     Text(
                                         restante >= 0
-                                            ? '${_numero(restante)} pts restantes'
+                                            ? 'Restam ${_numero(restante)} pts para distribuir'
                                             : '${_numero(-restante)} pts acima do limite',
                                         style: TextStyle(
                                             color: restante < 0
@@ -581,136 +1005,21 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
           ],
           _painelAtencao(alunos),
           const SizedBox(height: 20),
-          const Text(
-              'O boletim começa pelos totais de cada tipo e da etapa. Depois vêm as atividades individuais para lançamento. Deslize para os lados para consultar tudo.',
-              style: TextStyle(fontSize: 12)),
-          const SizedBox(height: 8),
           if (atividades.isEmpty && criterios.isEmpty)
             const Text(
                 'A Coordenação ainda não configurou os tipos de pontuação desta etapa.')
           else if (alunos.isEmpty)
             const Text('Nenhum aluno corresponde aos filtros.')
-          else
-            Scrollbar(
-                controller: _horizontal,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                    controller: _horizontal,
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                        headingRowColor:
-                            const WidgetStatePropertyAll(Color(0xFFEAF0F8)),
-                        headingRowHeight: 78,
-                        dataRowMinHeight: 76,
-                        dataRowMaxHeight: 96,
-                        columnSpacing: 20,
-                        columns: [
-                          const DataColumn(label: Text('Aluno')),
-                          ...criterios.map((c) => DataColumn(
-                              label: SizedBox(
-                                  width: 135,
-                                  child: Text(c['nome'].toString(),
-                                      maxLines: 2)))),
-                          const DataColumn(
-                              label: SizedBox(
-                                  width: 120, child: Text('Total atual'))),
-                          ...atividades.map((a) => DataColumn(
-                              label: SizedBox(
-                                  width: 150,
-                                  child: TextButton(
-                                      onPressed: () async {
-                                        _timer?.cancel();
-                                        await _guardar();
-                                        if (!mounted) return;
-                                        await Navigator.pushNamed(
-                                            context, AppRoutes.atividadeNotas,
-                                            arguments: {
-                                              'atividade':
-                                                  AtividadeModel.fromJson(
-                                                      Map<String, dynamic>.from(
-                                                          a as Map))
-                                            });
-                                        if (mounted) _carregar();
-                                      },
-                                      child: Text(
-                                          '${a['title']}\nAté ${a['nota_maxima'] ?? '—'} pts',
-                                          maxLines: 3,
-                                          overflow: TextOverflow.ellipsis)))))
-                        ],
-                        rows: alunos
-                            .map((al) => DataRow(cells: [
-                                  DataCell(SizedBox(
-                                      width: 180,
-                                      child: Text(al['nome'].toString()))),
-                                  ...criterios.map((c) => DataCell(SizedBox(
-                                      width: 135,
-                                      child: Text(
-                                          _resumoCriterio(al, c, atividades),
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w600))))),
-                                  DataCell(SizedBox(
-                                      width: 120,
-                                      child: Text(_totalEtapa(al),
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w700)))),
-                                  ...atividades.map((a) {
-                                    final chave = _chave(al['id'], a['id']);
-                                    final detalhes = (al['atividades'] as List)
-                                        .firstWhere((x) =>
-                                            x['id'].toString() ==
-                                            a['id'].toString());
-                                    return DataCell(SizedBox(
-                                        width: 150,
-                                        child: TextFormField(
-                                            key: ValueKey(
-                                                'grade-${al['id']}-${a['id']}'),
-                                            controller: _campos[chave],
-                                            enabled: !_salvando &&
-                                                _editavel(a) &&
-                                                a['nota_maxima'] != null,
-                                            keyboardType: const TextInputType
-                                                .numberWithOptions(
-                                                decimal: true),
-                                            textInputAction:
-                                                TextInputAction.next,
-                                            decoration: InputDecoration(
-                                                isDense: true,
-                                                hintText: '—',
-                                                suffixText:
-                                                    'de ${_numero(a['nota_maxima'] as num?)}',
-                                                helperText: [
-                                                  'Ausente',
-                                                  'Não entregou',
-                                                  'Não corrigido'
-                                                ].contains(detalhes['situacao'])
-                                                    ? detalhes['situacao']
-                                                        .toString()
-                                                    : null),
-                                            onChanged: (_) => _alterou(),
-                                            validator: (v) {
-                                              if ((v ?? '').trim().isEmpty) {
-                                                return _originais[chave]!
-                                                        .isEmpty
-                                                    ? null
-                                                    : 'Exclua na atividade';
-                                              }
-                                              final n = double.tryParse(
-                                                  v!.replaceAll(',', '.'));
-                                              final maximo =
-                                                  (a['nota_maxima'] as num?)
-                                                      ?.toDouble();
-                                              if (n == null ||
-                                                  !n.isFinite ||
-                                                  n < 0 ||
-                                                  maximo == null ||
-                                                  n > maximo) {
-                                                return 'De 0 a ${maximo ?? '?'}';
-                                              }
-                                              return null;
-                                            })));
-                                  })
-                                ]))
-                            .toList()))),
+          else ...[
+            _boletimRapido(alunos, criteriosAgrupados, atividades, totalOficial,
+                minimoOficial),
+            const SizedBox(height: 28),
+            if (atividades.isEmpty)
+              const Text(
+                  'Nenhuma atividade cadastrada nesta etapa. Use Nova atividade para distribuir os pontos.')
+            else
+              _lancamentosPorAtividade(alunos, criterios, atividades),
+          ],
           const SizedBox(height: 24),
         ]));
   }

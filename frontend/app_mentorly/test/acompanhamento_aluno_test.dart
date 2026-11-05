@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_mentorly/app/routes.dart';
 import 'package:app_mentorly/app/theme.dart';
 import 'package:app_mentorly/core/services/apiService.dart';
@@ -45,6 +46,7 @@ final aluno = {
 
 void main() {
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     ApiService().invalidarCache();
     ApiService().token =
         'acompanhamento-${DateTime.now().microsecondsSinceEpoch}';
@@ -119,13 +121,14 @@ void main() {
           home:
               const Scaffold(body: EstatisticasView(turmaId: 7, alunoId: 3))));
       await t.pumpAndSettle();
-      expect(find.text('Nota necessária para passar na etapa: 6 de 10'),
-          findsOneWidget);
-      expect(find.text('Faltam 4 pontos na etapa para atingir o mínimo.'),
+      expect(find.text('Mínimo para aprovação'), findsOneWidget);
+      expect(find.text('6 de 10 pts'), findsOneWidget);
+      expect(
+          find.text('Pelos lançamentos atuais, faltam 4 pontos para o mínimo.'),
           findsOneWidget);
       expect(find.textContaining('(0–10)'), findsNothing);
-      await t.scrollUntilVisible(find.text('Maior nota'), 150);
-      expect(find.text('2 de 2'), findsWidgets);
+      await t.scrollUntilVisible(
+          find.text('Aluno x turma, atividade por atividade'), 150);
       await t.scrollUntilVisible(find.byType(LineChart), 150);
       final grafico = t.widget<LineChart>(find.byType(LineChart)).data;
       expect(grafico.maxY, 2);
@@ -150,8 +153,8 @@ void main() {
           home:
               const Scaffold(body: EstatisticasView(turmaId: 7, alunoId: 3))));
       await t.pumpAndSettle();
-      expect(find.text('Nota necessária para passar na etapa: 18 de 30'),
-          findsOneWidget);
+      expect(find.text('Mínimo para aprovação'), findsOneWidget);
+      expect(find.text('18 de 30 pts'), findsOneWidget);
       expect(find.textContaining('Faltam'), findsNothing);
       expect(
           find.textContaining('Pontuação na etapa com os pesos'), findsNothing);
@@ -185,12 +188,21 @@ void main() {
           routes: {AppRoutes.chatIa: (_) => const ChatIaScreen()}));
       await t.pumpAndSettle();
       await t.tap(find.text('Como ajudar este aluno?'));
-      await t.pumpAndSettle();
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 400));
       expect(find.text('IA · Mariana'), findsOneWidget);
       expect(t.widget<TextField>(find.byType(TextField)).controller!.text,
           contains('Como posso ajudar Mariana a melhorar as notas'));
-      await t.tap(find.byTooltip('Enviar mensagem'));
-      await t.pumpAndSettle();
+      final enviar = find.widgetWithIcon(IconButton, Icons.send);
+      for (var tentativa = 0; tentativa < 20; tentativa++) {
+        if (t.widget<IconButton>(enviar).onPressed != null) break;
+        await t.pump(const Duration(milliseconds: 100));
+      }
+      expect(t.widget<IconButton>(enviar).onPressed, isNotNull);
+      await t.tap(enviar);
+      for (var tentativa = 0; tentativa < 20 && pedido == null; tentativa++) {
+        await t.pump(const Duration(milliseconds: 100));
+      }
       expect(pedido?['turma_id'], 7);
       expect(pedido?['aluno_id'], 3);
       expect(pedido?['historico'], isEmpty);
