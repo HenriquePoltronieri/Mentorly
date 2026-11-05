@@ -570,10 +570,13 @@ A minimização também depende do caso:
 - **Geração de atividade:** normalmente nenhum dado de aluno;
 - **Correção:** questão, rubrica e resposta textual, sem email, matrícula, senha, JWT ou id do banco;
 - **Feedback:** somente os resultados acadêmicos necessários para o objetivo.
+- **Chat pedagógico:** nomes e ids são trocados por referências neutras (`Turma N` e `Aluno N`)
+  antes da chamada; a pergunta e o histórico também têm nomes conhecidos e e-mails removidos. O
+  mapa de volta para os registros reais permanece somente no backend.
 
 #### Um único `AIClient` e limite de uso
 
-Os quatro casos usam o mesmo `AIClient` (`services/ia/client.py`), que cuida de transporte, timeout,
+Os casos de IA usam o mesmo `AIClient` (`services/ia/client.py`), que cuida de transporte, timeout,
 limite de tamanho da resposta, uma nova tentativa para resposta fora do contrato e validação do
 JSON; cada caso entrega o seu prompt, o seu contrato e o seu limite de saída (`CasoDeUso`). Como a
 cota da Groq é pequena, cada Professor tem um **limite único de 20 chamadas de IA a cada 15
@@ -610,6 +613,8 @@ Não existe tabela genérica de IA.
 - A sugestão bruta da correção não precisa ser persistida inicialmente; a decisão confirmada volta
   ao fluxo normal de nota.
 - Feedback/recuperação pode inicialmente ser apenas exibido.
+- O histórico do chat fica no armazenamento local do aplicativo, separado por Professor e por
+  contexto de turma/aluno, com exclusão pela própria tela. Não existe tabela de conversas no backend.
 
 #### Visão geral da integração
 

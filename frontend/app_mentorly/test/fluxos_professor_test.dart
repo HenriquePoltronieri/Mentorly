@@ -221,9 +221,17 @@ void main() {
       await t.tap(find.byTooltip('Enviar mensagem'));
       await t.pumpAndSettle();
       expect((pedidos.last['historico'] as List).length, 2);
+      expect(find.byTooltip('Copiar resposta'), findsWidgets);
       await t.tap(find.text('Nova conversa'));
       await t.pumpAndSettle();
       expect(find.text('Resumo real da turma.'), findsNothing);
+      await t.tap(find.byTooltip('Histórico de conversas'));
+      await t.pumpAndSettle();
+      expect(find.text('Histórico de conversas'), findsOneWidget);
+      expect(find.text('Resumo da turma'), findsOneWidget);
+      await t.tap(find.text('Resumo da turma'));
+      await t.pumpAndSettle();
+      expect(find.text('Resumo real da turma.'), findsWidgets);
     },
         () => MockClient((r) async {
               pedidos.add(jsonDecode(r.body) as Map<String, dynamic>);

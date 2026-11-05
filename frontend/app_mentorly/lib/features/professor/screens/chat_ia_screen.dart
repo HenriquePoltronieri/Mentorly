@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../app/routes.dart';
 import '../../../core/widgets/estrutura_pagina.dart';
 import '../../../core/widgets/identidade_visual.dart';
@@ -52,6 +53,76 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
     _conversa!.enviar(texto);
   }
 
+  String _dataHistorico(String bruto) {
+    final data = DateTime.tryParse(bruto)?.toLocal();
+    if (data == null) return '';
+    String dois(int valor) => valor.toString().padLeft(2, '0');
+    return '${dois(data.day)}/${dois(data.month)}/${data.year} '
+        '${dois(data.hour)}:${dois(data.minute)}';
+  }
+
+  Future<void> _copiar(String texto) async {
+    await Clipboard.setData(ClipboardData(text: texto));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Resposta copiada.')),
+    );
+  }
+
+  Future<void> _mostrarHistorico() async {
+    final conversa = _conversa!;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AnimatedBuilder(
+        animation: conversa,
+        builder: (_, __) => AlertDialog(
+          title: const Text('Histórico de conversas'),
+          content: SizedBox(
+            width: 520,
+            child: conversa.historico.isEmpty
+                ? const Text(
+                    'As conversas encerradas com “Nova conversa” aparecerão aqui.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: conversa.historico.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, indice) {
+                      final item = conversa.historico[indice];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(item['titulo'].toString(),
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(_dataHistorico(item['data'].toString())),
+                        onTap: () {
+                          conversa.restaurar(item['id'].toString());
+                          Navigator.of(dialogContext).pop();
+                        },
+                        trailing: IconButton(
+                          tooltip: 'Excluir conversa',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () =>
+                              conversa.excluirHistorico(item['id'].toString()),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            if (conversa.historico.isNotEmpty)
+              TextButton(
+                onPressed: conversa.limparHistorico,
+                child: const Text('Limpar histórico'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _conversa?.removeListener(_atualizar);
@@ -71,8 +142,13 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                     ? 'Assistente pedagógico'
                     : 'IA · $_turmaNome'),
             actions: [
+              IconButton(
+                tooltip: 'Histórico de conversas',
+                onPressed: c.carregando ? null : _mostrarHistorico,
+                icon: const Icon(Icons.history),
+              ),
               TextButton(
-                  onPressed: c.digitando ? null : c.nova,
+                  onPressed: c.digitando || c.carregando ? null : c.nova,
                   child: const Text('Nova conversa')),
             ]),
         body: ConteudoPagina(
@@ -83,11 +159,25 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                       controller: _scroll,
                       padding: const EdgeInsets.all(16),
                       children: [
-                    if (c.mensagens.isEmpty)
+                    if (c.carregando)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (c.mensagens.isEmpty)
                       const VidroCard(
                           padding: EdgeInsets.all(20),
-                          child: Text(
-                              'Pergunte sobre desempenho, risco ou medidas pedagógicas. As respostas usam os dados das suas turmas.')),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    'Pergunte sobre desempenho, risco ou medidas pedagógicas. As respostas usam os dados das suas turmas.'),
+                                SizedBox(height: 8),
+                                Text(
+                                    'Proteção de dados: nomes e identificadores dos alunos desta turma são substituídos antes da consulta à IA. Evite digitar outros dados pessoais. O histórico fica somente neste dispositivo e pode ser apagado.',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.black54)),
+                              ])),
                     ...c.mensagens.map((m) => Align(
                         alignment: m['role'] == 'user'
                             ? Alignment.centerRight
@@ -103,12 +193,27 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                              m['role'] == 'user'
-                                                  ? 'Você'
-                                                  : 'Mentorly',
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w600)),
+                                          Row(children: [
+                                            Text(
+                                                m['role'] == 'user'
+                                                    ? 'Você'
+                                                    : 'Mentorly',
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w600)),
+                                            const Spacer(),
+                                            if (m['role'] == 'assistant')
+                                              IconButton(
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                tooltip: 'Copiar resposta',
+                                                onPressed: () => _copiar(
+                                                    m['content'].toString()),
+                                                icon: const Icon(
+                                                    Icons.copy_outlined,
+                                                    size: 18),
+                                              ),
+                                          ]),
                                           const SizedBox(height: 8),
                                           SelectableText(
                                               m['content'].toString()),
@@ -208,7 +313,7 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                               Expanded(
                                   child: TextField(
                                       controller: _texto,
-                                      enabled: !c.digitando,
+                                      enabled: !c.digitando && !c.carregando,
                                       minLines: 1,
                                       maxLines: 4,
                                       maxLength: 1000,
@@ -219,8 +324,9 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                                           counterText: ''))),
                               IconButton(
                                   tooltip: 'Enviar mensagem',
-                                  onPressed:
-                                      c.digitando ? null : () => _enviar(),
+                                  onPressed: c.digitando || c.carregando
+                                      ? null
+                                      : () => _enviar(),
                                   icon: const Icon(Icons.send))
                             ]),
                       ]))),

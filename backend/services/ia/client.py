@@ -205,6 +205,9 @@ class AIClient:
             "temperature": 0.2,
             "max_tokens": caso.max_tokens,
             "response_format": {"type": "json_object"},
+            # Provedores compativeis podem oferecer armazenamento opcional.
+            # O Mentorly nunca solicita persistencia da resposta no provedor.
+            "store": False,
         }, ensure_ascii=False).encode("utf-8")
         requisicao = Request(
             self._endpoint(),

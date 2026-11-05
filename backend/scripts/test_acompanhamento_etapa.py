@@ -173,7 +173,9 @@ class OrientacaoIndividualTest(TestCase):
         s = ChatProfessorService(client, stats)
         s.execute(1, 1, {"turma_id": 7, "aluno_id": 3, "mensagem": "Como melhorar?"})
         contexto = client.gerar.call_args.args[0]["turmas"][0]["alunos"]
-        self.assertEqual([a["id"] for a in contexto], [3])
+        self.assertEqual([a["referencia"] for a in contexto], ["Aluno 1"])
+        self.assertNotIn("Mariana", str(contexto))
+        self.assertNotIn("'id'", str(contexto))
         self.assertIn("acompanhamento", contexto[0])
         client.reset_mock()
         with self.assertRaises(RecursoNaoEncontrado):

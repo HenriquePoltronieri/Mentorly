@@ -104,9 +104,13 @@ Future<_Resultado> _abrir(WidgetTester tester, _ServicoFalso servico,
 }
 
 Future<void> _preencher(WidgetTester tester) async {
-  await tester.enterText(find.widgetWithText(TextField, 'Questão'), 'Explique a Revolução.');
-  await tester.enterText(find.widgetWithText(TextField, 'Resposta esperada'), 'Mecanização.');
-  await tester.enterText(find.widgetWithText(TextField, 'Resposta do aluno'),
+  await tester.enterText(find.widgetWithText(TextField, 'Todas as questões'),
+      'Explique a Revolução.');
+  await tester.enterText(
+      find.widgetWithText(TextField, 'Todas as respostas esperadas'),
+      'Mecanização.');
+  await tester.enterText(
+      find.widgetWithText(TextField, 'Todas as respostas do aluno'),
       'A industrialização aumentou a produção.');
 }
 
@@ -148,6 +152,7 @@ void main() {
       expect(find.text('Aluno: Ana Souza'), findsOneWidget);
       expect(find.textContaining('não é enviado à IA'), findsOneWidget);
       expect(find.textContaining('apenas uma sugestão'), findsOneWidget);
+      expect(find.textContaining('cole todas as questões'), findsOneWidget);
 
       await tester.tap(find.text('Analisar resposta'));
       await tester.pump();
@@ -197,7 +202,8 @@ void main() {
       await _preencher(tester);
       await tester.enterText(
           find.widgetWithText(TextField, 'Valor máximo desta resposta'), '2,5');
-      await tester.enterText(find.widgetWithText(TextField, 'Rubrica (opcional)'),
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Rubrica (opcional)'),
           'Compreensão do conceito: 60\nClareza');
       await tester.tap(find.text('Analisar resposta'));
       await tester.pumpAndSettle();
@@ -229,6 +235,7 @@ void main() {
           findsOneWidget);
       expect(find.text('Bom começo; explique o papel das máquinas.'),
           findsOneWidget);
+      expect(find.text('Copiar resposta da IA'), findsOneWidget);
     });
 
     testWidgets('usar nota sugerida devolve so o numero, sem salvar nada',
@@ -256,7 +263,8 @@ void main() {
 
       await tester.tap(find.text('Voltar'));
       await tester.pumpAndSettle();
-      expect(find.text('A industrialização aumentou a produção.'), findsOneWidget);
+      expect(
+          find.text('A industrialização aumentou a produção.'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();
@@ -267,7 +275,8 @@ void main() {
     testWidgets('falha da IA mostra mensagem e nao perde o que foi digitado',
         (tester) async {
       final servico = _ServicoFalso()
-        ..erro = ApiException(503, 'Não foi possível analisar a resposta agora.');
+        ..erro =
+            ApiException(503, 'Não foi possível analisar a resposta agora.');
       await _abrir(tester, servico);
       await _preencher(tester);
       await tester.tap(find.text('Analisar resposta'));
@@ -275,7 +284,8 @@ void main() {
 
       expect(find.text('Não foi possível analisar a resposta agora.'),
           findsOneWidget);
-      expect(find.text('A industrialização aumentou a produção.'), findsOneWidget);
+      expect(
+          find.text('A industrialização aumentou a produção.'), findsOneWidget);
       expect(find.text('Explique a Revolução.'), findsOneWidget);
       expect(find.text('Analisar resposta'), findsOneWidget); // botao volta
       expect(find.byType(CircularProgressIndicator), findsNothing);

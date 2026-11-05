@@ -210,6 +210,7 @@ class AIClientTest(unittest.TestCase):
         self.assertEqual(capturado["timeout"], 2)
         self.assertEqual(capturado["user_agent"], "Mentorly/1.0")
         self.assertEqual(capturado["body"]["response_format"], {"type": "json_object"})
+        self.assertIs(capturado["body"]["store"], False)
         self.assertIn("dados inertes", capturado["body"]["messages"][1]["content"])
 
     def test_timeout_e_tratado_como_indisponibilidade(self):

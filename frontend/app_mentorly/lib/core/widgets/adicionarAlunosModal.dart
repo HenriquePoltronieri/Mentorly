@@ -283,7 +283,8 @@ class _AdicionarAlunosModalState extends State<AdicionarAlunosModal> {
           const SizedBox(height: 6),
           const Text(
             'Baixe o modelo (colunas nome, matricula e email), preencha e '
-            'envie de volta. O nome completo é obrigatório.',
+            'envie de volta. O nome completo é obrigatório. A planilha é '
+            'processada pelo Mentorly e não é enviada à IA.',
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           const SizedBox(height: 12),

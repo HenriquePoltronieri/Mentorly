@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/apiService.dart';
 
 class ConversaIa extends ChangeNotifier {
@@ -6,18 +9,144 @@ class ConversaIa extends ChangeNotifier {
   final int? alunoId;
   final String? token;
   final List<Map<String, dynamic>> mensagens = [];
+  final List<Map<String, dynamic>> historico = [];
   bool digitando = false;
+  bool carregando = true;
   String? erro, pendente;
-  ConversaIa(this.turmaId, this.token, {this.alunoId});
+  late final Future<void> _pronto;
+
+  ConversaIa(this.turmaId, this.token, {this.alunoId}) {
+    _pronto = _carregar();
+  }
+
+  String get _chave {
+    final usuario = ApiService().usuario?['id']?.toString() ?? 'sem-usuario';
+    var escola = 'sem-escola';
+    try {
+      final parte = token!.split('.')[1];
+      final normalizada = base64Url.normalize(parte);
+      final payload = jsonDecode(utf8.decode(base64Url.decode(normalizada)));
+      escola = payload['coordenacao_id']?.toString() ?? escola;
+    } catch (_) {
+      // A chave local e apenas um namespace; a autenticacao continua no backend.
+    }
+    return 'mentorly.chat_ia.$escola.$usuario.${turmaId ?? 'geral'}.${alunoId ?? 'turma'}';
+  }
+
+  Future<void> _carregar() async {
+    try {
+      final bruto = (await SharedPreferences.getInstance()).getString(_chave);
+      if (bruto != null) {
+        final dados = jsonDecode(bruto) as Map<String, dynamic>;
+        mensagens.addAll(_mensagensValidas(dados['atual']));
+        final salvas = dados['historico'];
+        if (salvas is List) {
+          for (final item in salvas) {
+            if (item is! Map) continue;
+            final convertido = item.cast<String, dynamic>();
+            final lista = _mensagensValidas(convertido['mensagens']);
+            if (lista.isEmpty) continue;
+            historico.add({
+              'id': convertido['id']?.toString() ?? '',
+              'titulo': convertido['titulo']?.toString() ?? 'Conversa',
+              'data': convertido['data']?.toString() ?? '',
+              'mensagens': lista,
+            });
+          }
+        }
+      }
+    } catch (_) {
+      // Preferencias antigas/corrompidas nao impedem uma nova conversa.
+      mensagens.clear();
+      historico.clear();
+    } finally {
+      carregando = false;
+      notifyListeners();
+    }
+  }
+
+  List<Map<String, dynamic>> _mensagensValidas(dynamic bruto) {
+    if (bruto is! List) return [];
+    final resultado = <Map<String, dynamic>>[];
+    for (final item in bruto) {
+      if (item is! Map) continue;
+      final mapa = item.cast<String, dynamic>();
+      if ((mapa['role'] != 'user' && mapa['role'] != 'assistant') ||
+          mapa['content'] is! String) {
+        continue;
+      }
+      resultado.add({
+        'role': mapa['role'],
+        'content': mapa['content'],
+        if (mapa['atalhos'] is List) 'atalhos': mapa['atalhos'],
+        if (mapa['tipo'] is String) 'tipo': mapa['tipo'],
+      });
+    }
+    return resultado;
+  }
+
+  Future<void> _salvar() async {
+    await (await SharedPreferences.getInstance()).setString(
+      _chave,
+      jsonEncode({'atual': mensagens, 'historico': historico}),
+    );
+  }
+
+  void _arquivarAtual() {
+    if (mensagens.isEmpty) return;
+    final primeira = mensagens.firstWhere(
+      (m) => m['role'] == 'user',
+      orElse: () => mensagens.first,
+    );
+    final texto = primeira['content'].toString().replaceAll('\n', ' ').trim();
+    historico.insert(0, {
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'titulo': texto.length > 70 ? '${texto.substring(0, 70)}…' : texto,
+      'data': DateTime.now().toIso8601String(),
+      'mensagens': mensagens.map((m) => Map<String, dynamic>.from(m)).toList(),
+    });
+    if (historico.length > 30) historico.removeRange(30, historico.length);
+  }
+
   void nova() {
     if (digitando) return;
+    _arquivarAtual();
     mensagens.clear();
     erro = null;
     pendente = null;
+    _salvar();
+    notifyListeners();
+  }
+
+  void restaurar(String id) {
+    if (digitando) return;
+    final indice = historico.indexWhere((item) => item['id'] == id);
+    if (indice < 0) return;
+    final escolhida = historico.removeAt(indice);
+    _arquivarAtual();
+    mensagens
+      ..clear()
+      ..addAll(_mensagensValidas(escolhida['mensagens']));
+    erro = null;
+    pendente = null;
+    _salvar();
+    notifyListeners();
+  }
+
+  void excluirHistorico(String id) {
+    historico.removeWhere((item) => item['id'] == id);
+    _salvar();
+    notifyListeners();
+  }
+
+  void limparHistorico() {
+    historico.clear();
+    _salvar();
     notifyListeners();
   }
 
   Future<void> enviar(String texto, {bool repetir = false}) async {
+    await _pronto;
     texto = texto.trim();
     if (digitando || texto.isEmpty) return;
     if (texto.length > 1000) {
@@ -33,6 +162,7 @@ class ConversaIa extends ChangeNotifier {
     if (!repetir) {
       pendente = texto;
       mensagens.add({'role': 'user', 'content': texto});
+      await _salvar();
     }
     digitando = true;
     erro = null;
@@ -53,9 +183,11 @@ class ConversaIa extends ChangeNotifier {
       mensagens.add({
         'role': 'assistant',
         'content': resposta['resposta'],
-        'atalhos': resposta['atalhos']
+        'atalhos': resposta['atalhos'],
+        if (resposta['tipo'] is String) 'tipo': resposta['tipo'],
       });
       pendente = null;
+      await _salvar();
     } catch (e) {
       erro = e is ApiException
           ? e.mensagem

@@ -14,9 +14,11 @@ from services.ia.contrato_correcao import caso_corrigir_resposta
 from services.professor.notas import _atividade_do_professor
 
 
-MAX_QUESTAO = 2000
-MAX_ESPERADA = 3000
-MAX_RESPOSTA = 5000
+# Os tres campos podem conter a atividade completa, com varias questoes
+# numeradas. Os limites continuam finitos para proteger o contexto/custo.
+MAX_QUESTAO = 5000
+MAX_ESPERADA = 8000
+MAX_RESPOSTA = 10000
 MAX_ITENS_RUBRICA = 6
 
 
@@ -86,11 +88,11 @@ def validar_pedido(dados, valor_maximo_atividade):
             )
 
     return {
-        "questao": _texto_obrigatorio(dados, "questao", MAX_QUESTAO, "a questao"),
+        "questao": _texto_obrigatorio(dados, "questao", MAX_QUESTAO, "todas as questoes"),
         "respostaEsperada": _texto_obrigatorio(
-            dados, "respostaEsperada", MAX_ESPERADA, "a resposta esperada"),
+            dados, "respostaEsperada", MAX_ESPERADA, "todas as respostas esperadas"),
         "respostaAluno": _texto_obrigatorio(
-            dados, "respostaAluno", MAX_RESPOSTA, "a resposta do aluno"),
+            dados, "respostaAluno", MAX_RESPOSTA, "todas as respostas do aluno"),
         "valorMaximo": valor_maximo,
         "rubrica": _rubrica(dados.get("rubrica")),
     }

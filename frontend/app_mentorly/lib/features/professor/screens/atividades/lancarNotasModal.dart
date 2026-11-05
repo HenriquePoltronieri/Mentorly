@@ -148,7 +148,8 @@ class _LancarNotasModalState extends State<LancarNotasModal> {
                     const SizedBox(height: 6),
                     const Text(
                       'O modelo já vem com os alunos da turma. Preencha só a '
-                      'coluna nota e envie de volta.',
+                      'coluna nota e envie de volta. A planilha é processada '
+                      'pelo Mentorly e não é enviada à IA.',
                       style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 12),

@@ -30,7 +30,13 @@ from services.ia.contrato_correcao import (
     normalizar,
     validar_correcao,
 )
-from services.ia.corrigir_resposta import CorrigirRespostaIaService, validar_pedido
+from services.ia.corrigir_resposta import (
+    CorrigirRespostaIaService,
+    MAX_ESPERADA,
+    MAX_QUESTAO,
+    MAX_RESPOSTA,
+    validar_pedido,
+)
 
 
 RESPOSTA = (
@@ -246,7 +252,7 @@ class PedidoTest(unittest.TestCase):
                     validar_pedido(self.pedido(valorMaximo=valor), 10)
 
     def test_tamanho_maximo(self):
-        for chave, limite in (("questao", 2000), ("respostaEsperada", 3000), ("respostaAluno", 5000)):
+        for chave, limite in (("questao", MAX_QUESTAO), ("respostaEsperada", MAX_ESPERADA), ("respostaAluno", MAX_RESPOSTA)):
             with self.assertRaises(ValueError):
                 validar_pedido(self.pedido(**{chave: "x" * (limite + 1)}), 10)
 

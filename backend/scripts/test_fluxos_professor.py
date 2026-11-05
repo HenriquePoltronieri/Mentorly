@@ -81,16 +81,31 @@ class ChatTest(TestCase):
     def test_contrato_invalido_nao_e_exibido(self):
         with self.assertRaises(AIResponseError): _validar({"fatos": [], "medidas": ["inventado"]})
 
+    def test_pedido_fora_do_escopo_nao_vira_resumo_repetido(self):
+        client, stats = MagicMock(), MagicMock()
+        resposta = ChatProfessorService(client, stats).execute(
+            1, 1, {"turma_id": 7, "mensagem": "faça um código python para calcular logaritmo"})
+        self.assertIn("somente com desempenho", resposta["resposta"])
+        self.assertEqual(resposta["tipo"], "fora_escopo")
+        client.gerar.assert_not_called()
+        stats.execute.assert_not_called()
+
     def test_contexto_minimo_historico_e_mensagem(self):
         client, stats = MagicMock(), MagicMock()
         stats.execute.return_value = fixture()
-        client.gerar.return_value = {"fatos": [{"turma_id": 7, "metrica": "resumo"}], "medidas": []}
-        ChatProfessorService(client, stats).execute(1, 1, {"turma_id": 7, "mensagem": "Resumo", "historico": [{"role": "user", "content": "Oi"}]})
+        client.gerar.return_value = {"tipo": "academico", "fatos": [{"turma_ref": "Turma 1", "aluno_ref": None, "metrica": "resumo"}], "medidas": []}
+        saida = ChatProfessorService(client, stats).execute(1, 1, {"turma_id": 7, "mensagem": "Resumo", "historico": [{"role": "user", "content": "Oi"}]})
         payload = client.gerar.call_args.args[0]
         self.assertEqual(payload["historico"][0]["content"], "Oi")
+        self.assertEqual(payload["turmas"][0]["referencia"], "Turma 1")
+        self.assertEqual(payload["turmas"][0]["alunos"][0]["referencia"], "Aluno 1")
+        self.assertNotIn("Ana teste", str(payload))
+        self.assertNotIn("Bia teste", str(payload))
         self.assertNotIn("email", str(payload))
         self.assertNotIn("matricula", str(payload))
         self.assertNotIn("telefone", str(payload))
+        self.assertNotIn("'id'", str(payload))
+        self.assertIn("Turma teste", saida["resposta"])
         stats.execute.assert_called_once_with(1, 1, 7)
 
     def test_limite_mensagem_e_historico(self):

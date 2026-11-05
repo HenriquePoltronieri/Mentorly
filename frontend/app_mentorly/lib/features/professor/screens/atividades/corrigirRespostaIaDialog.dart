@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/services/apiService.dart';
 import '../../models/correcaoSugeridaModel.dart';
@@ -77,8 +78,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
       if (texto.isEmpty) continue;
       final corte = texto.lastIndexOf(':');
       if (corte > 0) {
-        final peso =
-            double.tryParse(texto.substring(corte + 1).trim().replaceAll(',', '.'));
+        final peso = double.tryParse(
+            texto.substring(corte + 1).trim().replaceAll(',', '.'));
         if (peso != null) {
           itens.add({'item': texto.substring(0, corte).trim(), 'peso': peso});
           continue;
@@ -93,7 +94,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
     if (_questao.text.trim().isEmpty) return 'Cole a questão';
     if (_esperada.text.trim().isEmpty) return 'Informe a resposta esperada';
     if (_resposta.text.trim().isEmpty) return 'Cole a resposta do aluno';
-    final valor = double.tryParse(_valorMaximo.text.trim().replaceAll(',', '.'));
+    final valor =
+        double.tryParse(_valorMaximo.text.trim().replaceAll(',', '.'));
     if (valor == null || valor <= 0) {
       return 'O valor máximo precisa ser maior que zero';
     }
@@ -148,7 +150,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
-            child: _sugestao == null ? _construirEntrada() : _construirResultado(),
+            child:
+                _sugestao == null ? _construirEntrada() : _construirResultado(),
           ),
         ),
       ),
@@ -177,11 +180,39 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
     );
   }
 
+  Widget _orientacaoRespostas() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.format_list_numbered, size: 19),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Para avaliar a atividade completa, cole todas as questões, '
+              'todas as respostas esperadas e todas as respostas do aluno, '
+              'mantendo a mesma numeração nos três campos. Se analisar apenas '
+              'uma questão, a nota sugerida valerá somente para ela.',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _mensagemErro() {
     if (_erro == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Text(_erro!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child:
+          Text(_erro!, style: const TextStyle(color: Colors.red, fontSize: 13)),
     );
   }
 
@@ -202,25 +233,36 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
         const SizedBox(height: 12),
         _aviso(),
         const SizedBox(height: 12),
+        _orientacaoRespostas(),
+        const SizedBox(height: 12),
         TextField(
           controller: _questao,
-          minLines: 2,
-          maxLines: 5,
-          decoration: const InputDecoration(labelText: 'Questão'),
+          minLines: 3,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            labelText: 'Todas as questões',
+            hintText: '1. Questão...\n2. Questão...',
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _esperada,
-          minLines: 2,
-          maxLines: 5,
-          decoration: const InputDecoration(labelText: 'Resposta esperada'),
+          minLines: 3,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            labelText: 'Todas as respostas esperadas',
+            hintText: '1. Resposta esperada...\n2. Resposta esperada...',
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _resposta,
-          minLines: 3,
-          maxLines: 8,
-          decoration: const InputDecoration(labelText: 'Resposta do aluno'),
+          minLines: 4,
+          maxLines: 10,
+          decoration: const InputDecoration(
+            labelText: 'Todas as respostas do aluno',
+            hintText: '1. Resposta do aluno...\n2. Resposta do aluno...',
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -240,7 +282,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
           maxLines: 4,
           decoration: const InputDecoration(
             labelText: 'Rubrica (opcional)',
-            helperText: 'Um item por linha. Exemplo: Compreensão do conceito: 50',
+            helperText:
+                'Um item por linha. Exemplo: Compreensão do conceito: 50',
           ),
         ),
         _mensagemErro(),
@@ -286,7 +329,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
                 children: [
                   Icon(icone, size: 16),
                   const SizedBox(width: 6),
-                  Expanded(child: Text(item, style: const TextStyle(fontSize: 13))),
+                  Expanded(
+                      child: Text(item, style: const TextStyle(fontSize: 13))),
                 ],
               ),
             ),
@@ -300,6 +344,50 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
     final percentual = s.percentual == s.percentual.roundToDouble()
         ? s.percentual.toInt().toString()
         : s.percentual.toStringAsFixed(1).replaceAll('.', ',');
+    Future<void> copiarResposta() async {
+      final texto = StringBuffer()
+        ..writeln('Sugestão de correção do Mentorly')
+        ..writeln(
+            'Nota sugerida: ${_formatar(s.notaSugerida)} de ${_formatar(s.valorMaximo)} ($percentual%)');
+      if (s.justificativa.isNotEmpty) {
+        texto
+          ..writeln()
+          ..writeln('Justificativa: ${s.justificativa}');
+      }
+      if (s.avaliacao.isNotEmpty) {
+        texto
+          ..writeln()
+          ..writeln('Avaliação por critério:');
+        for (final item in s.avaliacao) {
+          texto.writeln('- ${item.criterio}: ${item.rotuloResultado}. '
+              'Evidência: ${item.evidencia}'
+              '${item.faltou.isEmpty ? '' : ' Faltou: ${item.faltou}'}');
+        }
+      }
+      if (s.pontosPositivos.isNotEmpty) {
+        texto
+          ..writeln()
+          ..writeln('Pontos positivos:')
+          ..writeln(s.pontosPositivos.map((item) => '- $item').join('\n'));
+      }
+      if (s.pontosMelhorar.isNotEmpty) {
+        texto
+          ..writeln()
+          ..writeln('Pontos a melhorar:')
+          ..writeln(s.pontosMelhorar.map((item) => '- $item').join('\n'));
+      }
+      if (s.feedbackAluno.isNotEmpty) {
+        texto
+          ..writeln()
+          ..writeln('Feedback sugerido ao aluno: ${s.feedbackAluno}');
+      }
+      await Clipboard.setData(ClipboardData(text: texto.toString().trim()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Resposta da IA copiada.')),
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,10 +406,12 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Nota sugerida', style: TextStyle(fontSize: 12, color: Colors.black54)),
+              const Text('Nota sugerida',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
               Text(
                 '${_formatar(s.notaSugerida)} de ${_formatar(s.valorMaximo)}  ·  $percentual%',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               const Text(
@@ -333,7 +423,8 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
         ),
         if (s.justificativa.isNotEmpty) ...[
           const SizedBox(height: 14),
-          const Text('Justificativa', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text('Justificativa',
+              style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text(s.justificativa, style: const TextStyle(fontSize: 13)),
         ],
@@ -362,8 +453,10 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
               ),
             ),
         ],
-        _secao('Pontos positivos', s.pontosPositivos, Icons.check_circle_outline),
-        _secao('Pontos a melhorar', s.pontosMelhorar, Icons.arrow_circle_up_outlined),
+        _secao(
+            'Pontos positivos', s.pontosPositivos, Icons.check_circle_outline),
+        _secao('Pontos a melhorar', s.pontosMelhorar,
+            Icons.arrow_circle_up_outlined),
         if (s.feedbackAluno.isNotEmpty) ...[
           const SizedBox(height: 14),
           const Text('Feedback sugerido ao aluno',
@@ -376,6 +469,11 @@ class _CorrigirRespostaIaDialogState extends State<CorrigirRespostaIaDialog> {
           alignment: WrapAlignment.end,
           spacing: 8,
           children: [
+            OutlinedButton.icon(
+              onPressed: copiarResposta,
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Copiar resposta da IA'),
+            ),
             TextButton(
               onPressed: () => setState(() => _sugestao = null),
               child: const Text('Voltar'),
