@@ -215,6 +215,15 @@ class _ChatIaScreenState extends State<ChatIaScreen> {
                                               ),
                                           ]),
                                           const SizedBox(height: 8),
+                                          if (m['aviso'] is String)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: 8),
+                                              child: Text(m['aviso'].toString(),
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.black54)),
+                                            ),
                                           SelectableText(
                                               m['content'].toString()),
                                           if (m['atalhos'] is List)

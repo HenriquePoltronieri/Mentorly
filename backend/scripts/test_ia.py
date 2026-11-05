@@ -196,6 +196,20 @@ class AIClientTest(unittest.TestCase):
         with self.assertRaises(AIConfigurationError):
             AIClient(base_url="", api_key="", model="").gerar({})
 
+    def test_groq_recebe_esquema_estrito_para_insights(self):
+        def abrir(requisicao, timeout):
+            formato = json.loads(requisicao.data)["response_format"]
+            self.assertEqual(formato["type"], "json_schema")
+            self.assertTrue(formato["json_schema"]["strict"])
+            esquema = formato["json_schema"]["schema"]
+            self.assertEqual(set(esquema["required"]), set(INSIGHTS))
+            self.assertFalse(esquema["properties"]["pontosAtencao"]["items"]["additionalProperties"])
+            return RespostaFalsa(json.dumps(ENVELOPE_VALIDO).encode())
+
+        cliente = AIClient(base_url="https://api.groq.com/openai/v1", api_key="teste",
+                           model="openai/gpt-oss-20b", opener=abrir)
+        self.assertEqual(cliente.gerar({}), INSIGHTS)
+
     def test_resposta_valida_e_parseada(self):
         envelope = {"choices": [{"message": {"content": json.dumps(INSIGHTS)}}]}
         capturado = {}

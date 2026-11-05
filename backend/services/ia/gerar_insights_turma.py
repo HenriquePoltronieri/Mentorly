@@ -10,13 +10,15 @@ mapeamento e nunca ve o mapa.
 """
 
 import re
+import logging
 from collections import defaultdict
 
 from models.aluno_model import Aluno
 from models.etapa_model import Etapa
 from models.turma_model import Turma
 from services.academico.calculo import calcular_desempenho_etapa, etapa_atual
-from services.ia.client import MENSAGEM_INDISPONIVEL, AIClient, AIResponseError
+from services.ia.client import MENSAGEM_INDISPONIVEL, AIClient, AIError, AIResponseError
+from services.ia.contingencia import AVISO_LOCAL, insights_locais
 from erros import RecursoNaoEncontrado
 
 
@@ -221,14 +223,23 @@ class GerarInsightsTurmaService:
             "alunos": alunos_payload,
             "detalhesIndividuaisLimitados": len(calculados) > MAX_DETALHES_ALUNOS,
         }
-        insights = remapear_insights(self.client.gerar(payload), mapa_nomes)
+        falha = None
+        try:
+            insights = remapear_insights(self.client.gerar(payload), mapa_nomes)
+        except AIError as erro:
+            falha = erro.codigo
+            logging.getLogger(__name__).warning('Insights em modo local: codigo=%s', falha)
+            insights = insights_locais(calculados)
         return {
             "contexto": {
                 "turma": turma["nome"],
                 "anoLetivo": turma["ano_letivo"],
                 "etapa": etapa["nome"],
             },
-            "geradoPorIA": True,
-            "modelo": self.client.model,
+            "geradoPorIA": falha is None,
+            "modo": 'local' if falha else 'ia',
+            "aviso": AVISO_LOCAL if falha else None,
+            "codigo": falha,
+            "modelo": self.client.model if not falha else '',
             "insights": insights,
         }

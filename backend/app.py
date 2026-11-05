@@ -2,6 +2,7 @@ import time
 from flask import Flask, g, jsonify, request, send_from_directory, redirect
 from datetime import timedelta
 import config
+from services.ia.versao import VERSAO_IA
 from routes.admin_routes import admin_blueprint
 from routes.acesso_routes import acesso_blueprint
 
@@ -55,6 +56,7 @@ def create_app():
 
     @app.after_request
     def registrar_tempo(response):
+        response.headers['X-Mentorly-IA-Version'] = VERSAO_IA
         duracao = (time.perf_counter() - getattr(g, 'inicio_requisicao', time.perf_counter())) * 1000
         response.headers["Server-Timing"] = 'app;dur=%.2f, db;desc="%d consultas"' % (duracao, getattr(g, "consultas_db", 0))
         # Usa o padrão da rota: nunca registra query string/token do convite.
@@ -194,8 +196,13 @@ def create_app():
 
 
 if __name__ == "__main__":
+    print('Backend IA: versao=%s' % VERSAO_IA, flush=True)
+    print('IA: chave=%s modelo=%s timeout=%ss; diagnostico: python scripts/diagnosticar_ia.py' % (
+        'configurada' if config.AI_CONFIG['api_key'] else 'AUSENTE',
+        config.AI_CONFIG['model'], config.AI_CONFIG['timeout']), flush=True)
     init_database()
     install_schema()
     install_procedures()
     app = create_app()
-    app.run(debug=DEBUG)
+    from services.servidor_local import executar
+    executar(app, debug=DEBUG)

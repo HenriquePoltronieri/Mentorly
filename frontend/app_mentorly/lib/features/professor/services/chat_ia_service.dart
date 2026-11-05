@@ -80,6 +80,8 @@ class ConversaIa extends ChangeNotifier {
         'content': mapa['content'],
         if (mapa['atalhos'] is List) 'atalhos': mapa['atalhos'],
         if (mapa['tipo'] is String) 'tipo': mapa['tipo'],
+        if (mapa['aviso'] is String) 'aviso': mapa['aviso'],
+        if (mapa['limpar_foco'] == true) 'limpar_foco': true,
       });
     }
     return resultado;
@@ -160,6 +162,13 @@ class ConversaIa extends ChangeNotifier {
       return;
     }
     if (!repetir) {
+      // O mesmo atalho apos uma falha retenta a mensagem ja exibida.
+      if (pendente == texto &&
+          mensagens.isNotEmpty &&
+          mensagens.last['role'] == 'user' &&
+          mensagens.last['content'] == texto) {
+        return enviar(texto, repetir: true);
+      }
       pendente = texto;
       mensagens.add({'role': 'user', 'content': texto});
       await _salvar();
@@ -175,6 +184,7 @@ class ConversaIa extends ChangeNotifier {
           .toList();
       Map<String, dynamic>? focoAnterior;
       for (final mensagem in anteriores.reversed) {
+        if (mensagem['role'] == 'assistant' && mensagem['limpar_foco'] == true) break;
         if (mensagem['role'] != 'assistant' || mensagem['atalhos'] is! List) {
           continue;
         }
@@ -202,6 +212,8 @@ class ConversaIa extends ChangeNotifier {
         'content': resposta['resposta'],
         'atalhos': resposta['atalhos'],
         if (resposta['tipo'] is String) 'tipo': resposta['tipo'],
+        if (resposta['aviso'] is String) 'aviso': resposta['aviso'],
+        if (resposta['limpar_foco'] == true) 'limpar_foco': true,
       });
       pendente = null;
       await _salvar();

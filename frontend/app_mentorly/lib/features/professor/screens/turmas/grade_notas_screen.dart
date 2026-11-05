@@ -434,8 +434,10 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
               ],
               if (_insights != null) ...[
                 const Divider(height: 24),
-                Text('Sugestões da IA · ${_insights!.etapa}',
+                Text(
+                    '${_insights!.geradoPorIA ? 'Sugestões da IA' : 'Análise local'} · ${_insights!.etapa}',
                     style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (_insights!.aviso != null) Text(_insights!.aviso!),
                 const SizedBox(height: 6),
                 Text(_insights!.resumo),
                 ..._insights!.pontosAtencao.map((p) => Padding(

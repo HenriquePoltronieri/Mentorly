@@ -20,6 +20,7 @@ from services.ia.client import MENSAGEM_INDISPONIVEL, AIClient, AIResponseError
 from services.ia.gerar_insights_turma import (
     MAX_DETALHES_ALUNOS,
     GerarInsightsTurmaService,
+    remapear_insights,
 )
 
 # Valores reais do cenario, todos distintivos para a busca por valor.
@@ -297,8 +298,11 @@ class RemapeamentoTest(_Base):
                     p.start()
                 try:
                     with self.assertRaises(AIResponseError) as erro:
-                        service.execute(10, 20, 2)
+                        remapear_insights(cliente.resposta, {1: 'Ana', 2: 'Bruno', 3: 'Carla', 4: 'Davi'})
                     self.assertEqual(str(erro.exception), MENSAGEM_INDISPONIVEL)
+                    saida = service.execute(10, 20, 2)
+                    self.assertFalse(saida['geradoPorIA'])
+                    self.assertNotIn(texto, str(saida['insights']))
                 finally:
                     for p in patches:
                         p.stop()
@@ -313,7 +317,10 @@ class RemapeamentoTest(_Base):
             p.start()
         try:
             with self.assertRaises(AIResponseError):
-                service.execute(10, 20, 2)
+                remapear_insights(cliente.resposta, {n: 'Pessoa' for n in range(1, 51)})
+            saida = service.execute(10, 20, 2)
+            self.assertFalse(saida['geradoPorIA'])
+            self.assertNotIn('Aluno 51 se destacou', str(saida['insights']))
         finally:
             for p in patches:
                 p.stop()

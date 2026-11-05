@@ -23,6 +23,8 @@ class InsightsTurmaModel {
   final int anoLetivo;
   final String etapa;
   final String modelo;
+  final bool geradoPorIA;
+  final String? aviso;
   final String resumo;
   final List<String> pontosPositivos;
   final List<PontoAtencaoIa> pontosAtencao;
@@ -33,6 +35,8 @@ class InsightsTurmaModel {
     required this.anoLetivo,
     required this.etapa,
     required this.modelo,
+    this.geradoPorIA = true,
+    this.aviso,
     required this.resumo,
     required this.pontosPositivos,
     required this.pontosAtencao,
@@ -53,6 +57,8 @@ class InsightsTurmaModel {
       anoLetivo: (contexto['anoLetivo'] as num?)?.toInt() ?? 0,
       etapa: contexto['etapa']?.toString() ?? '',
       modelo: json['modelo']?.toString() ?? '',
+      geradoPorIA: json['geradoPorIA'] != false,
+      aviso: json['aviso']?.toString(),
       resumo: insights['resumo']?.toString() ?? '',
       pontosPositivos: _textos(insights['pontosPositivos']),
       pontosAtencao: pontos
