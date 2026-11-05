@@ -305,33 +305,34 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
         .whereType<double>()
         .toList();
     if (notas.isEmpty) return '—';
-    final distribuido = doCriterio.fold<double>(
-        0, (soma, a) => soma + ((a['nota_maxima'] as num?)?.toDouble() ?? 0));
-    final pendentes = doCriterio.length - notas.length;
-    return '${_numero(notas.fold<double>(0, (a, b) => a + b))} / ${_numero(distribuido)}${pendentes > 0 ? '\n$pendentes sem nota' : ''}';
+    return _numero(notas.fold<double>(0, (a, b) => a + b));
   }
 
-  Map<String, dynamic>? _resultadoSelecionado(dynamic aluno) {
-    final resultados = aluno['resultado_etapas'] as List? ?? const [];
+  String _totalEtapa(dynamic aluno) {
+    final atividades = (_dados!['atividades_cadastro'] as List)
+        .where((a) => a['etapa_id'] == _etapa);
+    final notas = atividades
+        .map((a) => _notaDigitada(aluno['id'], a['id']))
+        .whereType<double>()
+        .toList();
+    return notas.isEmpty
+        ? '—'
+        : _numero(notas.fold<double>(0, (soma, nota) => soma + nota));
+  }
+
+  Map<String, dynamic>? _acompanhamentoSelecionado(dynamic aluno) {
+    final lista = aluno['acompanhamento_etapas'] as List? ?? const [];
     final encontrados =
-        resultados.where((e) => e['etapa_id'].toString() == _etapa.toString());
+        lista.where((e) => e['etapa_id'].toString() == _etapa.toString());
     return encontrados.isEmpty
         ? null
         : Map<String, dynamic>.from(encontrados.first as Map);
   }
 
-  String _totalEtapa(dynamic aluno) {
-    final resultado = _resultadoSelecionado(aluno);
-    if (resultado == null) return '—';
-    final valor = resultado['nota_calculada'] ?? resultado['nota_parcial'];
-    if (valor == null) return '—';
-    return '${_numero(valor as num)} / ${_numero(resultado['nota_maxima'] as num?)}${resultado['nota_calculada'] == null ? '\nparcial' : ''}';
-  }
-
   Widget _painelAtencao(List<dynamic> alunos) {
     final atencao = alunos.where((a) {
-      final resultado = _resultadoSelecionado(a);
-      return resultado?['situacao'] == 'abaixo_do_minimo';
+      final acompanhamento = _acompanhamentoSelecionado(a);
+      return const ['Alto', 'Médio'].contains(acompanhamento?['risco']);
     }).toList();
     return Card(
         margin: EdgeInsets.zero,
@@ -371,8 +372,14 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                 const SizedBox(height: 10),
                 ...atencao.take(5).map((a) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                        '• ${a['nome']} · resultado abaixo do mínimo na etapa')))
+                    child: Text(() {
+                      final acompanhamento = _acompanhamentoSelecionado(a);
+                      final motivos = acompanhamento?['motivos'] as List?;
+                      final motivo = motivos == null || motivos.isEmpty
+                          ? 'desempenho que precisa de atenção'
+                          : motivos.first.toString();
+                      return '• ${a['nome']} · $motivo';
+                    }())))
               ],
               if (_erroIa != null) ...[
                 const SizedBox(height: 10),
@@ -599,27 +606,14 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                         columnSpacing: 20,
                         columns: [
                           const DataColumn(label: Text('Aluno')),
-                          ...criterios.map((c) {
-                            final distribuido = atividades
-                                .where((a) => a['criterio_id'] == c['id'])
-                                .fold<double>(
-                                    0,
-                                    (soma, a) =>
-                                        soma +
-                                        ((a['nota_maxima'] as num?)
-                                                ?.toDouble() ??
-                                            0));
-                            return DataColumn(
-                                label: SizedBox(
-                                    width: 135,
-                                    child: Text(
-                                        '${c['nome']}\n${_numero(distribuido)} de ${_numero(c['nota_maxima'] as num?)} pts distribuídos',
-                                        maxLines: 3)));
-                          }),
+                          ...criterios.map((c) => DataColumn(
+                              label: SizedBox(
+                                  width: 135,
+                                  child: Text(c['nome'].toString(),
+                                      maxLines: 2)))),
                           const DataColumn(
                               label: SizedBox(
-                                  width: 120,
-                                  child: Text('Total da etapa\ncalculado'))),
+                                  width: 120, child: Text('Total atual'))),
                           ...atividades.map((a) => DataColumn(
                               label: SizedBox(
                                   width: 150,
@@ -682,6 +676,8 @@ class _GradeNotasScreenState extends State<GradeNotasScreen> {
                                             decoration: InputDecoration(
                                                 isDense: true,
                                                 hintText: '—',
+                                                suffixText:
+                                                    'de ${_numero(a['nota_maxima'] as num?)}',
                                                 helperText: [
                                                   'Ausente',
                                                   'Não entregou',

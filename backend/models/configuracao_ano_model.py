@@ -24,12 +24,14 @@ class ConfiguracaoAno:
                 anterior = por_ordem.get(ordem)
                 if anterior:
                     etapa_id = anterior["id"]
-                    cursor.execute("UPDATE etapa SET nome=%s, nota_minima=%s, nota_maxima=%s WHERE id=%s",
-                                   (etapa["nome"], etapa["nota_minima"], etapa["nota_maxima"], etapa_id))
+                    cursor.execute("UPDATE etapa SET nome=%s, nota_minima=%s, nota_maxima=%s, data_inicio=%s, data_fim=%s WHERE id=%s",
+                                   (etapa["nome"], etapa["nota_minima"], etapa["nota_maxima"],
+                                    etapa.get("data_inicio"), etapa.get("data_fim"), etapa_id))
                 else:
-                    cursor.execute("INSERT INTO etapa (coordenacao_id, ano_letivo, ordem, nome, nota_minima, nota_maxima) "
-                                   "VALUES (%s,%s,%s,%s,%s,%s)",
-                                   (coordenacao_id, ano, ordem, etapa["nome"], etapa["nota_minima"], etapa["nota_maxima"]))
+                    cursor.execute("INSERT INTO etapa (coordenacao_id, ano_letivo, ordem, nome, nota_minima, nota_maxima, data_inicio, data_fim) "
+                                   "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                                   (coordenacao_id, ano, ordem, etapa["nome"], etapa["nota_minima"], etapa["nota_maxima"],
+                                    etapa.get("data_inicio"), etapa.get("data_fim")))
                     etapa_id = cursor.lastrowid
                 # Colação do banco decide se o nome já existe (case/acento).
                 ids = []

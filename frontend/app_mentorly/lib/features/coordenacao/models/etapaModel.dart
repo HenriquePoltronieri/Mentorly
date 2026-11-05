@@ -4,8 +4,8 @@ class EtapaModel {
   final String nome;
   final int numero;
   final int anoLetivo;
-  final String? dataInicio;
-  final String? dataFim;
+  String? dataInicio;
+  String? dataFim;
   final bool ativa;
   final bool fechada;
   double? notaMinima;

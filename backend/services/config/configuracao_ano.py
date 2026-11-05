@@ -1,5 +1,6 @@
 """Valida a configuração inteira antes de iniciar qualquer gravação."""
 from decimal import Decimal
+from datetime import date
 import unicodedata
 
 from models.configuracao_ano_model import ConfiguracaoAno
@@ -14,6 +15,15 @@ def _decimal(valor, rotulo, maximo):
     if decimal != decimal.quantize(Decimal("0.01")):
         raise ValueError("%s: use no máximo duas casas decimais." % rotulo)
     return decimal
+
+
+def _data(valor, rotulo):
+    if valor in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(valor)[:10])
+    except (TypeError, ValueError):
+        raise ValueError("%s: informe uma data válida." % rotulo)
 
 
 def validar_configuracao(etapas, criterios):
@@ -32,7 +42,19 @@ def validar_configuracao(etapas, criterios):
         nome = entrada.texto(etapa.get("nome", "Etapa %d" % indice), "Nome da etapa", entrada.LIMITE_NOME_ETAPA)
         if not nome:
             raise ValueError("Preencha o nome de cada etapa.")
-        etapas_validas.append({"nome": nome, "nota_minima": minima, "nota_maxima": maxima})
+        inicio = _data(etapa.get("data_inicio"), "Início da etapa %d" % indice)
+        fim = _data(etapa.get("data_fim"), "Fim da etapa %d" % indice)
+        if (inicio is None) != (fim is None):
+            raise ValueError("Etapa %d: informe as duas datas ou deixe ambas vazias." % indice)
+        if inicio and fim and fim < inicio:
+            raise ValueError("Etapa %d: a data final deve ser igual ou posterior à inicial." % indice)
+        etapas_validas.append({"nome": nome, "nota_minima": minima,
+                               "nota_maxima": maxima, "data_inicio": inicio,
+                               "data_fim": fim})
+    datadas = [e for e in etapas_validas if e["data_inicio"]]
+    for anterior, atual in zip(datadas, datadas[1:]):
+        if atual["data_inicio"] <= anterior["data_fim"]:
+            raise ValueError("As datas das etapas não podem se sobrepor.")
     nomes = set()
     criterios_validos = []
     for criterio in criterios:

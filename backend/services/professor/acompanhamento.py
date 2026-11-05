@@ -21,6 +21,8 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
     if fim and not inicio:
         final = (fim - hoje).days <= 14 or final
     avaliadas = [a for a in atividades if a["nota"] is not None and a["nota_maxima"]]
+    dificuldades = [a for a in avaliadas
+                    if float(a["nota"]) / float(a["nota_maxima"]) < .5]
     base = {"etapa_id": etapa["id"], "etapa": etapa["nome"],
             "fase": "final" if final else "em_andamento", "progresso": round(progresso * 100, 1) if progresso is not None else None,
             "fechada": bool(etapa.get("fechada")),
@@ -30,7 +32,11 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
             "nota_maxima": float(etapa["nota_maxima"]) if etapa.get("nota_maxima") is not None else None,
             "pontos_ponderados": None, "pontos_restantes": None, "pontos_faltantes": None,
             "pontos_nao_planejados": None,
-            "cobertura_avaliada": None, "risco": "Sem dados", "motivos": []}
+            "cobertura_avaliada": None, "risco": "Sem dados", "motivos": [],
+            "atividades_muito_baixas": [
+                {"id": a["id"], "titulo": a["titulo"], "nota": a["nota"],
+                 "nota_maxima": a["nota_maxima"]} for a in dificuldades
+            ]}
     _, valido = resumo_pesos(criterios)
     if not valido or base["nota_minima"] is None or not base["nota_maxima"] or any(
         a.get("criterio_id") not in {c["id"] for c in criterios} or not a["nota_maxima"] for a in atividades
@@ -43,9 +49,12 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
         if peso <= 0:
             continue
         lista = [a for a in atividades if a.get("criterio_id") == criterio["id"]]
-        total, planejados, _ = base_pontos(lista, criterio, base['nota_maxima'])
+        total, planejados, previstos = base_pontos(
+            lista, criterio, base['nota_maxima'])
         parcela = peso * base["nota_maxima"]
-        nao_planejados += max(0, parcela - planejados)
+        # O limite de pontos e definido explicitamente pela Coordenacao; o
+        # peso serve ao calculo, mas nao substitui esse limite.
+        nao_planejados += max(0, previstos - planejados)
         if total <= 0:
             restantes += parcela
             continue
@@ -60,7 +69,33 @@ def acompanhar_etapa(etapa, criterios, atividades, hoje):
                 cobertura_avaliada=round(cobertura * 100, 1))
     if cobertura <= 0:
         return base
-    if nao_planejados > TOLERANCIA_NOTA:
+    planejamento_completo = nao_planejados <= TOLERANCIA_NOTA
+    lancamentos_completos = bool(atividades) and len(avaliadas) == len(atividades)
+    if planejamento_completo and lancamentos_completos:
+        if obtidos >= base["nota_minima"] - TOLERANCIA_NOTA:
+            base["risco"] = "Baixo"
+        else:
+            base["risco"] = "Alto"
+            base["motivos"] = [
+                "Todos os pontos da etapa já foram distribuídos e lançados, mas o resultado está abaixo do mínimo. Avalie reforço e recuperação."
+            ]
+    elif final and obtidos + restantes < base["nota_minima"] - TOLERANCIA_NOTA:
+        base["risco"] = "Alto"
+        base["motivos"] = [
+            "A etapa está perto do fim e os pontos ainda possíveis nas atividades cadastradas não alcançam o mínimo. Avalie reforço e recuperação."
+        ]
+    elif dificuldades:
+        nomes = ", ".join(a["titulo"] for a in dificuldades[:2])
+        base["risco"] = "Médio"
+        base["motivos"] = [
+            f"Desempenho abaixo de 50% em atividade: {nomes}. Confira a dificuldade e considere uma intervenção."
+        ]
+    elif final and cobertura > 0 and obtidos / cobertura < base["nota_minima"] - TOLERANCIA_NOTA:
+        base["risco"] = "Médio"
+        base["motivos"] = [
+            "A etapa está perto do fim e a projeção pelas atividades lançadas está abaixo do mínimo. Confira pendências e planeje uma intervenção."
+        ]
+    elif nao_planejados > TOLERANCIA_NOTA:
         base['risco'] = 'Em andamento'
         base['motivos'] = ['Planejamento incompleto: ainda faltam atividades para cobrir os pontos da etapa. A pontuação atual é parcial.']
     elif not final:

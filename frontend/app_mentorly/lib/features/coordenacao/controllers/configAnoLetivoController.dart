@@ -15,6 +15,7 @@ class ConfigAnoLetivoController {
   List<EtapaModel> etapas = [];
   List<CriterioAvaliacaoModel> criterios = [];
   final Map<int, List<String>> rascunhosNotas = {};
+  final Map<int, List<String>> rascunhosDatas = {};
   final Map<String, String> rascunhosPesos = {};
   final Map<String, String> rascunhosMaximos = {};
   List<String>? criteriosSelecionados;
@@ -49,6 +50,7 @@ class ConfigAnoLetivoController {
   Future<void> carregarConfiguracaoExistente() async {
     _sessaoRascunho = _api.token;
     rascunhosNotas.clear();
+    rascunhosDatas.clear();
     rascunhosPesos.clear();
     rascunhosMaximos.clear();
     criteriosSelecionados = null;
@@ -83,8 +85,8 @@ class ConfigAnoLetivoController {
     return null;
   }
 
-  Future<void> salvarNotasEtapa(
-      int numero, double minima, double maxima) async {
+  Future<void> salvarNotasEtapa(int numero, double minima, double maxima,
+      [String dataInicio = '', String dataFim = '']) async {
     final etapa = etapaPorNumero(numero);
     if (etapa == null) throw Exception('Etapa não encontrada.');
     if (!minima.isFinite ||
@@ -97,6 +99,10 @@ class ConfigAnoLetivoController {
     }
     etapa.notaMinima = minima;
     etapa.notaMaxima = maxima;
+    if (dataInicio.isNotEmpty || dataFim.isNotEmpty) {
+      etapa.dataInicio = dataInicio;
+      etapa.dataFim = dataFim;
+    }
   }
 
   Future<void> salvarConfiguracao(Map<String, double> pesos,
@@ -109,6 +115,8 @@ class ConfigAnoLetivoController {
                 'nome': e.nome,
                 'nota_minima': e.notaMinima,
                 'nota_maxima': e.notaMaxima,
+                'data_inicio': e.dataInicio,
+                'data_fim': e.dataFim,
               })
           .toList(),
       'criterios': pesos.entries

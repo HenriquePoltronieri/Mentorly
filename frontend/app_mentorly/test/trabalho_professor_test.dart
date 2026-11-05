@@ -52,6 +52,50 @@ Map<String, dynamic> gradeFixture() => {
       ],
     };
 
+Map<String, dynamic> gradeComResumoFixture() => {
+      'etapas': [
+        {'id': 1, 'nome': 'Etapa 1', 'nota_minima': 18, 'nota_maxima': 30}
+      ],
+      'criterios': [
+        {
+          'id': 4,
+          'etapa_id': 1,
+          'nome': 'Comportamento',
+          'peso': 33.33,
+          'nota_maxima': 10
+        }
+      ],
+      'atividades_cadastro': [
+        {
+          'id': 8,
+          'title': 'Participação',
+          'class_id': 7,
+          'nota_maxima': 2,
+          'etapa_id': 1,
+          'criterio_id': 4
+        }
+      ],
+      'alunos': [
+        {
+          'id': 2,
+          'nome': 'Ana',
+          'acompanhamento_etapas': [
+            {
+              'etapa_id': 1,
+              'risco': 'Médio',
+              'motivos': [
+                'Desempenho abaixo de 50% em atividade: Participação.'
+              ]
+            }
+          ],
+          'resultado_etapas': [],
+          'atividades': [
+            {'id': 8, 'nota': 1, 'situacao': 'Entregue', 'criterio_id': 4}
+          ]
+        }
+      ],
+    };
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -140,6 +184,27 @@ void main() {
               if (r.method == 'POST') posts++;
               return resposta(gradeFixture());
             }));
+  });
+  testWidgets('grade mostra pontos simples, planejamento e alerta da etapa',
+      (t) async {
+    t.view.physicalSize = const Size(1400, 1000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await http.runWithClient(() async {
+      await t.pumpWidget(
+          tela(const GradeNotasScreen(), args: {'id': 7, 'nome': '7A'}));
+      await t.pumpAndSettle();
+      expect(find.text('2 de 10 pts distribuídos'), findsOneWidget);
+      expect(find.text('8 pts restantes'), findsOneWidget);
+      expect(find.text('1 aluno(s) precisam de conferência nesta etapa.'),
+          findsOneWidget);
+      expect(find.textContaining('Desempenho abaixo de 50%'), findsOneWidget);
+      expect(find.text('2 / 2'), findsNothing);
+      expect(find.text('1 / 30'), findsNothing);
+      expect(find.text('Total atual'), findsOneWidget);
+      expect(find.text('de 2'), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+    }, () => MockClient((_) async => resposta(gradeComResumoFixture())));
   });
   testWidgets('recuperação de rascunho preserva nota alterada no servidor',
       (t) async {

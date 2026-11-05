@@ -61,14 +61,21 @@ class AcompanhamentoTest(TestCase):
 
     def test_alerta_so_nos_ultimos_vinte_por_cento(self):
         self.assertEqual(mariana(dados(hoje=date(2026, 10, 19)))["risco"], "Em andamento")
-        # So 2 dos 10 pontos foram planejados: nao inventa os outros 8.
-        self.assertEqual(mariana(dados(hoje=date(2026, 10, 20)))["risco"], "Em andamento")
-        self.assertEqual(dados(hoje=date(2026, 10, 20))["alunos_em_risco"], 0)
+        # Perto do fim, a projecao abaixo do minimo pede conferencia, mesmo
+        # que ainda existam pontos a planejar.
+        self.assertEqual(mariana(dados(hoje=date(2026, 10, 20)))["risco"], "Médio")
+        self.assertEqual(dados(hoje=date(2026, 10, 20))["alunos_em_risco"], 1)
 
     def test_sem_datas_nao_adivinha_fim_com_uma_avaliacao(self):
         etapa = {"id": 1, "nome": "Etapa", "nota_minima": 6, "nota_maxima": 10}
         self.assertEqual(mariana(dados(etapas=[etapa]))["risco"], "Em andamento")
-        self.assertEqual(mariana(dados(etapas=[{**etapa, "fechada": True}]))["risco"], "Em andamento")
+        self.assertEqual(mariana(dados(etapas=[{**etapa, "fechada": True}]))["risco"], "Médio")
+
+    def test_nota_muito_baixa_alerta_antes_do_fim(self):
+        a = mariana(dados(hoje=date(2026, 8, 20), notas=[
+            {"aluno_id": 3, "atividade_id": 8, "valor": .5}]))
+        self.assertEqual(a["risco"], "Médio")
+        self.assertIn("abaixo de 50%", a["motivos"][0])
 
     def test_sem_notas_ou_lancamentos_vencidos_nao_viram_zero(self):
         d = dados(hoje=date(2026, 11, 1), notas=[], atividades=[
@@ -85,7 +92,7 @@ class AcompanhamentoTest(TestCase):
                       {"id": 9, "titulo": "Prova", "etapa_id": 1, "criterio_id": 1, "nota_maxima": 8}]
         d = dados(hoje=date(2026, 11, 1), atividades=atividades)
         a = mariana(d)
-        self.assertEqual(a["risco"], "Em andamento")
+        self.assertEqual(a["risco"], "Médio")
         self.assertEqual(a["acompanhamento"]["pontos_ponderados"], 1)
         self.assertEqual(a["acompanhamento"]["pontos_restantes"], 8)
         d = dados(hoje=date(2026, 11, 1), atividades=atividades, notas=[
@@ -114,7 +121,7 @@ class AcompanhamentoTest(TestCase):
         a = mariana(dados(hoje=date(2026, 11, 1), criterios=[
             {"id": 1, "etapa_id": 1, "peso": 20}, {"id": 2, "etapa_id": 1, "peso": 80}]))
         self.assertEqual(a["acompanhamento"]["pontos_restantes"], 8)
-        self.assertEqual(a["risco"], "Em andamento")
+        self.assertEqual(a["risco"], "Médio")
 
     def test_configuracao_invalida_nao_alerta(self):
         self.assertEqual(mariana(dados(hoje=date(2026, 11, 1), criterios=[]))["risco"], "Sem dados")
@@ -129,7 +136,7 @@ class AcompanhamentoTest(TestCase):
         kwargs = dict(etapas=etapas, atividades=atividades, criterios=criterios, notas=notas, atual=2)
         self.assertEqual(mariana(dados(**kwargs))["risco"], "Em andamento")
         self.assertEqual(mariana(dados(**kwargs))["pontos_obtidos"], 2)
-        self.assertEqual(mariana(dados(**kwargs, etapa_id=1))["risco"], "Em andamento")
+        self.assertEqual(mariana(dados(**kwargs, etapa_id=1))["risco"], "Médio")
 
 
 class OrientacaoIndividualTest(TestCase):

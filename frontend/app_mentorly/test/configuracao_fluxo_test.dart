@@ -106,9 +106,10 @@ void main() {
         await tester.tap(find.text('Salvar e continuar'));
         await tester.pumpAndSettle();
         for (var i = 1; i <= quantidade; i++) {
-          final campos = find.byType(TextField);
-          await tester.enterText(campos.at(0), '6');
-          await tester.enterText(campos.at(1), '10');
+          await tester.enterText(
+              find.byKey(const ValueKey('etapa_nota_minima')), '6');
+          await tester.enterText(
+              find.byKey(const ValueKey('etapa_nota_maxima')), '10');
           final botao = find.text(i == quantidade
               ? 'Salvar e continuar'
               : 'Salvar e ir para a etapa ${i + 1}');
@@ -145,7 +146,8 @@ void main() {
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
         expect(
-            (tester.widget<TextField>(find.byType(TextField).at(0)))
+            (tester.widget<TextField>(
+                    find.byKey(const ValueKey('etapa_nota_minima'))))
                 .controller!
                 .text,
             '6');

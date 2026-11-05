@@ -148,6 +148,21 @@ class ConfiguracaoDosMaximosTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "soma dos máximos"):
             validar_configuracao(etapas, criterios)
 
+    def test_datas_das_etapas_sao_salvas_e_nao_podem_sobrepor(self):
+        etapas = [
+            {"nome": "Etapa 1", "nota_minima": 6, "nota_maxima": 10,
+             "data_inicio": "2026-02-01", "data_fim": "2026-04-30"},
+            {"nome": "Etapa 2", "nota_minima": 6, "nota_maxima": 10,
+             "data_inicio": "2026-05-01", "data_fim": "2026-07-31"},
+        ]
+        criterios = [{"nome": "Provas", "peso": 100,
+                      "notas_maximas": [10, 10]}]
+        validadas, _ = validar_configuracao(etapas, criterios)
+        self.assertEqual(str(validadas[0]["data_inicio"]), "2026-02-01")
+        etapas[1]["data_inicio"] = "2026-04-30"
+        with self.assertRaisesRegex(ValueError, "não podem se sobrepor"):
+            validar_configuracao(etapas, criterios)
+
     @patch("services.activity.validacao.Criterio.find_by_id")
     @patch("services.activity.validacao.Atividade.find_por_criterio")
     def test_atividade_nao_ultrapassa_limite_da_coordenacao(

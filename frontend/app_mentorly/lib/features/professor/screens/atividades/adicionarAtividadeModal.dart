@@ -76,30 +76,23 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((e) => e['fechada'] != true && e['ativa'] != false)
           .toList();
+      // Nova atividade sempre começa pela primeira etapa aberta. Assim o
+      // professor só avança quando escolher, em vez de o formulário reaproveitar
+      // silenciosamente a etapa mais recente.
       _etapas.sort((a, b) =>
-          ((b['ordem'] ?? 0) as num).compareTo((a['ordem'] ?? 0) as num));
-      final hoje = DateTime.now();
-      final atuais = _etapas.where((e) {
-        final inicio = DateTime.tryParse(e['data_inicio']?.toString() ?? '');
-        final fim = DateTime.tryParse(e['data_fim']?.toString() ?? '');
-        return inicio != null &&
-            fim != null &&
-            !hoje.isBefore(inicio) &&
-            hoje.isBefore(fim.add(const Duration(days: 1)));
-      }).toList();
+          ((a['ordem'] ?? 0) as num).compareTo((b['ordem'] ?? 0) as num));
       final base = widget.atividade ?? widget.modelo;
       _etapa = _etapas.any((e) => e['id'] == base?.etapaId)
           ? base!.etapaId
-          : atuais.isNotEmpty
-              ? atuais.first['id'] as int
-              : _etapas.isNotEmpty
-                  ? _etapas.first['id'] as int
-                  : null;
+          : _etapas.isNotEmpty
+              ? _etapas.first['id'] as int
+              : null;
       if (_etapa != null) {
         final respostas = await Future.wait([
           CriteriosService().listarCriterios(_etapa!),
           if (_turma != null)
-            AtividadesService().listarAtividades(turmaId: _turma!.id)
+            AtividadesService()
+                .listarAtividades(turmaId: _turma!.id, atualizar: true)
           else
             Future.value(<AtividadeModel>[]),
         ]);
@@ -429,7 +422,7 @@ class _AdicionarAtividadeModalState extends State<AdicionarAtividadeModal> {
                               .withValues(alpha: .45),
                           borderRadius: BorderRadius.circular(10)),
                       child: Text(
-                          'Limite definido pela Coordenação: ${_formatar(_limite!)} pts · Já distribuídos: ${_formatar(_distribuido)} pts · Restam: ${_formatar((_restante ?? 0).clamp(0, double.infinity).toDouble())} pts')),
+                          'Neste tipo de pontuação: limite da Coordenação ${_formatar(_limite!)} pts · professor já distribuiu ${_formatar(_distribuido)} pts · ainda restam ${_formatar((_restante ?? 0).clamp(0, double.infinity).toDouble())} pts.')),
                 ],
                 const SizedBox(height: 16),
                 TextFormField(

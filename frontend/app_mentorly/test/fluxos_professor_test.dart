@@ -64,8 +64,7 @@ void main() {
             }));
   });
 
-  testWidgets(
-      'atividade preseleciona turma e etapa atual e usa valor configurado',
+  testWidgets('atividade começa na primeira etapa e usa o valor configurado',
       (t) async {
     Map<String, dynamic>? enviado;
     await http.runWithClient(() async {
@@ -82,7 +81,7 @@ void main() {
                   find.byKey(const ValueKey('atividade_valor')))
               .controller!
               .text,
-          '20');
+          '10');
       await t.ensureVisible(find.byKey(const ValueKey('atividade_data')));
       await t.pumpAndSettle();
       await t.tap(find.byKey(const ValueKey('atividade_data')));
@@ -93,20 +92,20 @@ void main() {
       await t.tap(find.text('Salvar atividade'));
       await t.pumpAndSettle();
       expect(enviado?['class_id'], 7);
-      expect(enviado?['etapa_id'], 2);
-      expect(enviado?['nota_maxima'], 20);
+      expect(enviado?['etapa_id'], 1);
+      expect(enviado?['nota_maxima'], 10);
       expect(find.text('Lançar notas agora?'), findsOneWidget);
     },
         () => MockClient((r) async {
               if (r.method == 'GET' &&
-                  r.url.path == '/api/config/criterios/etapa/2') {
+                  r.url.path == '/api/config/criterios/etapa/1') {
                 return json([
                   {
                     'id': 11,
                     'nome': 'Provas',
                     'peso': 100,
-                    'nota_maxima': 20,
-                    'etapa_id': 2
+                    'nota_maxima': 10,
+                    'etapa_id': 1
                   }
                 ]);
               }
@@ -140,8 +139,8 @@ void main() {
                 'id': 8,
                 'title': 'Atividade teste',
                 'class_id': 7,
-                'nota_maxima': 20,
-                'etapa_id': 2,
+                'nota_maxima': 10,
+                'etapa_id': 1,
                 'criterio_id': 11
               });
             }));

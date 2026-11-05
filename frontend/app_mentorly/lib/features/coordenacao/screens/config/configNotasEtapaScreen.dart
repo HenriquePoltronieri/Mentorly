@@ -27,12 +27,15 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
   final _controller = ConfigAnoLetivoController();
   final _minimaController = TextEditingController();
   final _maximaController = TextEditingController();
+  final _inicioController = TextEditingController();
+  final _fimController = TextEditingController();
 
   int _etapaAtual = 1;
   bool _carregando = false;
   String? _mensagemErro;
   String? _erroMinimo;
   String? _erroPontos;
+  String? _erroDatas;
 
   int get _totalEtapas => _controller.etapas.length;
 
@@ -51,6 +54,9 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
         rascunho?[0] ?? etapa?.notaMinima?.toString() ?? '';
     _maximaController.text =
         rascunho?[1] ?? etapa?.notaMaxima?.toString() ?? '';
+    final datas = _controller.rascunhosDatas[_etapaAtual];
+    _inicioController.text = datas?[0] ?? etapa?.dataInicio ?? '';
+    _fimController.text = datas?[1] ?? etapa?.dataFim ?? '';
   }
 
   void _guardarRascunho() {
@@ -58,6 +64,26 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
       _minimaController.text,
       _maximaController.text
     ];
+    _controller.rascunhosDatas[_etapaAtual] = [
+      _inicioController.text,
+      _fimController.text
+    ];
+  }
+
+  Future<void> _escolherData(TextEditingController campo) async {
+    final atual = DateTime.tryParse(campo.text);
+    final ano = _controller.anoLetivo ?? DateTime.now().year;
+    final data = await showDatePicker(
+        context: context,
+        initialDate: atual ?? DateTime(ano, 1, 1),
+        firstDate: DateTime(ano - 1, 1, 1),
+        lastDate: DateTime(ano + 1, 12, 31));
+    if (data == null) return;
+    setState(() {
+      campo.text = data.toIso8601String().split('T').first;
+      _erroDatas = null;
+      _guardarRascunho();
+    });
   }
 
   double get _pontosAno => _controller.etapas.fold(0.0, (total, etapa) {
@@ -78,6 +104,8 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
     _guardarRascunho();
     final minima = double.tryParse(_minimaController.text.replaceAll(',', '.'));
     final maxima = double.tryParse(_maximaController.text.replaceAll(',', '.'));
+    final inicio = DateTime.tryParse(_inicioController.text);
+    final fim = DateTime.tryParse(_fimController.text);
 
     String? validar(double? valor) {
       if (valor == null || !valor.isFinite) return 'Digite um número válido';
@@ -94,8 +122,17 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
       if (_erroMinimo == null && _erroPontos == null && minima! >= maxima!) {
         _erroMinimo = 'O mínimo deve ser menor que os pontos da etapa';
       }
+      _erroDatas = inicio == null && fim == null
+          ? null
+          : inicio == null || fim == null
+              ? 'Informe as duas datas da etapa'
+              : fim.isBefore(inicio)
+                  ? 'A data final deve ser igual ou posterior à inicial'
+                  : null;
     });
-    if (_erroMinimo != null || _erroPontos != null) return;
+    if (_erroMinimo != null || _erroPontos != null || _erroDatas != null) {
+      return;
+    }
 
     setState(() {
       _carregando = true;
@@ -103,7 +140,8 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
     });
 
     try {
-      await _controller.salvarNotasEtapa(_etapaAtual, minima!, maxima!);
+      await _controller.salvarNotasEtapa(_etapaAtual, minima!, maxima!,
+          _inicioController.text, _fimController.text);
 
       if (!mounted) return;
 
@@ -112,6 +150,7 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
           _etapaAtual++;
           _erroMinimo = null;
           _erroPontos = null;
+          _erroDatas = null;
           _preencherCamposDaEtapa();
         });
       } else {
@@ -139,6 +178,7 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
         _mensagemErro = null;
         _erroMinimo = null;
         _erroPontos = null;
+        _erroDatas = null;
         _preencherCamposDaEtapa();
       });
       return;
@@ -151,6 +191,8 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
     _guardarRascunho();
     _minimaController.dispose();
     _maximaController.dispose();
+    _inicioController.dispose();
+    _fimController.dispose();
     super.dispose();
   }
 
@@ -190,13 +232,46 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Defina quantos pontos esta etapa vale e quantos o aluno precisa para aprovação.',
+                    'Defina as datas, quantos pontos esta etapa vale e quantos o aluno precisa para aprovação. As datas permitem avisar quando o fim estiver próximo.',
                     style: TextStyle(color: Colors.black54),
                   ),
                   const SizedBox(height: 16),
                   Column(
                     children: [
+                      Row(children: [
+                        Expanded(
+                            child: TextField(
+                                key: const ValueKey('etapa_data_inicio'),
+                                controller: _inicioController,
+                                readOnly: true,
+                                onTap: () => _escolherData(_inicioController),
+                                decoration: const InputDecoration(
+                                    labelText: 'Início da etapa',
+                                    suffixIcon: Icon(Icons.calendar_today)))),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: TextField(
+                                key: const ValueKey('etapa_data_fim'),
+                                controller: _fimController,
+                                readOnly: true,
+                                onTap: () => _escolherData(_fimController),
+                                decoration: const InputDecoration(
+                                    labelText: 'Fim da etapa',
+                                    suffixIcon: Icon(Icons.calendar_today)))),
+                      ]),
+                      if (_erroDatas != null)
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(_erroDatas!,
+                                    style: TextStyle(
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                        fontSize: 12)))),
+                      const SizedBox(height: 16),
                       TextField(
+                        key: const ValueKey('etapa_nota_minima'),
                         controller: _minimaController,
                         autofocus: true,
                         textInputAction: TextInputAction.next,
@@ -212,6 +287,7 @@ class _ConfigNotasEtapaScreenState extends State<ConfigNotasEtapaScreen> {
                       ),
                       const SizedBox(height: 16),
                       TextField(
+                        key: const ValueKey('etapa_nota_maxima'),
                         controller: _maximaController,
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _salvarEContinuar(),

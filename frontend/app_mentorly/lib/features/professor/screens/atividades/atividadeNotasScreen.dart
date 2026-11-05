@@ -262,7 +262,9 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                         autofocus: true,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
-                        decoration: const InputDecoration(labelText: 'Nota'),
+                        decoration: InputDecoration(
+                            labelText: 'Nota',
+                            suffixText: 'de ${_atividade?.notaMaxima ?? "?"}'),
                         validator: (v) => (v ?? '').trim().isEmpty
                             ? 'Informe a nota.'
                             : _validar(v))),
@@ -460,10 +462,11 @@ class _AtividadeNotasScreenState extends State<AtividadeNotasScreen> {
                                                   },
                                                   onChanged: (_) =>
                                                       setState(() {}),
-                                                  decoration:
-                                                      const InputDecoration(
-                                                          labelText: 'Nota',
-                                                          isDense: true))),
+                                                  decoration: InputDecoration(
+                                                      labelText: 'Nota',
+                                                      suffixText:
+                                                          'de ${_atividade?.notaMaxima ?? "?"}',
+                                                      isDense: true))),
                                         ]),
                                         Wrap(
                                             spacing: 8,

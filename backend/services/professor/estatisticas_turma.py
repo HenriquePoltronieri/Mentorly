@@ -93,7 +93,13 @@ def resumir(turma, etapas, atual, atividades, alunos, notas, etapa_id=None, hoje
     avaliadas = [a for a in por_atividade if a["media"] is not None]
     total = len(alunos) * len(selecionadas)
     return {"turma": {"id": turma["id"], "nome": turma["nome"]}, "escala": 10,
-            "etapa_atual": atual, "etapas": [{"id": e["id"], "nome": e["nome"], "fechada": bool(e.get("fechada", False)), "nota_minima": float(e["nota_minima"]) if e.get("nota_minima") is not None else None, "nota_maxima": float(e["nota_maxima"]) if e.get("nota_maxima") is not None else None} for e in etapas],
+            "etapa_atual": atual, "etapas": [{"id": e["id"], "nome": e["nome"],
+                "ordem": e.get("ordem"), "data_inicio": str(e.get("data_inicio") or "") or None,
+                "data_fim": str(e.get("data_fim") or "") or None,
+                "fechada": bool(e.get("fechada", False)),
+                "nota_minima": float(e["nota_minima"]) if e.get("nota_minima") is not None else None,
+                "nota_maxima": float(e["nota_maxima"]) if e.get("nota_maxima") is not None else None}
+                for e in etapas],
             "media": _media([a["media"] for a in ranking if a["media"] is not None]),
             "percentual_entregas": round(entregas / total * 100, 1) if total else None,
             "alunos_em_risco": distribuicao["Alto"] + distribuicao["Médio"],

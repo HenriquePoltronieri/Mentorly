@@ -15,11 +15,12 @@ import '../models/atividadeModel.dart';
 class AtividadesService {
   final ApiService _api = ApiService();
 
-  Future<List<AtividadeModel>> listarAtividades({String? turmaId}) async {
+  Future<List<AtividadeModel>> listarAtividades(
+      {String? turmaId, bool atualizar = false}) async {
     final endpoint = (turmaId != null && turmaId.isNotEmpty)
         ? '/activities?class_id=$turmaId'
         : '/activities';
-    final resposta = await _api.get(endpoint);
+    final resposta = await _api.get(endpoint, atualizar: atualizar);
     return (resposta as List)
         .map((item) => AtividadeModel.fromJson(item))
         .toList();
