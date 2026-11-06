@@ -2,18 +2,18 @@
 
 **Abrir aplicativo e administração:** execute `.\iniciar.ps1` ou dê dois cliques
 em `Iniciar Mentorly.cmd`. O primeiro uso pede a criação da sua conta administrativa.
-Guia: [hospedagem, planos, acessos e backups](docs/hospedagem-e-acessos.md).
+Guia: [hospedagem, planos, acessos e backups](docs/guias/hospedagem-e-acessos.md).
 
 A administração também é Flutter. O backend Python usa MySQL, Models mapeadas
 com Flask-SQLAlchemy e métodos de persistência SQL existentes. Revisão adicional:
-[QA administrativo](docs/qa-admin-2026-10-15.md).
+[QA administrativo](docs/qa/qa-admin-2026-10-15.md).
 
 **Notas:** uma atividade de 2 pontos não completa sozinha uma etapa de 10.
 O boletim mostra pontuação parcial e identifica planejamento incompleto.
 
 > Estado atual: **Marcos 1 a 8 e bloco de IA (9A a 9D) concluídos em código e testes**. A fase atual é
 > **validação final, congelamento (freeze) do MVP e preparação da apresentação**. O plano e o histórico das
-> decisões estão em [docs/roadmap.md](docs/roadmap.md).
+> decisões estão em [docs/projeto/roadmap.md](docs/projeto/roadmap.md).
 
 ## Sobre o Projeto
 
@@ -60,8 +60,10 @@ O fluxo completo funciona do aplicativo Flutter, passando pela API Flask, até o
 
 ## Funcionalidades Implementadas
 
+O fluxo de Termo de Uso e Consentimento, incluindo versionamento, decisões registradas e bloqueio de IA após recusa ou revogação, está descrito no [relatório de arquitetura](docs/relatorios/relatorio-arquitetura-termos-consentimento.md).
+
 São 27 funcionalidades demonstráveis, contadas de forma conservadora. A tabela completa, com
-tela, endpoint e service de cada uma, está em [docs/funcionalidades.md](docs/funcionalidades.md).
+tela, endpoint e service de cada uma, está em [docs/arquitetura/funcionalidades.md](docs/arquitetura/funcionalidades.md).
 
 ### Correspondência com o vídeo da atividade (itens 11 a 21)
 
@@ -85,8 +87,8 @@ MySQL**. O envio de convite também passa pelo `email_service`, que encapsula o 
 | 21 | Enviar convite no e-mail do professor | 9 |
 
 O detalhamento técnico e verificável de cada fluxo — tela, endpoint, Controller, Service e
-Model/Repository — está na [matriz de funcionalidades](docs/funcionalidades.md). O diagrama exigido
-pela atividade está em [docs/diagrama-classes.md](docs/diagrama-classes.md).
+Model/Repository — está na [matriz de funcionalidades](docs/arquitetura/funcionalidades.md). O diagrama exigido
+pela atividade está em [docs/arquitetura/diagrama-classes.md](docs/arquitetura/diagrama-classes.md).
 
 **Coordenação**
 1. Cadastro e login da Coordenação (cada cadastro é uma escola)
@@ -125,7 +127,7 @@ pela atividade está em [docs/diagrama-classes.md](docs/diagrama-classes.md).
 
 ## Arquitetura
 
-Diagrama de classes do domínio: [docs/diagrama-classes.md](docs/diagrama-classes.md).
+Diagrama de classes do domínio: [docs/arquitetura/diagrama-classes.md](docs/arquitetura/diagrama-classes.md).
 
 ```
 FLUTTER
@@ -275,7 +277,7 @@ Quem libera mostrar o código ou o link do convite é só `DEV_EXPOSE_AUTH_CODES
 seguro é `false`.
 
 O provedor do MVP é a Groq, com o modelo `openai/gpt-oss-20b`, e a integração foi validada com
-chamadas reais em 06/10/2026 (ver [docs/roadmap.md](docs/roadmap.md)). URL e modelo continuam
+chamadas reais em 06/10/2026 (ver [docs/projeto/roadmap.md](docs/projeto/roadmap.md)). URL e modelo continuam
 configuráveis para permitir troca sem alteração de código. Sem `AI_API_KEY`, ou com chave
 inválida, o provedor fora do ar ou uma resposta inválida, o botão mostra uma mensagem amigável e o
 restante do Mentorly continua normal.
@@ -292,7 +294,7 @@ interno de 20 chamadas de IA por Professor a cada 15 minutos, descrito acima):
 
 A separação não é absolutamente rígida: alguns modais Flutter usam o
 `ApiService` diretamente. Eles estão
-descritos em [docs/architecture.md](docs/architecture.md).
+descritos em [docs/arquitetura/architecture.md](docs/arquitetura/architecture.md).
 
 ---
 
@@ -495,15 +497,15 @@ backend/
 └── scripts/                    # init_db, smoke_db, smoke_api e os test_*.py (ver "Testes")
 
 docs/
-├── architecture.md
-├── banco-e-procedures.md
-├── como-executar.md
-├── funcionalidades.md
-├── historico-do-projeto.md
-├── roadmap.md
-├── roteiro-video.md
-├── simplificacao-tecnica.md
-└── visao-geral.md
+├── README.md                   # índice da documentação
+├── arquitetura/               # camadas, banco, diagrama e funcionalidades
+├── dados/                     # medições em JSON
+├── guias/                     # execução, hospedagem e apresentação
+├── imagens/                   # capturas de tela
+├── projeto/                   # visão geral, histórico e roadmap
+├── qa/                        # revisões de qualidade e segurança
+├── relatorios/                # implementações e validações
+└── termos/                    # Termo de Uso e Consentimento
 
 frontend/app_mentorly/
 ├── lib/
@@ -525,15 +527,14 @@ frontend/app_mentorly/
 ## Como Executar
 
 O passo a passo completo, com variáveis de ambiente e solução de problemas, está em
-[docs/como-executar.md](docs/como-executar.md). Resumo:
+[docs/guias/como-executar.md](docs/guias/como-executar.md). Resumo:
 
 ### Backend
 
 ```bash
 # 1. MySQL 8 em execução
-# 2. Dependências
-cd backend
-pip install -r requirements.txt
+# 2. Dependências (na raiz do projeto)
+python -m pip install -r requirements.txt
 
 # 3. (Opcional) backend/.env, ignorado pelo Git, com uma variável por linha:
 #    DB_PASSWORD=...   SECRET_KEY=...   (veja backend/.env.example)

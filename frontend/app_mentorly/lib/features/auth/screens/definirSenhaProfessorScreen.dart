@@ -6,6 +6,7 @@ import '../../../app/routes.dart';
 import '../../../core/services/authService.dart';
 import '../../../core/services/apiService.dart';
 import '../../../core/widgets/identidade_visual.dart';
+import '../widgets/termos_painel.dart';
 
 // Professor recebe o email por convite da coordenacao e cria a senha aqui
 // pela primeira vez (Confirmar senha garante que ele digitou certo)
@@ -24,6 +25,7 @@ class _DefinirSenhaProfessorScreenState
   final _senhaController = TextEditingController();
   final _confirmarSenhaController = TextEditingController();
   final _authService = AuthService();
+  final _termos = GlobalKey<TermosPainelState>();
   bool _carregando = false;
   String? _token;
   String? _erro;
@@ -102,6 +104,11 @@ class _DefinirSenhaProfessorScreenState
   Future<void> _entrar() async {
     if (_carregando || !_conviteValido) return;
     if (!_formKey.currentState!.validate()) return;
+    final termos = _termos.currentState?.dados();
+    if (termos == null || (termos['decisoes'] as Map)['uso'] != true) {
+      setState(() => _erro = 'Leia os documentos, aceite o Termo de Uso e escolha sobre o consentimento.');
+      return;
+    }
     if (_token == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -120,6 +127,7 @@ class _DefinirSenhaProfessorScreenState
         senha: _senhaController.text,
         confirmarSenha: _confirmarSenhaController.text,
         token: _token!,
+        termos: termos,
       );
       if (mounted) {
         Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
@@ -199,6 +207,8 @@ class _DefinirSenhaProfessorScreenState
                       ? 'As senhas não coincidem'
                       : Validators.validarSenha(valor),
                 ),
+                const SizedBox(height: 16),
+                TermosPainel(key: _termos),
                 SizedBox(height: 24),
                 if (_erro != null) ...[
                   Semantics(

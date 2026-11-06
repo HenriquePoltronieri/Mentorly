@@ -43,7 +43,7 @@ A regra de alunos em risco já existia no backend e foi reaproveitada: considera
 
 Poppins está embutida. A investigação identificou que CanvasKit ainda baixava Roboto como fallback quando essa família não constava no manifesto. O pubspec agora registra a Poppins Regular local também sob esse alias técnico. O comportamento está documentado no [código oficial do renderizador Flutter](https://github.com/flutter/engine/blob/main/lib/web_ui/lib/src/engine/canvaskit/fonts.dart). O Web antecipa os arquivos de fonte por preload; a captura de rede confirmou ausência de fontes externas.
 
-As medições de telas ficam em [antes](telas-vidro-antes.json) e [depois](telas-vidro-depois.json); a medição intermediária com fallback remoto foi preservada em [investigação](telas-vidro-antes-fallback-local.json). O script `backend/scripts/medir_telas.py` mede o release no Edge em 1280×900, da navegação/ação até o conteúdo acessível pronto, usando a escola de QA e a mesma conta de professor. Os tempos incluem autenticação, rede local, transição e renderização; não são benchmarks de produção.
+As medições de telas ficam em [antes](../dados/telas-vidro-antes.json) e [depois](../dados/telas-vidro-depois.json); a medição intermediária com fallback remoto foi preservada em [investigação](../dados/telas-vidro-antes-fallback-local.json). O script `backend/scripts/medir_telas.py` mede o release no Edge em 1280×900, da navegação/ação até o conteúdo acessível pronto, usando a escola de QA e a mesma conta de professor. Os tempos incluem autenticação, rede local, transição e renderização; não são benchmarks de produção.
 
 | Medição | Antes | Release final | Diferença |
 | --- | ---: | ---: | ---: |
@@ -53,7 +53,7 @@ As medições de telas ficam em [antes](telas-vidro-antes.json) e [depois](telas
 | Intervalo mediano entre frames do painel carregado | 6,90 ms | 6,90 ms | 0,00 ms |
 | Intervalos acima de 33 ms em 120 frames | 0 | 0 | 0 |
 
-A [amostra anterior do redesign](telas-vidro-amostra-anterior.json) também foi mantida: 1.613,98 / 1.064,64 / 1.179,12 ms, respectivamente. A captura final usa CanvasKit servido localmente; nenhuma fonte externa foi carregada. O backend respondeu aos logins em 173,32 e 175,66 ms nessa captura.
+A [amostra anterior do redesign](../dados/telas-vidro-amostra-anterior.json) também foi mantida: 1.613,98 / 1.064,64 / 1.179,12 ms, respectivamente. A captura final usa CanvasKit servido localmente; nenhuma fonte externa foi carregada. O backend respondeu aos logins em 173,32 e 175,66 ms nessa captura.
 
 Não se deve afirmar ausência de regressão nos tempos de abertura: as amostras posteriores ficaram acima da primeira amostra anterior. A duração do backend de autenticação também variou entre execuções, portanto a diferença não pode ser atribuída integralmente ao layout. A mediana dos intervalos de 120 frames permaneceu perto de 6,9–7,0 ms, sem intervalos acima de 33 ms nessa amostra. Isso indica estabilidade do painel já carregado nessa condição, não garantia de fluidez em todo dispositivo ou durante todo fluxo.
 
@@ -65,9 +65,9 @@ Validação concluída:
 - Build Web release gerado com renderizador e fontes locais.
 - Edge em 320, 768 e 1280 px: teclado/Enter, alternância de cadastro, mensagens de validação sem cortes, navegação, assistente, pesos sem cortes, convite somente leitura, criação de senha, dashboard e token usado. O envio externo ficou desligado no servidor de QA; não foram enviados novos e-mails reais nesta etapa.
 
-Capturas: [perfil](vidro-perfil-desktop.png), [login](vidro-login-desktop.png), [cadastro](vidro-cadastro-desktop.png), [tablet](vidro-login-768.png), [celular](vidro-login-320.png), [Coordenação](vidro-coordenacao-1280.png), [critérios](vidro-criterios-mobile.png), [convite](vidro-convite-mobile.png), [convite usado](vidro-convite-usado-mobile.png), [Professor desktop](vidro-professor-1280.png), [Professor celular](vidro-professor-320.png).
+Capturas: [perfil](../imagens/vidro-perfil-desktop.png), [login](../imagens/vidro-login-desktop.png), [cadastro](../imagens/vidro-cadastro-desktop.png), [tablet](../imagens/vidro-login-768.png), [celular](../imagens/vidro-login-320.png), [Coordenação](../imagens/vidro-coordenacao-1280.png), [critérios](../imagens/vidro-criterios-mobile.png), [convite](../imagens/vidro-convite-mobile.png), [convite usado](../imagens/vidro-convite-usado-mobile.png), [Professor desktop](../imagens/vidro-professor-1280.png), [Professor celular](../imagens/vidro-professor-320.png).
 
-O card de acesso acompanha a altura do formulário e dos erros, preservando a troca de lados. No tablet, a barra do professor reduz a marca ao ícone para manter as três abas e a conta sem cortes; com fontes ampliadas, passa ao menu compacto. Exemplos: [cadastro inválido no tablet](vidro-cadastro-erros-768.png) e [dashboard no tablet](vidro-professor-768.png).
+O card de acesso acompanha a altura do formulário e dos erros, preservando a troca de lados. No tablet, a barra do professor reduz a marca ao ícone para manter as três abas e a conta sem cortes; com fontes ampliadas, passa ao menu compacto. Exemplos: [cadastro inválido no tablet](../imagens/vidro-cadastro-erros-768.png) e [dashboard no tablet](../imagens/vidro-professor-768.png).
 
 Para reproduzir o build de QA, na pasta `frontend/app_mentorly`:
 
@@ -75,6 +75,6 @@ Para reproduzir o build de QA, na pasta `frontend/app_mentorly`:
 flutter build web --release --no-wasm-dry-run --no-web-resources-cdn --dart-define=API_URL=http://127.0.0.1:5001/api
 ```
 
-Na raiz do projeto, mantenha `python -u backend/scripts/servir_validacao.py` e `python -m http.server 18080 --bind 127.0.0.1 --directory frontend/app_mentorly/build/web` em terminais separados. Com o banco de QA existente, execute `python backend/scripts/validar_visual_vidro.py` e depois `python backend/scripts/medir_telas.py docs/telas-vidro-depois.json`. A digitação ocorre antes do início da cronometragem dos logins; a automação confere o input de edição do Flutter, pois o nó semântico de senha pode permanecer vazio durante o foco.
+Na raiz do projeto, mantenha `python -u backend/scripts/servir_validacao.py` e `python -m http.server 18080 --bind 127.0.0.1 --directory frontend/app_mentorly/build/web` em terminais separados. Com o banco de QA existente, execute `python backend/scripts/validar_visual_vidro.py` e depois `python backend/scripts/medir_telas.py docs/dados/telas-vidro-depois.json`. A digitação ocorre antes do início da cronometragem dos logins; a automação confere o input de edição do Flutter, pois o nó semântico de senha pode permanecer vazio durante o foco.
 
 Prévia local: http://127.0.0.1:18080, backend de QA na porta 5001, banco isolado `mentorly_interface_regressao`. Conta fictícia de Coordenação: `validacao@escola.invalid`, senha `validacao123`. A prévia exige que os dois processos estejam em execução. Não houve implantação em produção; `backend/.env` e seus segredos foram preservados.

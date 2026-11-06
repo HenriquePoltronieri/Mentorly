@@ -35,9 +35,10 @@ from services import rate_limit
 # elas nao esbarrarem no 429. A secao [M-08] restaura os limites reais.
 LIMITES_REAIS = dict(rate_limit.LIMITES)
 rate_limit.LIMITES.update({k: (10 ** 6, v[1]) for k, v in LIMITES_REAIS.items()})
-from database.connection import execute, insert, query_all, query_one
+from database.connection import execute, insert, query_all, query_one, init_database, install_schema
 from models.codigo_model import CodigoVerificacao
 from models.professor_model import hash_convite
+from services.termos import documentos_atuais
 
 SUFIXO = "smoke-api@mentorly.local"
 
@@ -47,6 +48,11 @@ ANO = 2026
 
 falhas = []
 _passos = [0]
+
+
+def termos_qa():
+    return {"decisoes": {"uso": True, "consentimento": True},
+            "versoes": {tipo: doc["sha256"] for tipo, doc in documentos_atuais(False).items()}}
 
 
 def checar(condicao, descricao):
@@ -100,7 +106,10 @@ class Cliente:
         return self._cliente.get(url, headers=self._cabecalhos())
 
     def post(self, url, corpo=None):
-        return self._cliente.post(url, json=corpo or {}, headers=self._cabecalhos())
+        dados = dict(corpo or {})
+        if url == "/api/auth/cadastro-coordenacao" and "termos" not in dados:
+            dados["termos"] = termos_qa()
+        return self._cliente.post(url, json=dados, headers=self._cabecalhos())
 
     def put(self, url, corpo=None):
         return self._cliente.put(url, json=corpo or {}, headers=self._cabecalhos())
@@ -185,6 +194,8 @@ def montar_escola(cliente_flask, rotulo):
 
 
 def main():
+    init_database()
+    install_schema()
     aplicacao = app_module.create_app()
     aplicacao.config["TESTING"] = True
 
@@ -270,6 +281,7 @@ def main():
         checar(bool(token_convite), "cadastro do professor gera convite")
 
         ativacao = cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "termos": termos_qa(),
             "email": prof_a["email"], "senha": "senha123", "token": token_convite,
         })
         checar(ativacao.status_code == 200, "professor cria a senha pelo convite")
@@ -294,6 +306,7 @@ def main():
         ).status_code == 404, "professor nao acessa turma de outra escola")
 
         checar(cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "termos": termos_qa(),
             "email": prof_a["email"], "senha": "outra123", "token": token_convite,
         }).status_code == 403, "convite nao pode ser usado duas vezes")
 
@@ -655,6 +668,7 @@ def main():
             """Repete o fluxo de convite ja validado em [3], para um
             professor novo. Devolve o Cliente ja logado."""
             cliente_flask.post("/api/auth/criar-senha-professor", json={
+                "termos": termos_qa(),
                 "email": prof_dict["email"], "senha": senha,
                 "token": prof_dict["conviteToken"],
             })
@@ -1933,6 +1947,7 @@ def main():
                and reenvio.get_json().get("conviteToken") != convite_original,
                "M8-02: reenvio substitui convite pendente")
         checar(cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "termos": termos_qa(),
             "email": prof8["email"], "senha": "senha123",
             "token": convite_original,
         }).status_code == 403, "M8-03: convite anterior deixa de valer")
@@ -1955,6 +1970,7 @@ def main():
             {"email": prof_a["email"]},
         ).status_code == 409, "M8-06: conflito de email e recusado")
         checar(cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "termos": termos_qa(),
             "email": "prof.gestao.editado.%s" % SUFIXO,
             "senha": "senha123", "token": convite_editado,
         }).status_code == 200, "M8-07: convite editado ativa professor")
@@ -4018,6 +4034,7 @@ def main():
         r_conf = Cliente(cliente_flask).post(
             "/api/auth/confirmar-codigo", {"email": r["email_codigo"], "codigo": codigo})
         ativ = cliente_flask.post("/api/auth/criar-senha-professor", json={
+            "termos": termos_qa(),
             "email": r["email_professor"], "senha": "senha123", "token": token})
         checar(r_conf.get_json() == {"valido": True} and ativ.status_code == 200
                and token not in ativ.get_data(as_text=True),

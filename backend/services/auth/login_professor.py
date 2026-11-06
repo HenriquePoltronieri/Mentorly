@@ -3,6 +3,7 @@ from auth.passwords import conferir_senha
 from auth.jwt_utils import TIPO_PROFESSOR, gerar_token
 from models.professor_model import Professor
 from services import entrada
+from services.termos import situacao
 
 
 class LoginProfessorService:
@@ -29,5 +30,8 @@ class LoginProfessorService:
             "token": gerar_token(
                 linha["id"], TIPO_PROFESSOR, linha["coordenacao_id"]
             ),
-            "usuario": Professor.to_dict(linha),
+            "usuario": {**Professor.to_dict(linha),
+                        "termosPendentes": situacao({"tipo": "professor",
+                                                     "id": linha["id"],
+                                                     "coordenacao_id": linha["coordenacao_id"]})["pendente"]},
         }

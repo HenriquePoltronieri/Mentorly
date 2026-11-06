@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 from auth.jwt_utils import TIPO_PROFESSOR, gerar_token
 from models.professor_model import Professor
 from services import entrada
+from services.termos import validar_escolhas
 
 
 class CriarSenhaProfessorService:
@@ -14,7 +15,7 @@ class CriarSenhaProfessorService:
     mesmo link nao funciona duas vezes.
     """
 
-    def execute(self, email, senha, token):
+    def execute(self, email, senha, token, termos=None):
         email = entrada.texto(email, "O email", entrada.LIMITE_EMAIL).lower()
         senha = entrada.senha(senha)
         token = entrada.texto(token, "O convite", entrada.LIMITE_CODIGO)
@@ -23,6 +24,7 @@ class CriarSenhaProfessorService:
             raise ValueError("A senha precisa ter ao menos 8 caracteres")
         if not token:
             raise ValueError("Convite invalido")
+        escolhas, atuais = validar_escolhas(termos)
 
         linha = Professor.find_by_convite(token)
         if not linha:
@@ -40,7 +42,9 @@ class CriarSenhaProfessorService:
         if expira_em and expira_em < datetime.now():
             raise PermissionError("Convite expirado. Peca um novo a coordenacao.")
 
-        if not Professor.definir_senha(linha["id"], generate_password_hash(senha), token):
+        if not Professor.definir_senha(linha["id"], generate_password_hash(senha), token,
+                                      escolhas_termos=escolhas, documentos_atuais=atuais,
+                                      coordenacao_id=linha["coordenacao_id"]):
             raise PermissionError("Convite expirado ou já utilizado. Peça um novo à Coordenação.")
         atualizado = Professor.find_by_id(linha["id"])
 
@@ -48,5 +52,5 @@ class CriarSenhaProfessorService:
             "token": gerar_token(
                 linha["id"], TIPO_PROFESSOR, linha["coordenacao_id"]
             ),
-            "usuario": Professor.to_dict(atualizado),
+            "usuario": {**Professor.to_dict(atualizado), "termosPendentes": False},
         }

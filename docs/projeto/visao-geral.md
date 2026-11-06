@@ -47,8 +47,8 @@ Professores e vínculos        valor máximo)              Boletim da turma
                                                           Fechamento da etapa
 ```
 
-As regras do cálculo estão em [banco-e-procedures.md](banco-e-procedures.md) e a tabela das 25
-funcionalidades demonstráveis, em [funcionalidades.md](funcionalidades.md).
+As regras do cálculo estão em [banco-e-procedures.md](../arquitetura/banco-e-procedures.md) e a tabela das 25
+funcionalidades demonstráveis, em [funcionalidades.md](../arquitetura/funcionalidades.md).
 
 ## Como o projeto evoluiu
 

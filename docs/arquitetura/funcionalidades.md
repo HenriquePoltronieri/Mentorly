@@ -143,4 +143,4 @@ Groq nem envia e-mail.
 
 Esses testes cobrem a API e a lógica e a maior parte das telas por testes de widget, não a interface
 inteira. O teste manual de ponta a ponta, pelas telas do aplicativo, está previsto no
-[roadmap.md](roadmap.md).
+[roadmap.md](../projeto/roadmap.md).

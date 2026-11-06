@@ -100,13 +100,16 @@ class CredenciaisTest(TestCase):
 
     def test_api_exige_codigo_recebido_no_email_antes_de_criar_conta(self):
         from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
+        from services.termos import documentos_atuais
         servico = CadastroCoordenacaoService()
+        termos = {'decisoes': {'uso': True, 'consentimento': True},
+                  'versoes': {tipo: doc['sha256'] for tipo, doc in documentos_atuais(False).items()}}
         with patch('services.auth.cadastro_coordenacao.Coordenacao.find_by_email', return_value=None), \
                 patch('services.auth.cadastro_coordenacao.Coordenacao.create') as criar, \
                 patch('services.auth.cadastro_coordenacao.CodigoVerificacao.validar', return_value=False):
             with self.assertRaisesRegex(ValueError, 'Código inválido'):
                 servico.execute('Escola', 'coord@escola.com', 'senha-segura',
-                                '11987654321', '000000', exigir_verificacao=True)
+                                '11987654321', '000000', exigir_verificacao=True, termos=termos)
             criar.assert_not_called()
 
     def test_telefone_com_mascara_e_normalizado_para_digitos(self):

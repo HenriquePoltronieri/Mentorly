@@ -40,6 +40,7 @@ class AuthService {
     required String senha,
     required String telefone,
     required String codigoVerificacao,
+    required Map<String, dynamic> termos,
   }) async {
     final resposta = await _api.post('/auth/cadastro-coordenacao', {
       'nome': nome,
@@ -47,6 +48,7 @@ class AuthService {
       'senha': senha,
       'telefone': telefone,
       'codigoVerificacao': codigoVerificacao,
+      'termos': termos,
     });
     return _guardarSessao(resposta);
   }
@@ -57,6 +59,7 @@ class AuthService {
     required String senha,
     required String confirmarSenha,
     required String token,
+    required Map<String, dynamic> termos,
   }) async {
     if (senha != confirmarSenha) {
       throw Exception('As senhas nao coincidem');
@@ -65,6 +68,7 @@ class AuthService {
       if (email != null && email.isNotEmpty) 'email': email,
       'senha': senha,
       'token': token,
+      'termos': termos,
     });
     return _guardarSessao(resposta);
   }

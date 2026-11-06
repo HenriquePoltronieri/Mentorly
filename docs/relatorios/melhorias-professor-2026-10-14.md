@@ -55,4 +55,4 @@ flutter analyze --no-pub --no-fatal-infos
 
 Para integração sem navegador: `python backend/scripts/validar_trabalho_professor.py --sem-visual`. Para as capturas, iniciar o backend de QA (`servir_validacao.py`), servir o build na porta 18080 com API na porta 5001 e rodar o mesmo script sem essa opção.
 
-Capturas: [início desktop](profissional-inicio-1280.png), [início celular](profissional-inicio-320.png), [grade desktop](profissional-grade-1280.png), [grade celular](profissional-grade-320.png).
+Capturas: [início desktop](../imagens/profissional-inicio-1280.png), [início celular](../imagens/profissional-inicio-320.png), [grade desktop](../imagens/profissional-grade-1280.png), [grade celular](../imagens/profissional-grade-320.png).

@@ -75,7 +75,8 @@ class Coordenacao(db.Model):
     # Escrita
     # -----------------------------------------------------------------
     @staticmethod
-    def create(nome, email, senha_hash, telefone=None):
+    def create(nome, email, senha_hash, telefone=None,
+               escolhas_termos=None, documentos_atuais=None):
         from datetime import timedelta
         from services.horario import agora_brasilia
         prazo = agora_brasilia().date() + timedelta(days=14)
@@ -86,6 +87,10 @@ class Coordenacao(db.Model):
             escola_id = cursor.lastrowid
             cursor.execute('INSERT INTO acesso_escola(coordenacao_id,valido_ate) VALUES (%s,%s)',
                            (escola_id, prazo))
+            if escolhas_termos is not None:
+                from services.termos import inserir_decisoes
+                inserir_decisoes(cursor, escola_id, None, escolhas_termos,
+                                 documentos_atuais)
         return escola_id
 
     @staticmethod

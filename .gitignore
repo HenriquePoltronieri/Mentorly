@@ -7,6 +7,9 @@ venv/
 # Banco local: data directory criado pelo mysqld em desenvolvimento.
 # Nao entra no repositorio - o schema versionado e backend/database/schema.sql.
 .mysql-data/
+.mysql-local*/
+.mysql-undo-backups/
+.local_mysql.py
 
 # Editors / OS
 .vscode/

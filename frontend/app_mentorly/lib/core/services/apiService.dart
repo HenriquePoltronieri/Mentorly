@@ -56,7 +56,9 @@ class ApiService {
 
   AoEncerrarSessao? aoEncerrarSessao;
   void Function()? aoBloquearEscola;
+  void Function()? aoExigirTermos;
   bool _bloqueioNotificado = false;
+  bool _termosNotificados = false;
   final Map<String, Future<dynamic>> _alteracoes = {};
 
   static const String _chaveToken = 'mentorly.token';
@@ -124,6 +126,7 @@ class ApiService {
     invalidarCache();
     token = novoToken;
     _bloqueioNotificado = false;
+    _termosNotificados = false;
     usuario = dados;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_chaveToken, novoToken);
@@ -153,9 +156,19 @@ class ApiService {
     invalidarCache();
     token = null;
     usuario = null;
+    _termosNotificados = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_chaveToken);
     await prefs.remove(_chaveUsuario);
+  }
+
+  Future<void> atualizarTermosPendentes(bool pendente) async {
+    final dados = usuario;
+    if (dados == null) return;
+    dados['termosPendentes'] = pendente;
+    if (!pendente) _termosNotificados = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_chaveUsuario, jsonEncode(dados));
   }
 
   // Autoriza apenas o arquivo pedido por 2 minutos; nunca expoe o JWT na URL.
@@ -322,6 +335,13 @@ class ApiService {
     }
 
     final codigo = _extrairCodigo(response);
+    if (codigo == 'termos_pendentes' && tokenUsado == token &&
+        tokenUsado != null && !_termosNotificados) {
+      _termosNotificados = true;
+      usuario?['termosPendentes'] = true;
+      invalidarCache();
+      aoExigirTermos?.call();
+    }
     if (codigo == 'escola_sem_acesso' && tokenUsado == token &&
         tokenUsado != null && !_bloqueioNotificado) {
       _bloqueioNotificado = true;

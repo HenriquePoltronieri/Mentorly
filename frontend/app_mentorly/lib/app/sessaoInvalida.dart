@@ -14,6 +14,9 @@ void registrarTratamentoDeSessao(ApiService api) {
   api.aoBloquearEscola = () {
     navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.acesso, (_) => false);
   };
+  api.aoExigirTermos = () {
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.termos, (_) => false);
+  };
 }
 
 // Sessao invalida: troca TODA a pilha pelo login do papel que estava logado

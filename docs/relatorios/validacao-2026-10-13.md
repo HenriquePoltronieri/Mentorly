@@ -32,4 +32,4 @@ dos fatos são cobertos por dublês.
   nos padrões examinados. O `.env`, builds, logs e capturas locais de QA não
   fazem parte do envio.
 
-As regras do acompanhamento estão em [acompanhamento-etapa.md](acompanhamento-etapa.md).
+As regras do acompanhamento estão em [acompanhamento-etapa.md](../projeto/acompanhamento-etapa.md).

@@ -42,6 +42,7 @@ class AuthController:
                 dados.get("telefone"),
                 dados.get("codigoVerificacao"),
                 exigir_verificacao=True,
+                termos=dados.get("termos"),
             )
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400
@@ -78,7 +79,8 @@ class AuthController:
         limitar_por_origem('criar_senha', request.remote_addr, '')
         try:
             resultado = CriarSenhaProfessorService().execute(
-                dados.get("email"), dados.get("senha"), dados.get("token")
+                dados.get("email"), dados.get("senha"), dados.get("token"),
+                termos=dados.get("termos"),
             )
         except ValueError as erro:
             return jsonify({"error": str(erro)}), 400

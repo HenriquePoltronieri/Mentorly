@@ -5,6 +5,7 @@ import config
 from services.ia.versao import VERSAO_IA
 from routes.admin_routes import admin_blueprint
 from routes.acesso_routes import acesso_blueprint
+from routes.termos_routes import termos_blueprint
 
 from config import DEBUG
 from erros import AcessoNegado
@@ -80,6 +81,7 @@ def create_app():
     app.register_blueprint(trabalho_blueprint)
     app.register_blueprint(admin_blueprint)
     app.register_blueprint(acesso_blueprint)
+    app.register_blueprint(termos_blueprint)
 
     # Libera o acesso do Flutter Web: o app roda em outra porta, entao o
     # navegador trata como outra origem e bloqueia a chamada sem estes

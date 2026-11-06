@@ -119,14 +119,22 @@ class Professor(db.Model):
         return professor_id
 
     @staticmethod
-    def definir_senha(professor_id, senha_hash, convite_token=None):
+    def definir_senha(professor_id, senha_hash, convite_token=None,
+                     escolhas_termos=None, documentos_atuais=None,
+                     coordenacao_id=None):
         """Ativa o professor e queima o convite."""
-        return execute(
-            "UPDATE professor SET senha_hash = %s, convite_token = NULL, "
-            "convite_expira_em = NULL WHERE id = %s AND senha_hash IS NULL "
-            "AND habilitado=1 AND convite_token=%s AND convite_expira_em >= NOW()",
-            (senha_hash, professor_id, hash_convite(convite_token)),
-        )
+        with transacao() as cursor:
+            alteradas = cursor.execute(
+                "UPDATE professor SET senha_hash = %s, convite_token = NULL, "
+                "convite_expira_em = NULL WHERE id = %s AND senha_hash IS NULL "
+                "AND habilitado=1 AND convite_token=%s AND convite_expira_em >= NOW()",
+                (senha_hash, professor_id, hash_convite(convite_token)),
+            )
+            if alteradas and escolhas_termos is not None:
+                from services.termos import inserir_decisoes
+                inserir_decisoes(cursor, coordenacao_id, professor_id,
+                                 escolhas_termos, documentos_atuais)
+        return alteradas
 
     @staticmethod
     def atualizar_convite(professor_id, convite_token, convite_expira_em):

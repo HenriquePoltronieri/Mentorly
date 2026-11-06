@@ -29,7 +29,7 @@ O envio SMTP continua síncrono, conforme a alternativa permitida no pedido: tim
 | GET /api/classes | 4.103,32 ms | 15,15 ms |
 | GET /api/dashboard/resumo | 2.094,45 ms | 15,36 ms |
 
-Medição com o cliente de teste Flask, banco local e o mesmo cadastro existente, sem alterar dados: uma execução de cada endpoint por versão, com um professor e três etapas. Não inclui rede pública, renderização Flutter nem envio SMTP e não constitui benchmark de produção. Evidências: [antes](desempenho-antes.json), [depois](desempenho-depois.json), script `backend/scripts/medir_desempenho.py`.
+Medição com o cliente de teste Flask, banco local e o mesmo cadastro existente, sem alterar dados: uma execução de cada endpoint por versão, com um professor e três etapas. Não inclui rede pública, renderização Flutter nem envio SMTP e não constitui benchmark de produção. Evidências: [antes](../dados/desempenho-antes.json), [depois](../dados/desempenho-depois.json), script `backend/scripts/medir_desempenho.py`.
 
 O backend também registra duração, status e contagem de consultas auxiliares por rota e envia `Server-Timing`. Um teste integrado compara o boletim de 1 e 41 alunos: a quantidade de consultas permanece constante e os resultados são equivalentes ao cálculo anterior. Não há evidência local de cold start; a hospedagem de produção não foi informada nem medida. Paginação geral de todas as listas não foi implementada nesta alteração.
 
@@ -75,7 +75,7 @@ O backend também registra duração, status e contagem de consultas auxiliares 
 
 Tema central em `lib/app/theme.dart`: Material 3, fundo off-white, azul acinzentado, espaçamento consistente, controles principais de 48 px, bordas discretas e menos decoração. Componentes de página e formulários compartilham limites de largura. Localização Material em português do Brasil. As telas de detalhes acadêmicos e diálogos de IA não receberam uma reconstrução visual integral; herdam o tema.
 
-Capturas: [acesso](interface-acesso.png), [login](interface-login-desktop.png), [coordenação desktop](interface-coordenacao-desktop.png), [tablet](interface-coordenacao-768.png), [celular](interface-coordenacao-320.png), [critérios](interface-criterios-mobile.png), [senha](interface-senha-mobile.png), [professores](interface-professores-desktop.png), [formulário de turma](interface-turma-formulario-mobile.png), [turmas](interface-turmas-mobile.png), [alunos](interface-alunos-mobile.png), [vínculos](interface-vinculos-mobile.png), [boletim](interface-boletim-mobile.png), [turmas do professor](interface-professor-turmas-mobile.png), [painel do professor](interface-professor-mobile.png).
+Capturas: [acesso](../imagens/interface-acesso.png), [login](../imagens/interface-login-desktop.png), [coordenação desktop](../imagens/interface-coordenacao-desktop.png), [tablet](../imagens/interface-coordenacao-768.png), [celular](../imagens/interface-coordenacao-320.png), [critérios](../imagens/interface-criterios-mobile.png), [senha](../imagens/interface-senha-mobile.png), [professores](../imagens/interface-professores-desktop.png), [formulário de turma](../imagens/interface-turma-formulario-mobile.png), [turmas](../imagens/interface-turmas-mobile.png), [alunos](../imagens/interface-alunos-mobile.png), [vínculos](../imagens/interface-vinculos-mobile.png), [boletim](../imagens/interface-boletim-mobile.png), [turmas do professor](../imagens/interface-professor-turmas-mobile.png), [painel do professor](../imagens/interface-professor-mobile.png).
 
 ## 5. Verificação e limites
 

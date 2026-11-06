@@ -17,6 +17,8 @@ from config import DB_CONFIG
 from auth.jwt_utils import gerar_token
 from auth.downloads import gerar_permissao
 from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
+from services.termos import documentos_atuais, inserir_decisoes
+from database.connection import transacao
 from services.acesso_escola import alterar, consultar, hoje, iniciar_teste, cadastrar_escolas_existentes
 from services.rate_limit import limiter, _consumir_no_banco, LimiteExcedido
 from werkzeug.security import generate_password_hash
@@ -39,13 +41,18 @@ class IntegracaoCompletaTest(unittest.TestCase):
         cls.admin = insert('INSERT INTO administrador(nome,email,senha_hash) VALUES (%s,%s,%s)',
                            ('Responsável QA', cls.admin_email, generate_password_hash('senha-segura-qa-123')))
         cls.escolas = []
+        atuais = documentos_atuais(False)
+        termos = {'decisoes': {'uso': True, 'consentimento': True},
+                  'versoes': {tipo: doc['sha256'] for tipo, doc in atuais.items()}}
         for nome in ('Escola QA <script>alert(1)</script>', 'Outra escola QA'):
-            res = CadastroCoordenacaoService().execute(nome, uuid.uuid4().hex+'@qa.invalid', 'senha-qa-123')
+            res = CadastroCoordenacaoService().execute(nome, uuid.uuid4().hex+'@qa.invalid', 'senha-qa-123', termos=termos)
             cls.escolas.append(res['usuario']['id'])
         cls.escola = cls.escolas[0]
         cls.coord = {'Authorization': 'Bearer '+gerar_token(cls.escola, 'coordenacao', cls.escola)}
         cls.prof = insert('INSERT INTO professor(coordenacao_id,nome,email,senha_hash) VALUES (%s,%s,%s,%s)',
                           (cls.escola, 'Professor QA', uuid.uuid4().hex+'@qa.invalid', generate_password_hash('senha-qa-123')))
+        with transacao() as cursor:
+            inserir_decisoes(cursor, cls.escola, cls.prof, termos['decisoes'], atuais)
         cls.prof_headers = {'Authorization': 'Bearer '+gerar_token(cls.prof, 'professor', cls.escola)}
         insert("INSERT INTO ano_letivo(coordenacao_id,ano,status) VALUES (%s,2026,'atual')", (cls.escola,))
         cls.turma = insert("INSERT INTO turma(coordenacao_id,nome,disciplina,turno,ano_letivo) VALUES (%s,'QA','Matemática','Manhã',2026)", (cls.escola,))
@@ -206,7 +213,9 @@ class IntegracaoCompletaTest(unittest.TestCase):
         for corpo in ([], 'texto', 42, True):
             r = self.client.post('/api/classes', json=corpo, headers=self.coord)
             self.assertEqual(r.status_code, 400)
-        r = self.client.post('/api/auth/login-coordenacao', data=b'x'*(5*1024*1024+1), content_type='application/json')
+        r = self.client.post('/api/auth/login-coordenacao',
+                             data=b'x'*(self.app.config['MAX_CONTENT_LENGTH']+1),
+                             content_type='application/json')
         self.assertEqual(r.status_code, 413)
 
     def test_14_uma_escola_nao_consulta_outra(self):

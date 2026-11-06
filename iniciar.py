@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import webbrowser
+import runpy
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent
@@ -16,6 +17,9 @@ def executar():
     parser.add_argument('--sem-navegador', action='store_true')
     args = parser.parse_args()
     os.chdir(RAIZ)
+    local_mysql = RAIZ / '.local_mysql.py'
+    if local_mysql.exists():
+        runpy.run_path(str(local_mysql))['ensure_running']()
     sys.path.insert(0, str(RAIZ / 'backend'))
     import config
     from cryptography.fernet import Fernet

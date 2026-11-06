@@ -24,11 +24,10 @@ Estão em `backend/requirements.txt`:
 - Werkzeug 3.1.9 (hash de senha)
 - cryptography 50.0.1 (suporte do PyMySQL às senhas do MySQL 8)
 
-Para instalar:
+Para instalar na raiz do projeto:
 
 ```bash
-cd backend
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 Não há ORM: o acesso ao banco é SQL puro com PyMySQL.

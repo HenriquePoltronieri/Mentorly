@@ -249,6 +249,7 @@ def install_schema():
     aplicar_migracoes()
     install_professor_workspace()
     install_comercial()
+    _rodar_arquivo_sql(os.path.join(BASE_DIR, "database", "termos.sql"))
 
     return resultado
 

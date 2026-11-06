@@ -3,6 +3,7 @@ from auth.passwords import conferir_senha
 from auth.jwt_utils import TIPO_COORDENACAO, gerar_token
 from models.coordenacao_model import Coordenacao
 from services import entrada
+from services.termos import situacao
 
 
 class LoginCoordenacaoService:
@@ -24,5 +25,8 @@ class LoginCoordenacaoService:
 
         return {
             "token": gerar_token(linha["id"], TIPO_COORDENACAO, linha["id"]),
-            "usuario": Coordenacao.to_dict(linha),
+            "usuario": {**Coordenacao.to_dict(linha),
+                        "termosPendentes": situacao({"tipo": "coordenacao",
+                                                     "id": linha["id"],
+                                                     "coordenacao_id": linha["id"]})["pendente"]},
         }

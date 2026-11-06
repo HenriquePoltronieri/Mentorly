@@ -20,6 +20,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from services.rate_limit import limiter
 from services.acesso_escola import consultar
 from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
+from services.termos import documentos_atuais
 from scripts import criar_admin
 
 
@@ -191,8 +192,10 @@ class AdminSegurancaTest(qa.IntegracaoCompletaTest):
 
 
     def test_z_admin_exclui_escola_com_confirmacao_e_dependencias(self):
+        termos = {'decisoes': {'uso': True, 'consentimento': True},
+                  'versoes': {tipo: doc['sha256'] for tipo, doc in documentos_atuais(False).items()}}
         criada = CadastroCoordenacaoService().execute(
-            'Escola para excluir', uuid.uuid4().hex + '@qa.invalid', 'senha-qa-123')
+            'Escola para excluir', uuid.uuid4().hex + '@qa.invalid', 'senha-qa-123', termos=termos)
         escola_id = criada['usuario']['id']
         email = criada['usuario']['email']
         professor_id = insert(

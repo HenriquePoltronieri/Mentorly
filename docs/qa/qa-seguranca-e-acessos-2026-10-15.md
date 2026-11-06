@@ -127,7 +127,7 @@ Capturas revisadas: `qa-admin-desktop.png`, `qa-admin-mobile.png`,
 - As comparações internas de aproveitamento ainda usam percentual/escala
   comparável para ordenar atividades. A nota final oficial vem do motor acadêmico.
 
-Guia de uso e hospedagem: [hospedagem-e-acessos.md](hospedagem-e-acessos.md).
+Guia de uso e hospedagem: [hospedagem-e-acessos.md](../guias/hospedagem-e-acessos.md).
 
 Referências consultadas:
 [segurança Flask](https://flask.palletsprojects.com/en/stable/web-security/),

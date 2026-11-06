@@ -15,6 +15,13 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  final documentos = {
+    'documentos': {
+      'uso': {'titulo': 'Termo de Uso', 'texto': 'Texto de uso', 'sha256': 'hash-uso'},
+      'consentimento': {'titulo': 'Termo de Consentimento', 'texto': 'Texto de consentimento', 'sha256': 'hash-consentimento'},
+    }
+  };
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await ApiService().limparSessao();
@@ -40,6 +47,9 @@ void main() {
       (tester) async {
     final caminhos = <String>[];
     final cliente = MockClient((request) async {
+      if (request.url.path == '/api/termos/atuais') {
+        return http.Response(jsonEncode(documentos), 200);
+      }
       caminhos.add(request.url.path);
       final corpo = request.body.isEmpty
           ? <String, dynamic>{}
@@ -51,6 +61,10 @@ void main() {
       if (request.url.path == '/api/auth/cadastro-coordenacao') {
         expect(corpo['telefone'], '11987654321');
         expect(corpo['codigoVerificacao'], '123456');
+        expect(corpo['termos'], {
+          'decisoes': {'uso': true, 'consentimento': false},
+          'versoes': {'uso': 'hash-uso', 'consentimento': 'hash-consentimento'}
+        });
         return http.Response(
             jsonEncode({
               'token': 'jwt-coordenacao',
@@ -87,6 +101,10 @@ void main() {
       await tester.enterText(campos.at(3), 'senha123');
       await tester.enterText(campos.at(4), '11987654321');
       expect(find.text('(11) 98765-4321'), findsOneWidget);
+      await tester.ensureVisible(find.text('Aceito o Termo de Uso'));
+      await tester.tap(find.text('Aceito o Termo de Uso'));
+      await tester.ensureVisible(find.text('Não dou meu consentimento'));
+      await tester.tap(find.text('Não dou meu consentimento'));
       final criar = find.widgetWithText(ElevatedButton, 'Criar conta');
       await tester.ensureVisible(criar);
       await tester.tap(criar);
@@ -114,6 +132,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       var chamadas = 0;
       final cliente = MockClient((request) async {
+        if (request.url.path == '/api/termos/atuais') {
+          return http.Response(jsonEncode(documentos), 200);
+        }
         chamadas++;
         expect(request.url.path, '/api/auth/login-coordenacao');
         expect(jsonDecode(request.body), {
@@ -157,8 +178,15 @@ void main() {
     for (final sucesso in [false, true]) {
       testWidgets('$fluxo preserva resposta de ${sucesso ? 'sucesso' : 'erro'}',
           (tester) async {
+        tester.view.physicalSize = const Size(800, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
         var chamadas = 0;
         final cliente = MockClient((request) async {
+          if (request.url.path == '/api/termos/atuais') {
+            return http.Response(jsonEncode(documentos), 200);
+          }
           if (request.url.path == '/api/acesso') {
             return http.Response(jsonEncode({'liberado': true}), 200);
           }
@@ -178,6 +206,10 @@ void main() {
             if (!primeiroAcesso) 'email': 'professor@escola.test',
             'senha': 'senha123',
             if (primeiroAcesso) 'token': 'convite-teste',
+            if (primeiroAcesso) 'termos': {
+              'decisoes': {'uso': true, 'consentimento': true},
+              'versoes': {'uso': 'hash-uso', 'consentimento': 'hash-consentimento'}
+            },
           });
           return http.Response(
               jsonEncode(sucesso
@@ -219,8 +251,15 @@ void main() {
           }
           await tester.enterText(campos.at(primeiroAcesso ? 0 : 1), 'senha123');
           if (primeiroAcesso) await tester.enterText(campos.at(1), 'senha123');
+          if (primeiroAcesso) {
+            await tester.ensureVisible(find.text('Aceito o Termo de Uso'));
+            await tester.tap(find.text('Aceito o Termo de Uso'));
+            await tester.ensureVisible(find.text('Dou meu consentimento'));
+            await tester.tap(find.text('Dou meu consentimento'));
+          }
           await tester.ensureVisible(find.widgetWithText(ElevatedButton,
               primeiroAcesso ? 'Criar senha e entrar' : 'Entrar'));
+          await tester.pumpAndSettle();
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(ElevatedButton,
               primeiroAcesso ? 'Criar senha e entrar' : 'Entrar'));

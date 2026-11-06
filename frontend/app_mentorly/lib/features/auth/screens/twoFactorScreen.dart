@@ -58,6 +58,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
           senha: _argumentos!['senha'].toString(),
           telefone: _argumentos!['telefone'].toString(),
           codigoVerificacao: _codigoController.text.trim(),
+          termos: Map<String, dynamic>.from(_argumentos!['termos'] as Map),
         );
         final acesso = await ApiService().get('/acesso');
         if (!mounted) return;

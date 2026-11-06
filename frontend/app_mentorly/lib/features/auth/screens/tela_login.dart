@@ -5,6 +5,7 @@ import '../../../core/services/apiService.dart';
 import '../../../core/services/authService.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/utils/telefone_formatter.dart';
+import '../widgets/termos_painel.dart';
 import '../../../core/widgets/customTextfield.dart';
 import '../../../core/widgets/customButton.dart';
 import '../../../core/widgets/identidade_visual.dart';
@@ -25,6 +26,7 @@ class _TelaLoginState extends State<TelaLogin> {
   final _senha = TextEditingController();
   final _confirmar = TextEditingController();
   final _telefone = TextEditingController();
+  final _termos = GlobalKey<TermosPainelState>();
   late bool _cadastro;
   bool _carregando = false;
   String? _erro;
@@ -56,6 +58,11 @@ class _TelaLoginState extends State<TelaLogin> {
     try {
       final auth = AuthService();
       if (_cadastro) {
+        final termos = _termos.currentState?.dados();
+        if (termos == null || (termos['decisoes'] as Map)['uso'] != true) {
+          setState(() => _erro = 'Leia os documentos, aceite o Termo de Uso e escolha sobre o consentimento.');
+          return;
+        }
         final email = _email.text.trim().toLowerCase();
         final enviado = await auth.enviarCodigoDuasEtapas(email);
         if (!enviado) {
@@ -70,6 +77,7 @@ class _TelaLoginState extends State<TelaLogin> {
           'telefone':
               TelefoneBrasileiroFormatter.somenteDigitos(_telefone.text),
           'cadastroCoordenacao': true,
+          'termos': termos,
         });
         return;
       } else if (widget.professor) {
@@ -77,6 +85,11 @@ class _TelaLoginState extends State<TelaLogin> {
             email: _email.text.trim(), senha: _senha.text);
       } else {
         await auth.loginCoordenacao(_email.text.trim(), _senha.text);
+      }
+      if (ApiService().usuario?['termosPendentes'] == true) {
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, AppRoutes.termos, (_) => false);
+        return;
       }
       final acesso = await ApiService().get('/acesso');
       if (!mounted) return;
@@ -170,6 +183,8 @@ class _TelaLoginState extends State<TelaLogin> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _enviar(),
                       validator: Validators.validarTelefone),
+                  const SizedBox(height: 16),
+                  TermosPainel(key: _termos),
                 ],
                 const SizedBox(height: 24),
                 if (_erro != null) ...[

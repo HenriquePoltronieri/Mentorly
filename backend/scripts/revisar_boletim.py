@@ -25,11 +25,11 @@ with sync_playwright() as p:
     assert login.value.status==200
     page.get_by_role('button',name='Navegar',exact=True).wait_for()
     page.wait_for_timeout(500)
-    page.screenshot(path='docs/interface-professor-turmas-mobile.png')
+    page.screenshot(path='docs/imagens/interface-professor-turmas-mobile.png')
     turma=page.get_by_role('button',name=re.compile(re.escape(professor['nome']))).or_(page.get_by_label(re.compile(re.escape(professor['nome'])))).or_(page.get_by_text(professor['nome'],exact=False)).first
     turma.click()
     page.get_by_role('button',name='Boletim e fechamento de etapas',exact=True).click()
     page.get_by_text('Fechamento de etapas',exact=False).wait_for()
-    page.screenshot(path='docs/interface-boletim-mobile.png')
+    page.screenshot(path='docs/imagens/interface-boletim-mobile.png')
     print('OK: login, turma vinculada e boletim móvel.')
     browser.close()

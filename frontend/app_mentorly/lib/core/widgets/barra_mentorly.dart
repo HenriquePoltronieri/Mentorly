@@ -93,11 +93,18 @@ class BarraMentorly extends StatelessWidget implements PreferredSizeWidget {
                       .toList()),
             PopupMenuButton<String>(
                 tooltip: 'Conta',
-                onSelected: (valor) => valor == 'acesso'
-                    ? Navigator.pushNamed(context, AppRoutes.acesso)
-                    : sair(context),
+                onSelected: (valor) {
+                  if (valor == 'acesso') {
+                    Navigator.pushNamed(context, AppRoutes.acesso);
+                  } else if (valor == 'termos') {
+                    Navigator.pushNamed(context, AppRoutes.termos);
+                  } else {
+                    sair(context);
+                  }
+                },
                 itemBuilder: (_) => [
                       const PopupMenuItem(value: 'acesso', child: Text('Plano e acesso da escola')),
+                      const PopupMenuItem(value: 'termos', child: Text('Termos e consentimento')),
                       PopupMenuItem(
                           value: 'sair',
                           child: Row(children: [

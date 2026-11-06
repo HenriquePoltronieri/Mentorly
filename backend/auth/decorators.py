@@ -96,13 +96,29 @@ def _professor_desativado():
 
 def _conferir_acesso(usuario):
     # A consulta de situacao continua disponivel mesmo com prazo vencido.
-    if request.path == '/api/acesso':
+    if request.path == '/api/acesso' or request.path.startswith('/api/termos/'):
         return None
     from services.acesso_escola import consultar
     acesso = consultar(usuario['coordenacao_id'])
     if not acesso['liberado']:
         return jsonify({'error': acesso['mensagem'], 'code': 'escola_sem_acesso',
                         'acesso': acesso}), 403
+    return None
+
+
+def _conferir_termos(usuario):
+    if request.path.startswith('/api/termos/'):
+        return None
+    from services.termos import situacao
+    estado = situacao(usuario)
+    if estado['pendente']:
+        return jsonify({'error': 'Leia e responda aos termos atuais.',
+                        'code': 'termos_pendentes'}), 403
+    if request.method == 'POST' and request.path.endswith((
+            '/insights', '/atividades/gerar', '/feedback-ia',
+            '/correcao-assistida', '/ia/chat')) and not estado['iaPermitida']:
+        return jsonify({'error': 'O recurso de IA requer consentimento ativo.',
+                        'code': 'consentimento_necessario'}), 403
     return None
 
 
@@ -116,6 +132,9 @@ def auth_required(funcao):
             return jsonify({"error": "Autenticacao necessaria"}), 401
         if not _professor_habilitado(usuario):
             return _professor_desativado()
+        bloqueio = _conferir_termos(usuario)
+        if bloqueio is not None:
+            return bloqueio
         bloqueio = _conferir_acesso(usuario)
         if bloqueio is not None:
             return bloqueio
@@ -140,6 +159,9 @@ def coordenacao_required(funcao):
             return jsonify(
                 {"error": "Esta acao e exclusiva da Coordenacao"}
             ), 403
+        bloqueio = _conferir_termos(usuario)
+        if bloqueio is not None:
+            return bloqueio
         bloqueio = _conferir_acesso(usuario)
         if bloqueio is not None:
             return bloqueio
@@ -169,6 +191,9 @@ def professor_required(funcao):
         # mesma de @auth_required, pois ambos precisam bloquear o token.
         if not _professor_habilitado(usuario):
             return _professor_desativado()
+        bloqueio = _conferir_termos(usuario)
+        if bloqueio is not None:
+            return bloqueio
         bloqueio = _conferir_acesso(usuario)
         if bloqueio is not None:
             return bloqueio

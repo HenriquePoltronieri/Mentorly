@@ -185,7 +185,7 @@ Verificação mais recente (10/10/2026, depois da auditoria final):
 A auditoria não encontrou regressões críticas ou importantes nos Marcos 1 a 5. No Marco 6, o código novo foi comparado com o antigo sobre os dados reais de desenvolvimento: dashboard, boletim, desempenho do aluno, médias e etapas saíram idênticos, e as únicas diferenças foram o ano letivo agora explícito.
 
 Por contagem conservadora, o código possui hoje **25 funcionalidades demonstráveis de
-MVP** (lista em [funcionalidades.md](funcionalidades.md)). Os quatro sub-marcos do bloco de IA
+MVP** (lista em [funcionalidades.md](../arquitetura/funcionalidades.md)). Os quatro sub-marcos do bloco de IA
 (9A, 9B, 9C e 9D) estão implementados e validados.
 
 A infraestrutura e os Insights IA estão implementados, testados com cliente simulado e validados
@@ -276,7 +276,7 @@ resposta validada no Flutter
 A arquitetura segue esse fluxo na maior parte do projeto, mas **não é uma separação absolutamente rígida**. A auditoria encontrou pequenas exceções, que estão registradas aqui em vez de escondidas:
 
 - **Controller → Model (4 pontos):** `class_controller.py` (ramo do Professor em `list_classes` e `get_class`) e `boletim_turma` em `coordenacao_controller.py` e `professor_controller.py`, que consultam `Turma` diretamente para validar acesso.
-- **Controller → Repository (3 pontos):** `activity_controller.py`, `class_controller.py` e `dashboard_controller.py` chamam `repositories/consultas.py` sem um Service intermediário (simplificação intencional, descrita em [simplificacao-tecnica.md](simplificacao-tecnica.md)).
+- **Controller → Repository (3 pontos):** `activity_controller.py`, `class_controller.py` e `dashboard_controller.py` chamam `repositories/consultas.py` sem um Service intermediário (simplificação intencional, descrita em [simplificacao-tecnica.md](../arquitetura/simplificacao-tecnica.md)).
 - **Estilo dos Services:** `services/turmas.py` é um módulo de funções; os demais Services são classes com `execute()`.
 - **Flutter:** `adicionarAlunosModal`, `editarAlunoModal` e `lancarNotasModal` usam o `ApiService` diretamente, sem um Service Dart intermediário.
 
@@ -355,7 +355,7 @@ Os pontos que usavam `date.today().year` foram corrigidos:
 
 Encerrar o ano é só trocar o status: **não** há promoção automática de alunos, transferência nem criação automática de turmas do próximo ano. Isso pertence ao Marco 7 e à evolução futura.
 
-Detalhes técnicos e a migração estão em [banco-e-procedures.md](banco-e-procedures.md).
+Detalhes técnicos e a migração estão em [banco-e-procedures.md](../arquitetura/banco-e-procedures.md).
 
 ## Marco 7 — Transferência de aluno com histórico
 **✅ concluído, migrado no banco real e publicado**
@@ -918,7 +918,7 @@ A Coordenação define os critérios; o Professor utiliza, não redefine o padr�
 
 ## Fase 2 — Corrigir cálculo de notas
 
-**Status: ✅ concluída (Marco 2; arredondamento intermediário corrigido no Marco 4, A02).** Regra implementada em `backend/services/academico/calculo.py`; explicação em [banco-e-procedures.md](banco-e-procedures.md).
+**Status: ✅ concluída (Marco 2; arredondamento intermediário corrigido no Marco 4, A02).** Regra implementada em `backend/services/academico/calculo.py`; explicação em [banco-e-procedures.md](../arquitetura/banco-e-procedures.md).
 **Prioridade: crítica**
 
 Hoje este é o ponto que impede o dashboard de representar corretamente o desempenho.
@@ -1330,7 +1330,7 @@ Para TCC/MVP, recomendação: opcional ou somente Coordenação.
 **Status: 🟡 parcial, bem coberta.** Existem `smoke_db`, `smoke_api` (944 verificações), 10 scripts
 `test_*` de backend (motor, IA 9A–9D, privacidade, limites, erros, configuração), três testes de
 migration (24, 8 e 8 verificações) e `flutter test` (107 testes). A lista completa está em
-[funcionalidades.md](funcionalidades.md). Uma suíte estruturada por módulo continua como evolução.
+[funcionalidades.md](../arquitetura/funcionalidades.md). Uma suíte estruturada por módulo continua como evolução.
 
 Os smoke tests são úteis, mas é importante começar uma suíte estruturada.
 
@@ -1373,7 +1373,7 @@ Testes pelo menos de:
 
 ## Fase 11 — Limpeza técnica
 
-**Status: 🟡 parcial.** Já feito: ORM antigo removido, código morto removido (ver [simplificacao-tecnica.md](simplificacao-tecnica.md)), bypass de login removido, `SECRET_KEY` sem valor padrão fixo, `backend/.env` ignorado pelo Git. O tratamento de erros ficou mais uniforme na auditoria final (400/409/404/429/500 bem separados). Pendente: URL da API por ambiente e padronização de nomes de arquivo Dart.
+**Status: 🟡 parcial.** Já feito: ORM antigo removido, código morto removido (ver [simplificacao-tecnica.md](../arquitetura/simplificacao-tecnica.md)), bypass de login removido, `SECRET_KEY` sem valor padrão fixo, `backend/.env` ignorado pelo Git. O tratamento de erros ficou mais uniforme na auditoria final (400/409/404/429/500 bem separados). Pendente: URL da API por ambiente e padronização de nomes de arquivo Dart.
 
 Quando o domínio estiver estável:
 

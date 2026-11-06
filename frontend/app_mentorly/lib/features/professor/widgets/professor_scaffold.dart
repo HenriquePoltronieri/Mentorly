@@ -34,7 +34,11 @@ class ProfessorScaffold extends StatelessWidget {
     final nome = ApiService().usuario?['nome']?.toString() ?? 'Professor';
     final conta = PopupMenuButton<String>(
       tooltip: 'Minha conta',
-      onSelected: (_) async {
+      onSelected: (valor) async {
+        if (valor == 'termos') {
+          Navigator.pushNamed(context, AppRoutes.termos);
+          return;
+        }
         await AuthService().sair();
         if (context.mounted) {
           Navigator.pushNamedAndRemoveUntil(
@@ -43,6 +47,7 @@ class ProfessorScaffold extends StatelessWidget {
       },
       itemBuilder: (_) => [
         PopupMenuItem(enabled: false, child: Text(nome)),
+        const PopupMenuItem(value: 'termos', child: Text('Termos e consentimento')),
         const PopupMenuItem(value: 'sair', child: Text('Sair'))
       ],
       icon: const Icon(Icons.account_circle_outlined),

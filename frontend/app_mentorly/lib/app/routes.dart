@@ -10,6 +10,7 @@ import '../features/auth/screens/cadastroScreen.dart';
 import '../features/auth/screens/professorLoginScreen.dart';
 import '../features/auth/screens/definirSenhaProfessorScreen.dart';
 import '../features/auth/screens/twoFactorScreen.dart';
+import '../features/auth/screens/termos_screen.dart';
 import '../features/auth/screens/acesso_escola_screen.dart';
 import '../features/admin/screens/admin_screen.dart';
 
@@ -52,6 +53,7 @@ class AppRoutes {
   static const String definirSenha = '/definir-senha';
   static const String twoFactor = '/two-factor';
   static const String acesso = '/acesso';
+  static const String termos = '/termos';
   static const String admin = '/admin';
 
   // coordenacao
@@ -87,6 +89,9 @@ class AppRoutes {
             final tipo = ApiService().tipoUsuario;
             final privado = nome.startsWith('/coordenacao/') ||
                 nome.startsWith('/professor/');
+            if (privado && ApiService().usuario?['termosPendentes'] == true) {
+              return const TermosScreen();
+            }
             final esperado =
                 nome.startsWith('/coordenacao/') ? 'coordenacao' : 'professor';
             if (privado && tipo != esperado) {
@@ -123,6 +128,7 @@ class AppRoutes {
     definirSenha: (context) => DefinirSenhaProfessorScreen(),
     twoFactor: (context) => TwoFactorScreen(),
     acesso: (context) => const AcessoEscolaScreen(),
+    termos: (context) => const TermosScreen(),
     admin: (context) => const AdminScreen(),
 
     coordenacaoHome: (context) => CoordenacaoHomeScreen(),

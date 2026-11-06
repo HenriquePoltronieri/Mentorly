@@ -112,7 +112,7 @@ A partir daí o desenvolvimento passou a ser organizado por marcos, descritos em
 ## Simplificação técnica
 
 Antes do Marco 3, o grupo revisou o que havia de repasse sem regra e de código sem uso. O
-resultado, descrito em [simplificacao-tecnica.md](simplificacao-tecnica.md), foi: cinco
+resultado, descrito em [simplificacao-tecnica.md](../arquitetura/simplificacao-tecnica.md), foi: cinco
 consultas que apenas chamavam uma procedure passaram a viver em `repositories/consultas.py`; o
 CRUD de turma, que eram cinco classes de um método, virou o módulo `services/turmas.py`; e foram
 removidos arquivos Dart e Python sem nenhuma referência, entre eles o `GradeCalculator`, o
@@ -122,10 +122,10 @@ URLs e os status HTTP foram preservados.
 ## Estado atual
 
 Os Marcos 1 a 8 e o bloco de IA (9A a 9D) estão concluídos, e o projeto tem 25 funcionalidades
-demonstráveis, listadas em [funcionalidades.md](funcionalidades.md). Depois de uma auditoria final,
+demonstráveis, listadas em [funcionalidades.md](../arquitetura/funcionalidades.md). Depois de uma auditoria final,
 os itens importantes e médios foram corrigidos (ver [roadmap.md](roadmap.md)). A verificação mais
 recente (10/10/2026) tem `smoke_api` com 944 verificações, 107 testes Flutter e os demais scripts de
-teste do backend passando; os números completos estão em [funcionalidades.md](funcionalidades.md). A
+teste do backend passando; os números completos estão em [funcionalidades.md](../arquitetura/funcionalidades.md). A
 fase atual é de validação final, congelamento do MVP e preparação da apresentação.
 
 ### Registro histórico (02/10/2026, Marcos 1 a 6)

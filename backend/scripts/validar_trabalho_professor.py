@@ -117,18 +117,18 @@ def revisar_visual(token, usuario, turma_id):
         for largura in (1280, 768, 320):
             page.set_viewport_size({'width': largura, 'height': 1000})
             page.wait_for_timeout(400)
-            page.screenshot(path=f'docs/profissional-inicio-{largura}.png')
+            page.screenshot(path=f'docs/imagens/profissional-inicio-{largura}.png')
         # Acesso direto pela navegação visível; sem depender da posição dos cards.
         page.get_by_role('button', name='Abrir minhas turmas', exact=True).click()
         page.wait_for_timeout(500)
-        page.screenshot(path='docs/profissional-turmas-320.png')
+        page.screenshot(path='docs/imagens/profissional-turmas-320.png')
         page.get_by_role('button', name=re.compile('8º ano A')).or_(page.get_by_text('8º ano A', exact=False)).first.click()
         page.get_by_role('button', name='Grade de notas', exact=True).click()
         page.get_by_text('Notas da turma', exact=True).wait_for()
         for largura in (320, 768, 1280):
             page.set_viewport_size({'width': largura, 'height': 1000})
             page.wait_for_timeout(400)
-            page.screenshot(path=f'docs/profissional-grade-{largura}.png')
+            page.screenshot(path=f'docs/imagens/profissional-grade-{largura}.png')
         assert not erros, erros
         browser.close()
         print('OK: revisão no navegador e capturas em 320/768/1280 px.')

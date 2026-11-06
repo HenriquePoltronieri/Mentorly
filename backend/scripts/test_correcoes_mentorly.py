@@ -15,7 +15,14 @@ from app import create_app
 from database.connection import execute, insert, init_database, install_schema, install_procedures, query_one
 from models.professor_model import hash_convite
 from models.codigo_model import CodigoVerificacao
+from auth.jwt_utils import gerar_token
 from services import email_service, rate_limit
+from services.termos import documentos_atuais
+
+
+def termos_qa():
+    return {"decisoes": {"uso": True, "consentimento": True},
+            "versoes": {tipo: doc["sha256"] for tipo, doc in documentos_atuais(False).items()}}
 
 
 class CorrecoesTest(unittest.TestCase):
@@ -32,7 +39,7 @@ class CorrecoesTest(unittest.TestCase):
         CodigoVerificacao.criar(self.email, "123456")
         resposta = self.client.post("/api/auth/cadastro-coordenacao", json={
             "nome": "Escola de teste", "email": self.email, "senha": "senha123",
-            "telefone": "11999999999", "codigoVerificacao": "123456"})
+            "telefone": "11999999999", "codigoVerificacao": "123456", "termos": termos_qa()})
         self.assertEqual(resposta.status_code, 201, resposta.json)
         self.escola = resposta.json["usuario"]["id"]
         self.coord = {"Authorization": "Bearer " + resposta.json["token"]}
@@ -66,9 +73,53 @@ class CorrecoesTest(unittest.TestCase):
 
     def professor(self):
         dados, token = self.convite()
-        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123"})
+        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123", "termos": termos_qa()})
         self.assertEqual(resposta.status_code, 200, resposta.json)
         return dados, {"Authorization": "Bearer " + resposta.json["token"]}
+
+    def test_termos_revogacao_preserva_acesso_basico_e_bloqueia_ia(self):
+        uso = self.client.get('/api/termos/atuais').json['documentos']
+        self.assertEqual(set(uso), {'uso', 'consentimento'})
+        resposta = self.client.post('/api/termos/decisoes', headers=self.coord,
+                                    json={'decisoes': {'uso': True, 'consentimento': False},
+                                          'versoes': {tipo: doc['sha256'] for tipo, doc in uso.items()}})
+        self.assertEqual(resposta.status_code, 200, resposta.json)
+        self.assertFalse(resposta.json['pendente'])
+        self.assertFalse(resposta.json['iaPermitida'])
+        self.assertEqual(self.client.get('/api/config/anos-letivos', headers=self.coord).status_code, 200)
+        dados, token = self.convite()
+        ativacao = self.client.post('/api/auth/criar-senha-professor', json={
+            'token': token, 'senha': 'senha123', 'termos': termos_qa()})
+        self.assertEqual(ativacao.status_code, 200, ativacao.json)
+        professor = {'Authorization': 'Bearer ' + ativacao.json['token']}
+        recusado = self.client.post('/api/termos/decisoes', headers=professor,
+                                   json={'decisoes': {'uso': True, 'consentimento': False},
+                                         'versoes': {tipo: doc['sha256'] for tipo, doc in uso.items()}})
+        self.assertEqual(recusado.status_code, 200, recusado.json)
+        ia = self.client.post('/api/professor/ia/chat', headers=professor, json={'mensagem': 'teste'})
+        self.assertEqual(ia.status_code, 403, ia.json)
+        self.assertEqual(ia.json['code'], 'consentimento_necessario')
+        eventos = self.client.get('/api/termos/historico', headers=professor).json['eventos']
+        self.assertTrue(any(evento['decisao'] == 'revogado' for evento in eventos))
+
+    def test_conta_antiga_precisa_decidir_sobre_versao_atual(self):
+        professor_id = insert('INSERT INTO professor(coordenacao_id,nome,email,senha_hash) '
+                              'VALUES (%s,%s,%s,%s)',
+                              (self.escola, 'Professor legado', 'legado-' + self.email, 'hash'))
+        headers = {'Authorization': 'Bearer ' + gerar_token(professor_id, 'professor', self.escola)}
+        status = self.client.get('/api/termos/status', headers=headers)
+        self.assertEqual(status.status_code, 200, status.json)
+        self.assertTrue(status.json['pendente'])
+        bloqueado = self.client.get('/api/professor/dashboard', headers=headers)
+        self.assertEqual(bloqueado.status_code, 403, bloqueado.json)
+        self.assertEqual(bloqueado.json['code'], 'termos_pendentes')
+        termos = termos_qa()
+        termos['versoes']['uso'] = 'versao-antiga'
+        self.assertEqual(self.client.post('/api/termos/decisoes', headers=headers,
+                                          json=termos).status_code, 400)
+        decidido = self.client.post('/api/termos/decisoes', headers=headers, json=termos_qa())
+        self.assertEqual(decidido.status_code, 200, decidido.json)
+        self.assertFalse(decidido.json['pendente'])
 
     def test_1_2_3_4_personalizado_e_reabertura(self):
         for quantidade in (1, 2, 3, 4, 7, 12):
@@ -114,10 +165,10 @@ class CorrecoesTest(unittest.TestCase):
         self.assertEqual(consulta.status_code, 200)
         self.assertEqual(consulta.json, {'email': dados['email']})
         self.assertEqual(query_one('SELECT convite_token FROM professor WHERE id=%s', (dados['id'],))['convite_token'], banco['convite_token'])
-        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123"})
+        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123", "termos": termos_qa()})
         self.assertEqual(resposta.status_code, 200, resposta.json)
         self.assertEqual(self.client.post('/api/auth/consultar-convite', json={'token': token}).status_code, 403)
-        self.assertEqual(self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123"}).status_code, 403)
+        self.assertEqual(self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123", "termos": termos_qa()}).status_code, 403)
         self.assertEqual(self.client.post("/api/auth/login-professor", json={"email": dados["email"], "senha": "senha123"}).status_code, 200)
         lista = self.client.get("/api/coordenacao/professores", headers=self.coord)
         self.assertEqual(lista.status_code, 200)
@@ -128,7 +179,7 @@ class CorrecoesTest(unittest.TestCase):
         dados, token = self.convite()
         execute("UPDATE professor SET convite_expira_em=DATE_SUB(NOW(), INTERVAL 1 HOUR) WHERE id=%s", (dados["id"],))
         self.assertEqual(self.client.post('/api/auth/consultar-convite', json={'token': token}).status_code, 403)
-        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123"})
+        resposta = self.client.post("/api/auth/criar-senha-professor", json={"token": token, "senha": "senha123", "termos": termos_qa()})
         self.assertEqual(resposta.status_code, 403)
         self.assertIn("expirado", resposta.json["error"])
         novo = self.client.post("/api/coordenacao/professores/%d/link-convite" % dados["id"], headers=self.coord)

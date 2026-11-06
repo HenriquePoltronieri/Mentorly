@@ -14,6 +14,7 @@ from app import create_app
 from database.connection import init_database, install_schema, install_procedures
 from models.coordenacao_model import Coordenacao
 from services.auth.cadastro_coordenacao import CadastroCoordenacaoService
+from services.termos import documentos_atuais
 from services.config.anos_letivos import CriarAnoLetivoService
 
 
@@ -23,6 +24,8 @@ if __name__ == "__main__":
     install_schema()
     install_procedures()
     if not Coordenacao.find_by_email("validacao@escola.invalid"):
-        usuario = CadastroCoordenacaoService().execute("Escola de validação", "validacao@escola.invalid", "validacao123", "11999999999")
+        termos = {"decisoes": {"uso": True, "consentimento": True},
+                  "versoes": {tipo: doc["sha256"] for tipo, doc in documentos_atuais(False).items()}}
+        usuario = CadastroCoordenacaoService().execute("Escola de validação", "validacao@escola.invalid", "validacao123", "11999999999", termos=termos)
         CriarAnoLetivoService().execute(usuario["usuario"]["id"], 2026, "atual")
     create_app().run(host="127.0.0.1", port=5001, debug=False)

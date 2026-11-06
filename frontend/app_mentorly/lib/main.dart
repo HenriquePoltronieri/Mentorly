@@ -13,6 +13,14 @@ Future<void> main() async {
   final api = ApiService();
   await api.carregarSessao();
   registrarTratamentoDeSessao(api);
+  if (api.estaLogado) {
+    try {
+      final estado = await api.get('/termos/status');
+      await api.atualizarTermosPendentes(estado['pendente'] == true);
+    } catch (_) {
+      // O backend continua impondo a escolha em cada rota protegida.
+    }
+  }
 
   runApp(MyApp(rotaInicial: _rotaInicial(api)));
 }
@@ -37,6 +45,7 @@ String _rotaInicial(ApiService api) {
   if (rotaPedida != null) return rotaPedida;
 
   if (!api.estaLogado) return AppRoutes.perfilSelection;
+  if (api.usuario?['termosPendentes'] == true) return AppRoutes.termos;
   if (api.ehCoordenacao) return AppRoutes.coordenacaoHome;
   if (api.ehProfessor) return AppRoutes.dashboard;
   return AppRoutes.perfilSelection;

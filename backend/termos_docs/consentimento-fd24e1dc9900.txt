@@ -1,0 +1,253 @@
+TERMO DE CONSENTIMENTO PARA TRATAMENTO DE DADOS PESSOAIS – MENTORLY
+
+Este Termo de Consentimento formaliza a manifestação livre, informada e inequívoca do titular para o tratamento de seus dados pessoais pelo Projeto Mentorly, plataforma educacional destinada ao apoio às atividades de ensino e aprendizagem, quando o consentimento for a base legal aplicável, em conformidade com a Lei nº 13.709/2018 – Lei Geral de Proteção de Dados (LGPD), bem como com boas práticas de segurança da informação, privacidade e proteção de dados pessoais descritas nas normas ISO/IEC 27001, ISO/IEC 27701 e ISO/IEC 29100.
+
+O consentimento do titular é uma das bases legais para o tratamento de dados pessoais, conforme o art. 7º, I, da LGPD, e deverá ser solicitado de forma específica e destacada quando for a base legal aplicável, sendo registrado como evidência pelo Projeto Mentorly.
+
+Ao utilizar o Mentorly e, quando aplicável, manifestar seu consentimento de forma específica e destacada, o titular declara ter lido e compreendido as informações deste Termo e da Política de Privacidade, estando ciente das finalidades e condições relacionadas ao tratamento de seus dados pessoais, nos termos a seguir:
+
+CLÁUSULA PRIMEIRA – DO OBJETO DO CONSENTIMENTO E DOS DADOS TRATADOS
+
+O titular AUTORIZA o Projeto Mentorly a tratar os seguintes dados pessoais:
+
+I – Dados de identificação, como nome e outros dados necessários para identificação do usuário;
+
+II – Dados de contato, como endereço de e-mail, quando necessário para cadastro, autenticação, comunicação ou recuperação de acesso;
+
+III – dados relacionados ao perfil de usuário, incluindo informações necessárias para diferenciar perfis como aluno e professor;
+
+IV – Dados educacionais e acadêmicos inseridos ou produzidos durante a utilização da plataforma, como atividades, respostas, avaliações, resultados e informações relacionadas ao desempenho;
+
+V – Conteúdos inseridos pelo usuário na plataforma, incluindo enunciados, objetivos, respostas, materiais e demais informações necessárias ao funcionamento das funcionalidades disponibilizadas;
+
+VI – Informações técnicas e registros de utilização, como data e horário de acesso, ações realizadas na plataforma, informações de sessão e registros necessários à segurança e auditoria;
+
+VII – outros dados estritamente necessários para disponibilização, manutenção, segurança e melhoria das funcionalidades do Mentorly.
+
+O Mentorly não deverá solicitar dados pessoais que não sejam necessários para as finalidades informadas.
+
+Atenção: Ainda que não haja coleta direta de dados sensíveis, estes podem estar contidos nos documentos armazenados. Nestes casos, o Mentorly compromete-se a adotar medidas reforçadas de segurança e governança em conformidade com a LGPD e a ISO/IEC 27701.
+
+CLÁUSULA SEGUNDA – DAS FINALIDADES DO TRATAMENTO
+
+Os dados pessoais serão utilizados exclusivamente para:
+
+I – Permitir o cadastro, autenticação e gerenciamento das contas de usuários;
+
+II – Disponibilizar as funcionalidades educacionais do Mentorly;
+
+III – Permitir que professores criem, organizem, disponibilizem e acompanhem atividades educacionais;
+
+IV – Permitir que alunos acessem atividades, forneçam respostas e acompanhem informações educacionais disponibilizadas pela plataforma;
+
+V – Registrar e apresentar informações relacionadas às atividades e ao desempenho educacional, de acordo com as permissões de cada perfil;
+
+VI – Possibilitar a geração assistida de atividades por inteligência artificial, quando essa funcionalidade for utilizada pelo usuário;
+
+VII – manter a segurança, estabilidade, disponibilidade e integridade da plataforma;
+
+VIII – prevenir acessos indevidos, fraudes, abusos e incidentes de segurança;
+
+IX – Realizar suporte técnico e comunicação relacionada ao funcionamento do sistema;
+
+X – Cumprir obrigações legais e regulatórias aplicáveis;
+
+XI – exercer direitos em processos judiciais, administrativos ou arbitrais, quando necessário;
+
+XII – realizar outras atividades compatíveis com as finalidades informadas ao titular e permitidas pela legislação aplicável.
+
+Base legal do tratamento: cada atividade de tratamento deverá estar fundamentada na base legal adequada, conforme a LGPD. Quando aplicável, poderá ser utilizado o consentimento livre, informado e inequívoco do titular (art. 7º, I). Também poderão ser utilizadas, conforme a finalidade e os requisitos legais, as bases de cumprimento de obrigação legal ou regulatória (art. 7º, II), execução de contrato ou de procedimentos preliminares (art. 7º, V) e legítimo interesse (art. 7º, IX). O consentimento não será utilizado como autorização genérica para todas as atividades de tratamento.
+
+CLÁUSULA TERCEIRA – DO NÃO COMPARTILHAMENTO DE DADOS
+
+Os dados pessoais tratados pelo Mentorly não serão compartilhados com terceiros para finalidades incompatíveis com as apresentadas neste Termo.
+
+Poderá ocorrer acesso ou compartilhamento de dados quando necessário:
+
+I – Para prestação de serviços tecnológicos necessários ao funcionamento da plataforma;
+
+II – Para hospedagem, armazenamento, manutenção, segurança ou suporte técnico;
+
+III – para processamento de funcionalidades de inteligência artificial, quando aplicável;
+
+IV – Mediante consentimento expresso do titular, quando este for necessário;
+
+V – Em cumprimento de obrigação legal ou determinação de autoridade competente;
+
+VI – Para o exercício regular de direitos;
+
+VII – em outras hipóteses permitidas pela legislação aplicável.
+
+Qualquer eventual compartilhamento seguirá o princípio da necessidade e deverá contar com medidas técnicas e contratuais adequadas. Antes de uma implantação real, a Política de Privacidade deverá identificar, sempre que possível, os fornecedores envolvidos, as categorias de dados compartilhadas e as condições de utilização, inclusive nos serviços de inteligência artificial.
+
+CLÁUSULA QUARTA – DA IDENTIFICAÇÃO DO CONTROLADOR E DO ENCARREGADO (DPO)
+
+A identificação do controlador e do canal de contato do Encarregado de Dados (quando houver designação) deverá ser informada de maneira clara ao titular, conforme a legislação aplicável.
+
+CONTROLADOR:
+
+Projeto/Instituição responsável: Projeto acadêmico Mentorly – instituição responsável pela eventual implantação: _______________________________
+
+Razão social: ____________________________________________ (quando aplicável)
+
+CNPJ/CPF: ______________________________________________ (quando aplicável)
+
+Endereço para contato: ___________________________________
+
+CANAL DE CONTATO SOBRE PROTEÇÃO DE DADOS:
+
+Encarregado (quando designado): _______________________________
+
+Cargo/Função: _______________________________
+
+E-mail: _______________________________
+
+Canal para solicitações relacionadas à proteção de dados:  mentorly.noreply@gmail.com
+
+CLÁUSULA QUINTA – DA CONFORMIDADE COM A LGPD E COM AS NORMAS ISO
+
+O tratamento observará os princípios da LGPD e buscará adotar boas práticas de governança em privacidade descritas nas normas ISO/IEC 27001, ISO/IEC 27701 e ISO/IEC 29100, sem afirmar certificação ou conformidade formal do Projeto Mentorly com essas normas.
+
+Entre as medidas de segurança previstas ou que poderão ser implementadas, conforme os recursos e a etapa de desenvolvimento:
+
+I – Controle de acesso restrito, conforme os perfis de usuário;
+
+II – Mecanismos de autenticação;
+
+III – proteção das informações armazenadas e transmitidas, quando tecnicamente implementada e aplicável;
+
+IV – registro de eventos relevantes de segurança, quando disponível;
+
+V – Orientações de confidencialidade e controle de acesso;
+
+VI – Procedimentos para identificação, prevenção e tratamento de incidentes;
+
+VII – adoção de medidas destinadas a preservar a confidencialidade, integridade e disponibilidade das informações, de acordo com a etapa de desenvolvimento da plataforma.
+
+Em caso de incidente de segurança que possa acarretar risco ou dano relevante aos titulares, serão avaliadas e adotadas as providências previstas na legislação aplicável.
+
+CLÁUSULA SEXTA – DOS DIREITOS DO TITULAR
+
+O titular poderá, a qualquer momento, mediante solicitação:
+
+• Confirmar a existência de tratamento de seus dados pessoais;
+
+• Solicitar acesso aos seus dados pessoais;
+
+• Solicitar a correção de dados incompletos, inexatos ou desatualizados;
+
+• Solicitar a anonimização, o bloqueio ou a eliminação de dados desnecessários, excessivos ou tratados em desconformidade com a legislação;
+
+• Solicitar a portabilidade dos dados pessoais, quando aplicável;
+
+• Solicitar a eliminação dos dados pessoais tratados com fundamento no consentimento, ressalvadas as hipóteses legais de conservação;
+
+• Solicitar informações sobre as entidades públicas e privadas com as quais seus dados tenham sido compartilhados;
+
+• Solicitar informações sobre a possibilidade de não fornecer consentimento e sobre as consequências da negativa, quando aplicável;
+
+• Revogar o consentimento a qualquer momento, quando esta for a base legal utilizada para o tratamento;
+
+• Peticionar à Autoridade Nacional de Proteção de Dados – ANPD em relação ao tratamento de seus dados pessoais, quando insatisfeito com a resposta do controlador.
+
+CLÁUSULA SÉTIMA – CANAL DE COMUNICAÇÃO
+
+Canal oficial para dúvidas, solicitações e exercício de direitos do titular:
+
+Nome: Mentorly
+
+E-mail: mentorly.noreply@gmail.com
+
+As solicitações dos titulares serão atendidas nos prazos previstos na LGPD. A declaração completa sobre a existência ou o acesso a dados pessoais será fornecida no prazo de até 15 (quinze) dias, quando aplicável, conforme art. 19, II, da LGPD. Caso a resposta não seja satisfatória, o titular poderá apresentar petição à Autoridade Nacional de Proteção de Dados – ANPD, observadas as regras aplicáveis.
+
+CLÁUSULA OITAVA – DO CANAL DE CONTATO SOBRE PROTEÇÃO DE DADOS
+
+Para dúvidas e solicitações relacionadas à proteção de dados, o titular poderá utilizar o canal informado na Cláusula Quarta. Caso exista Encarregado de Proteção de Dados formalmente designado, sua identificação e seus contatos serão disponibilizados por esse canal.
+
+CLÁUSULA NONA – DO CONSENTIMENTO LIVRE, INFORMADO E INEQUÍVOCO
+
+O titular confirma que o consentimento foi concedido de forma livre, sem coação, após leitura e compreensão integral deste Termo.
+
+A revogação do consentimento não afeta a licitude do tratamento realizado no período anterior à revogação (art. 8º, § 5º, da LGPD). Caso o consentimento seja a única base legal que fundamenta determinado tratamento, a sua revogação implicará a eliminação dos dados pessoais correspondentes, ressalvadas as hipóteses de conservação previstas no art. 16 da LGPD (cumprimento de obrigação legal ou regulatória, uso exclusivo do controlador com anonimização, transferência a terceiro mediante consentimento, ou uso em pesquisa de interesse público, garantida, quando possível, a anonimização dos dados).
+
+CLÁUSULA DÉCIMA – DO TRATAMENTO DE DADOS DE CRIANÇAS E ADOLESCENTES
+
+O Mentorly observará o disposto no art. 14 da LGPD e adotará medidas adequadas para proteger os dados pessoais de crianças e adolescentes, sempre considerando o melhor interesse do titular.
+
+O tratamento de dados pessoais de crianças será realizado com o consentimento específico e em destaque de pelo menos um dos pais ou responsável legal, quando essa for a hipótese legal aplicável, observadas as demais situações previstas na legislação.
+
+No tratamento de dados pessoais de adolescentes, serão observados o melhor interesse, a privacidade, a segurança, a dignidade e o desenvolvimento do titular, com utilização da base legal adequada a cada finalidade.
+
+Serão adotadas medidas técnicas e administrativas adequadas para garantir a confidencialidade e integridade desses dados, conforme os recursos efetivamente disponíveis, incluindo, quando implementadas:
+
+Criptografia das informações, quando implementada e tecnicamente aplicável.
+
+Controle de acesso adequado aos perfis de usuários.
+
+Acompanhamento de eventos de segurança, conforme os recursos disponíveis.
+
+Quando o tratamento estiver fundamentado no consentimento, este poderá ser revogado a qualquer momento, observadas as hipóteses legais de conservação dos dados.
+
+Quando a legislação ou o procedimento adotado exigir a participação do responsável legal, este deverá manifestar sua autorização e identificar-se abaixo:
+
+RESPONSÁVEL LEGAL (quando aplicável):
+
+Nome completo: ____________________________________________
+
+CPF/Documento: ___________________________________________
+
+Grau de parentesco ou vínculo legal: _________________________
+
+CLÁUSULA DÉCIMA PRIMEIRA – DISPOSIÇÕES GERAIS
+
+Este Termo é regido pela LGPD (Lei nº 13.709/2018) e observa diretrizes internacionais de segurança da informação e privacidade.
+
+Os dados pessoais serão conservados pelo prazo necessário ao cumprimento das finalidades para as quais foram coletados, nos termos do art. 15 da LGPD, e serão eliminados ao término do tratamento, salvo nas hipóteses legais de conservação previstas no art. 16. Os prazos e critérios específicos de retenção deverão ser informados em Política de Privacidade ou aviso complementar.
+
+Este Termo poderá ser revisado periodicamente para refletir mudanças legais, regulatórias ou operacionais. Em caso de alterações relevantes que afetem o tratamento de dados ou os direitos dos titulares, estes serão informados pelo sistema ou pelo e-mail cadastrado. Quando a alteração exigir novo consentimento, ele será solicitado de forma específica.
+
+CLÁUSULA DÉCIMA SEGUNDA – DO FORO
+
+Fica eleito o foro da comarca de Belo Horizonte/MG para dirimir eventuais controvérsias oriundas deste Termo.
+
+Data: ____ de __________________ de _________.
+
+USUÁRIO(A):
+
+Nome completo: ____________________________________________
+
+Assinatura/Manifestação eletrônica: __________________________
+
+QUANDO APLICÁVEL – RESPONSÁVEL LEGAL:
+
+Nome completo: ____________________________________________
+
+CPF/Documento: ___________________________________________
+
+Grau de parentesco ou vínculo legal: _________________________
+
+Assinatura/Manifestação eletrônica: __________________________
+
+PELO PROJETO MENTORLY:
+
+Nome do responsável: _______________________________________
+
+Cargo/Função: _____________________________________________
+
+CPF/Documento: ___________________________________________
+
+Assinatura: _______________________________________________
+
+TESTEMUNHAS:
+
+Nome completo: _________________________________________
+
+CPF/Documento: ___________________________________________
+
+Assinatura: _______________________________________________
+
+Nome completo: _________________________________________
+
+CPF/Documento: ___________________________________________
+
+Assinatura: _______________________________________________

@@ -4,6 +4,7 @@ from auth.jwt_utils import TIPO_COORDENACAO, gerar_token
 from models.coordenacao_model import Coordenacao
 from models.codigo_model import CodigoVerificacao
 from services import entrada
+from services.termos import validar_escolhas, situacao
 
 
 class CadastroCoordenacaoService:
@@ -14,7 +15,7 @@ class CadastroCoordenacaoService:
     """
 
     def execute(self, nome, email, senha, telefone=None,
-                codigo_verificacao=None, exigir_verificacao=False):
+                codigo_verificacao=None, exigir_verificacao=False, termos=None):
         nome = entrada.texto(nome, "O nome", entrada.LIMITE_NOME)
         email = entrada.email(email)
         senha = entrada.senha(senha)
@@ -24,6 +25,7 @@ class CadastroCoordenacaoService:
             raise ValueError("O nome e obrigatorio")
         if not senha or len(senha) < 8:
             raise ValueError("A senha precisa ter ao menos 8 caracteres")
+        escolhas, atuais = validar_escolhas(termos)
 
         if Coordenacao.find_by_email(email):
             raise ValueError("Ja existe uma coordenacao com este email")
@@ -38,11 +40,12 @@ class CadastroCoordenacaoService:
                 )
 
         coordenacao_id = Coordenacao.create(
-            nome, email, generate_password_hash(senha), telefone
+            nome, email, generate_password_hash(senha), telefone,
+            escolhas_termos=escolhas, documentos_atuais=atuais,
         )
         linha = Coordenacao.find_by_id(coordenacao_id)
 
         return {
             "token": gerar_token(coordenacao_id, TIPO_COORDENACAO, coordenacao_id),
-            "usuario": Coordenacao.to_dict(linha),
+            "usuario": {**Coordenacao.to_dict(linha), "termosPendentes": False},
         }
